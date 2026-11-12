@@ -228,7 +228,7 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
       if (!isFile(file)) continue;
       const entry = { bytes: fs.statSync(file).size, tables: [] as SaveTable[], opened: false };
       found.set(id, entry);
-      report('Copying ' + path.basename(file), 0, 1);
+      report('Copying the databases', 0, 1);
       const copy = path.join(tmp, path.basename(file));
       for (const ext of ['', '-wal', '-journal']) if (isFile(file + ext)) fs.copyFileSync(file + ext, copy + ext);
       try {
@@ -244,7 +244,8 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
           if (!result) continue;
           let from: number | null = null, to: number | null = null, days: [number, number][] = [];
           if (t.time && result.rows) {
-            days = (db.prepare(`SELECT ${t.time} / 86400000 * 86400000 AS d, count(*) AS n FROM main.${t.to} NOT INDEXED WHERE ${t.time} > 0 GROUP BY d ORDER BY d`)
+            report('Checking which days the data covers', 0, 1);
+            days =(db.prepare(`SELECT ${t.time} / 86400000 * 86400000 AS d, count(*) AS n FROM main.${t.to} NOT INDEXED WHERE ${t.time} > 0 GROUP BY d ORDER BY d`)
               .all() as { d: number; n: number }[]).map((r) => [r.d, r.n]);
             // Rows with time 0 have no time (31 orders of the November case): they do not stretch the span to 1970.
             const span = db.prepare(`SELECT min(${t.time}) AS a, max(${t.time}) AS b FROM main.${t.to} WHERE ${t.time} > 0`).get() as { a: number | null; b: number | null };
@@ -281,7 +282,7 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
     add('market', files.markets.map((m) => ({ item: m.item, price: m.price, default_price: m.defaultPrice, maintenance: +m.maintenance })));
     db.exec('COMMIT');
 
-    report('Building the index', 0, 1);
+    report('Preparing the data for quick searching', 0, 1);
     db.exec(INDEXES);
     // 1-hour candles for long time ranges. The open is that of the hour's first minute.
     db.exec(`INSERT INTO candle_hour
