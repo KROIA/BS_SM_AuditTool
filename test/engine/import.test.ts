@@ -49,7 +49,7 @@ test('the master: role, format, every table with the rows the builder wrote, and
   assert.equal(save.generation, 'current');
   assert.equal(save.name, 'survival-main');
   assert.equal(save.serverUid, 'f0000000-0000-4000-8000-000000000001');
-  assert.deepEqual(status(save), ['bank:read', 'market:read', 'bankDiag:read', 'marketDiag:read']);
+  assert.deepEqual(status(save), ['bank:read', 'market:read', 'bankDiag:read', 'marketDiag:read', 'audit:read']);
   const w = fx.rows.master!;
   assert.deepEqual(rowsOf(save, 'market'), { MarketPrice: 8 * 160, OrderHistory: 86 });
   assert.deepEqual(rowsOf(save, 'market'), { MarketPrice: w.MarketPrice, OrderHistory: w.OrderHistory });
@@ -67,6 +67,7 @@ test('the master: role, format, every table with the rows the builder wrote, and
     NoteFlow: [T0 + 52 * MIN, T0 + 69 * MIN],
     Meta: [null, null], // tables without a time column
     OrderOrigin: [null, null],
+    AuditLog: [T0 + 30 * MIN, T0 + 129 * MIN], // whole seconds: the log drops the milliseconds
   });
   const day = (ms: number) => ms - (ms % 86_400_000);
   const days = Object.fromEntries(save.sources.flatMap((x) => x.tables.map((t) => [t.name, t.days])));
@@ -88,7 +89,7 @@ test('a slave is named after its slave id and is expected to have only the journ
   assert.equal(save.name, 'mining-1');
   assert.equal(save.masterUid, 'f0000000-0000-4000-8000-000000000001');
   assert.equal(save.generation, 'current');
-  assert.deepEqual(status(save), ['bank:none', 'market:none', 'bankDiag:read', 'marketDiag:none']);
+  assert.deepEqual(status(save), ['bank:none', 'market:none', 'bankDiag:read', 'marketDiag:none', 'audit:none']);
   assert.deepEqual(rowsOf(save, 'bankDiag'), { TransferJournal: 4, NoteFlow: 1, Meta: 2 });
   assert.deepEqual([save.players, save.accounts, save.bankVersion], [0, 0, null]);
   assert.equal(save.lastPlayedMs, fx.lastPlayed['mining-1']);
@@ -101,7 +102,7 @@ test('an old 2.1.2 save: recognised as such, role assumed, and no complaint abou
   assert.equal(save.role, 'MASTER');
   assert.equal(save.roleAssumed, true);
   assert.equal(save.name, 'old-world');
-  assert.deepEqual(status(save), ['bank:read', 'market:read', 'bankDiag:none', 'marketDiag:none']);
+  assert.deepEqual(status(save), ['bank:read', 'market:read', 'bankDiag:none', 'marketDiag:none', 'audit:none']);
   const w = fx.rows.legacy!;
   assert.deepEqual(rowsOf(save, 'bank'), { TransactionLog: w.TransactionLog, BalanceHistory: w.BalanceHistory });
   assert.deepEqual(rowsOf(save, 'market'), { MarketPrice: w.MarketPrice, OrderHistory: w.OrderHistory });
@@ -194,7 +195,7 @@ test('a damaged market database gives up what is readable and says what was lost
   fs.closeSync(fd);
 
   const { save } = load(dir);
-  assert.deepEqual(status(save), ['bank:read', 'market:damaged', 'bankDiag:read', 'marketDiag:read']);
+  assert.deepEqual(status(save), ['bank:read', 'market:damaged', 'bankDiag:read', 'marketDiag:read', 'audit:read']);
   const candles = tables(save, 'market').find((t) => t.name === 'MarketPrice')!;
   assert.ok(candles.rows > fx.rows.master!.MarketPrice! / 2, `kept ${candles.rows} candles`);
   assert.ok(candles.lostIds > 0);
@@ -218,7 +219,7 @@ test('rows past the id that sqlite_sequence recorded are copied too', () => {
     db.exec("UPDATE sqlite_sequence SET seq = seq - 10 WHERE name IN ('MarketPrice', 'OrderHistory')");
     db.close();
   });
-  assert.deepEqual(status(save), ['bank:read', 'market:read', 'bankDiag:read', 'marketDiag:read']);
+  assert.deepEqual(status(save), ['bank:read', 'market:read', 'bankDiag:read', 'marketDiag:read', 'audit:read']);
   assert.deepEqual(rowsOf(save, 'market'), { MarketPrice: 8 * 160, OrderHistory: 86 });
 });
 
@@ -244,10 +245,13 @@ test('a file that is not a database is damaged, and a master without its market 
   fs.rmSync(path.join(dir, 'data/StockMarket/Database/stockdata.db'));
   fs.writeFileSync(path.join(dir, 'data/BankSystem/Database/banksystem.db'), 'this is not a database');
   const { save } = load(dir);
-  assert.deepEqual(status(save), ['bank:damaged', 'market:missing', 'bankDiag:read', 'marketDiag:read']);
+  assert.deepEqual(status(save), ['bank:damaged', 'market:missing', 'bankDiag:read', 'marketDiag:read', 'audit:read']);
   assert.deepEqual(tables(save, 'bank'), []);
   assert.equal(save.players, 6); // the NBT files are still read
-  assert.equal(save.warnings.length, 1);
+  // Without the bank's database nothing matches the audit log's entries: its times fall back to this computer's zone.
+  assert.equal(save.warnings.length, 2);
+  assert.match(save.warnings[0]!, /none of its entries could be matched.*this computer's time zone/);
+  assert.equal(save.sources.find((s) => s.id === 'audit')!.note, 'times approximate (time zone unknown), 1 entry not readable (kept as text)');
 });
 
 test('a folder without mod data is refused in plain words', () => {

@@ -20,10 +20,13 @@ export interface SaveTable {
  * missing: should be there for this kind of save and is not. none: not there, and that is normal.
  */
 export interface SaveSource {
-  id: 'bank' | 'market' | 'bankDiag' | 'marketDiag';
+  /** audit: the bank's audit log files, one table AuditLog with an entry per row. */
+  id: 'bank' | 'market' | 'bankDiag' | 'marketDiag' | 'audit';
   status: 'read' | 'damaged' | 'missing' | 'none';
   bytes: number;
   tables: SaveTable[];
+  /** A sentence about how the source was read, e.g. the audit log's time zone. */
+  note?: string;
 }
 
 export interface SaveSummary {
@@ -411,9 +414,35 @@ export interface QueryApi {
    * Sorted by level, highest first, then by time.
    */
   findings(scope: Scope, settings: RuleSettings): FindingsResult;
+  /** Admin actions and admin changes from the bank's audit log in the time range, oldest first. Empty without an audit log. */
+  adminEvents(scope: Scope): AdminEvent[];
 }
 
-export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings'> {
+/** One admin action (ADMIN_SET, ADMIN_REMOVE, ...) or admin change of BS-257 (RIGHTS_OP, SLAVE_TRUST, ...) from the audit log. */
+export interface AdminEvent {
+  id: number;
+  time: number;
+  /** The log's time zone could not be worked out: the time is read in this computer's zone and may be off by whole hours. */
+  approximate: boolean;
+  type: string;
+  account: number | null;
+  item: number | null;
+  /** Raw, as the ledger row stores it. null for BS-257 changes. */
+  amount: bigint | null;
+  /** Player name, or the source (ADMIN, CONSOLE, ...) when no player acted. */
+  actor: string;
+  actorUuid: string | null;
+  /** RIGHTS_OP and RIGHTS_DEOP: the player whose rights changed. */
+  player: string | null;
+  note: string | null;
+  /** BS-257 only: what changed, in the mod's words (player, slave, item, company), and its new state (admin, not_admin, trusted, ...). */
+  subject: string | null;
+  state: string | null;
+  /** The ledger row of the action, when the save still has it (the history shows that row already). */
+  ledgerId: number | null;
+}
+
+export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'adminEvents'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
   addSave(path: string): Workspace;

@@ -9,7 +9,7 @@
 //   price-spike  time, low, high (of the most extreme candle), usual, minutes
 //   balance      item, difference (signed), labels, rating
 //   order-ledger volume, logged (of the order furthest off), orders
-//   bank-flag    flagType, severity, amount, ref, details
+//   bank-flag    flagType, severity, amount, ref, details; origin 'audit log' and approximateTime for a flag only the audit log has
 //   last-save    lastSave, rows
 import type { DatabaseSync } from 'node:sqlite';
 import type { Fact, Finding, FindingsResult, Level, OrderRow, RuleId, RuleSettings, RuleStatus, Scope } from '../../shared/api.ts';
@@ -253,14 +253,14 @@ const RULES: { [K in keyof RuleSettings]: Rule<K> } = {
   },
 
   'bank-flag': {
-    applies: () => (mainSave()?.sources.find((x) => x.id === 'bank')?.tables.some((t) => t.name === 'SuspicionFlag') ? null
+    applies: (db) => (mainSave()?.sources.find((x) => x.id === 'bank')?.tables.some((t) => t.name === 'SuspicionFlag') || exists(db, "SELECT 1 FROM audit WHERE kind = 'FLAG'") ? null
       : 'This save has no flag table: the bank mod raises flags from version 2.2.0 on.'),
     run: (db, _s, st) => {
       const audit = bankSettings(db);
       const money = (key: string) => (typeof audit[key] === 'number' ? BigInt(Math.round((audit[key] as number) * 100)) : null);
       const limit: Record<number, bigint | null> = { 1: money('LAUNDERING_MIN_AMOUNT'), 2: money('LARGE_NOTE_WITHDRAWAL_AMOUNT'), 3: money('WEALTH_JUMP_AMOUNT'),
         4: money('NEW_ACCOUNT_TRANSFER_AMOUNT'), 5: money('MONEY_SUPPLY_GROWTH_AMOUNT') };
-      return all(db, 'SELECT * FROM flag ORDER BY ts, id').map((r): Finding => {
+      const fromDb = all(db, 'SELECT * FROM flag ORDER BY ts, id').map((r): Finding => {
         const id = num(r.id)!, type = num(r.flag_type)!, severity = num(r.severity)!, account = num(r.account)!, amount = big(r.amount)!;
         const owner = st.owner.get(account);
         return {
@@ -273,6 +273,19 @@ const RULES: { [K in keyof RuleSettings]: Rule<K> } = {
           records: { orders: [], ledger: [], flags: [id], candles: [] }, acknowledged: r.acknowledged === 1n,
         };
       });
+      // A FLAG entry of the audit log without its flag row: a row the database lost. Whether it was acknowledged is unknown.
+      const fromLog = all(db, "SELECT * FROM audit WHERE kind = 'FLAG' AND row_id IS NULL AND ts IS NOT NULL ORDER BY ts, id").map((r): Finding => {
+        const type = Number(r.type), severity = num(r.severity)!, account = num(r.account)!, amount = big(r.amount)!, ts = num(r.ts)!;
+        const owner = st.owner.get(account);
+        return {
+          ...blank('bank-flag', `log@${num(r.local)}:${account}:${type}`), basis: 'as raised', source: 'bank mod', start: ts, end: ts,
+          level: severity >= 3 ? 'critical' : severity === 2 ? 'high' : severity === 1 ? 'medium' : 'low',
+          players: owner ? [{ uuid: owner, name: st.nameOf(owner) }] : [], accounts: account === 0 ? [] : [account],
+          measured: { value: amount, threshold: limit[type] ?? null, unit: type <= 6 ? 'money' : type === 7 ? 'items' : 'shares' },
+          facts: { flagType: type, severity, amount, ref: text(r.ref), details: text(r.text), origin: 'audit log', approximateTime: r.approx === 1n },
+        };
+      });
+      return [...fromDb, ...fromLog].sort((a, b) => a.start - b.start);
     },
   },
 

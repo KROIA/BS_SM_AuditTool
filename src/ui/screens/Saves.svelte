@@ -12,6 +12,7 @@
     market: 'Market orders and prices',
     bankDiag: 'Bank diagnostics',
     marketDiag: 'Market diagnostics',
+    audit: 'Bank audit log',
   };
   const ROLE = { MASTER: 'Master', SLAVE: 'Slave', STANDALONE: 'Single server' };
   /** The mods' tables in words. The engine's progress steps name the table being read. */
@@ -25,6 +26,7 @@
     NoteFlow: 'banknote log',
     OrderOrigin: 'order origins',
     Meta: 'diagnostics',
+    AuditLog: 'audit log',
   };
   const DAY = 86_400_000;
   const date = (ms: number, utc = false) => time(ms, utc).split(',')[0];
@@ -32,7 +34,7 @@
   function detail(s: SaveSource): string {
     if (s.status === 'missing') return 'not in this copy';
     const rows = s.tables.reduce((sum, t) => sum + t.rows, 0), lost = s.tables.reduce((sum, t) => sum + t.lostIds, 0);
-    const text = `${count(s.tables.length)} ${s.tables.length === 1 ? 'table' : 'tables'}, ${count(rows)} rows`;
+    const text = (s.id === 'audit' ? `${count(rows)} entries` : `${count(s.tables.length)} ${s.tables.length === 1 ? 'table' : 'tables'}, ${count(rows)} rows`) + (s.note ? ', ' + s.note : '');
     if (s.status !== 'damaged') return text;
     if (!s.tables.length) return 'the file could not be opened';
     const newest = s.tables.filter((t) => t.newestLost).map((t) => TABLE[t.name] ?? t.name);
@@ -42,7 +44,7 @@
   /** The sources worth a line: everything except what this kind of save never has. */
   const shown = (save: SaveSummary) => save.sources.filter((s) => s.status !== 'none');
   const taken = (save: SaveSummary) => (save.lastPlayedMs === null ? 'When the copy was taken is unknown' : 'Copy taken ' + time(save.lastPlayedMs));
-  const size = (save: SaveSummary) => bytes(save.sources.reduce((sum, s) => sum + s.bytes, 0)) + ' of databases';
+  const size = (save: SaveSummary) => bytes(save.sources.filter((s) => s.id !== 'audit').reduce((sum, s) => sum + s.bytes, 0)) + ' of databases';
   function versions(save: SaveSummary): string {
     const mc = save.minecraft ? `Minecraft ${save.minecraft}` : 'Minecraft version unknown';
     if (save.generation === 'legacy') return `Written by BankSystem 2.1.2, before the audit additions. ${mc}.`;
@@ -99,6 +101,7 @@
       ['bank', 'BalanceHistory', 'Balance snapshots', true],
       ['market', 'OrderHistory', 'Market orders', false],
       ['market', 'MarketPrice', 'Market prices', true],
+      ['audit', 'AuditLog', 'Bank audit log', false],
     ];
     const mains = app.saves.filter((s) => s.sources.some((x) => (x.id === 'bank' || x.id === 'market') && x.status !== 'none'));
     for (const save of mains) {

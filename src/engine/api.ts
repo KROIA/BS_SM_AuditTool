@@ -2,6 +2,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { EngineApi } from '../shared/api.ts';
 import { account, accounts, balances } from './query/accounts.ts';
+import { adminEvents } from './query/admin.ts';
 import { check } from './query/check.ts';
 import { findings } from './query/findings.ts';
 import { candles, market, markets, traders } from './query/markets.ts';
@@ -30,6 +31,7 @@ export const api: EngineApi = {
   sessions,
   check,
   findings,
+  adminEvents,
   selfCheck() {
     const db = new DatabaseSync(':memory:');
     try {

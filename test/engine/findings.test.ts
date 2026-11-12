@@ -7,7 +7,7 @@ import { api } from '../../src/engine/api.ts';
 import { group, level, roundTrips } from '../../src/engine/query/findings.ts';
 import { addSave, init } from '../../src/engine/workspace.ts';
 import { DEFAULT_RULES, type Finding, type OrderRow, type RuleId, type RuleSettings, type Scope } from '../../src/shared/api.ts';
-import { buildFixtures, CHECK, COMPANY, ITEM, LAST_SAVE, PLAYERS, STRAY, T0, uuidText, type Fixtures } from '../fixtures/build.ts';
+import { AUDIT_OFFSET, buildFixtures, CHECK, COMPANY, ITEM, LAST_SAVE, LOST_FLAG, PLAYERS, STRAY, T0, uuidText, type Fixtures } from '../fixtures/build.ts';
 
 const MIN = 60_000;
 const ALL: Scope = { from: null, to: null, server: null };
@@ -22,6 +22,7 @@ const uuid = (name: keyof typeof PLAYERS) => uuidText(PLAYERS[name].n);
 const of = (rule: RuleId, settings: RuleSettings = DEFAULT_RULES, scope = ALL) => api.findings(scope, settings).findings.filter((f) => f.rule === rule);
 const set = <K extends keyof RuleSettings>(rule: K, s: Partial<RuleSettings[K]>): RuleSettings => ({ ...DEFAULT_RULES, [rule]: { ...DEFAULT_RULES[rule], ...s } });
 const who = (f: Finding) => f.players.map((p) => p.name);
+const LOG_FLAG = `bank-flag:log@${LOST_FLAG.ts + AUDIT_OFFSET}:${LOST_FLAG.account}:${LOST_FLAG.type}`;
 
 before(() => (fx = buildFixtures(fs.mkdtempSync(path.join(os.tmpdir(), 'audittool-findings-')))));
 after(() => {
@@ -119,6 +120,7 @@ test('bank flags: as raised, severity to level, acknowledged carried, thresholds
   const r = api.findings(ALL, DEFAULT_RULES);
   assert.deepEqual(r.findings.filter((f) => f.rule === 'bank-flag').map((f) => [f.id, f.level, f.accounts, f.acknowledged, f.basis, f.source, f.measured.threshold, f.measured.unit]), [
     ['bank-flag:3', 'critical', [COMPANY.account], true, 'as raised', 'bank mod', null, 'shares'],
+    [LOG_FLAG, 'critical', [LOST_FLAG.account], null, 'as raised', 'bank mod', 1_000_000_000n, 'money'], // only in the audit log
     ['bank-flag:2', 'high', [PLAYERS.Ombrelune.account], false, 'as raised', 'bank mod', 200_000_000n, 'money'],
     ['bank-flag:1', 'medium', [PLAYERS.Tavrik.account], false, 'as raised', 'bank mod', 100_000_000n, 'money'],
   ]);
@@ -181,6 +183,7 @@ test('fixed run: every finding on the current and the old save', () => {
   open(fx.master);
   assert.deepEqual(run(), [
     'critical bank-flag:3',
+    `critical ${LOG_FLAG}`,
     `high hour-profit:${tavrik}@${T0}`,
     `high balance:${CHECK.set}:${ITEM.money}@${at(30)}`,
     'high bank-flag:2',

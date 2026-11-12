@@ -55,6 +55,11 @@ export const CHECK = { gain: 12, pair: 13, set: 14, stamp: 15, raw: 16, gone: 17
 export const STRAY = { account: 18, order: 1 } as const;
 /** When the master's bank last saved: the trade row of the last order (minute 130, +5.3 s) is newer. */
 export const LAST_SAVE = T0 + 130 * 60_000;
+/** The master's audit log is written in server local time, one hour ahead of UTC. */
+export const AUDIT_OFFSET = 60 * 60_000;
+/** A flag in the audit log whose SuspicionFlag row is missing: the database lost it. */
+export const LOST_FLAG = { account: 7, type: 2, severity: 3, amount: 1_500_000_000n, ts: T0 + 100 * 60_000 } as const;
+const SHARE_DETAILS = 'more shares than issued\nissued: 1000 shares\nheld: 1005 shares';
 export const MINECRAFT = '1.21.1';
 
 /** Invented UUIDs whose halves do not fit into a floating-point number, like real ones. */
@@ -355,10 +360,38 @@ function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers
     db.insert('SuspicionFlag', { ts: T0 + 70 * MIN + 600, account_number: PLAYERS.Ombrelune.account, flag_type: 1, severity: 2, amount: 300_000_000n,
       details: 'banknote deposit 3000000.00\nown withdrawals in 24 h: 0.00' });
     // A share excess an admin has already looked at: critical, acknowledged.
-    db.insert('SuspicionFlag', { ts: T0 + 60 * MIN, account_number: COMPANY.account, flag_type: 8, severity: 3, amount: 500, details: 'more shares than issued',
+    db.insert('SuspicionFlag', { ts: T0 + 60 * MIN, account_number: COMPANY.account, flag_type: 8, severity: 3, amount: 500, details: SHARE_DETAILS,
       acknowledged: 1 });
   }
   return { counts: db.close(), balance };
+}
+
+/**
+ * The bank's audit log (BS AdminAudit.java): a line per admin action and per flag, in server local time, CRLF as on a
+ * Windows server. Both shapes of ADMIN lines: with a ledger row, and BS-257 changes without one. A file of the day
+ * before holds a line the bank did not write; a digest and a file with another name are not the log.
+ */
+function auditLog(dataDir: string) {
+  const dir = path.join(dataDir, 'BankSystem', 'audit');
+  fs.mkdirSync(dir, { recursive: true });
+  const at = (ms: number) => new Date(ms + AUDIT_OFFSET).toISOString().slice(0, 19).replace('T', ' ');
+  const noor = `AdmiralNoor (${uuidText(PLAYERS.AdmiralNoor.n)})`;
+  const lines: [number, string][] = [
+    [T0 + 30 * MIN + 500, `ADMIN ADMIN_SET account ${CHECK.set} item ${ITEM.money} amount 1000000 by ADMIN note "balance corrected"`],
+    [T0 + 45 * MIN, `FLAG 3 account ${PLAYERS.Tavrik.account} severity 1 amount 3900000000 "wealth more than doubled within one hour"`],
+    [T0 + 60 * MIN, `FLAG 8 account ${COMPANY.account} severity 3 amount 500 "${SHARE_DETAILS}"`],
+    [T0 + 65 * MIN, `ADMIN FLAG_ACK company ${COMPANY.id} "${COMPANY.name}" account ${COMPANY.account} flag SHARE_EXCESS excess 500 state acknowledged by ${noor}`],
+    [T0 + 70 * MIN + 600, `FLAG 1 account ${PLAYERS.Ombrelune.account} severity 2 amount 300000000 "banknote deposit 3000000.00\nown withdrawals in 24 h: 0.00"`],
+    [LOST_FLAG.ts, `FLAG ${LOST_FLAG.type} account ${LOST_FLAG.account} severity ${LOST_FLAG.severity} amount ${LOST_FLAG.amount} ref note:lost "large banknote withdrawal"`],
+    [T0 + 120 * MIN + 500, `ADMIN ADMIN_REMOVE account ${PLAYERS.Quenby.account} item ${ITEM.money} amount 20000000 by ${noor} note "exploit profit removed"`],
+    [T0 + 125 * MIN + 500, `ADMIN ADMIN_SET account ${PLAYERS.AdmiralNoor.account} item ${ITEM.money} amount 2500000 by ${noor} note "money set AdmiralNoor: 10000000->7500000"`],
+    [T0 + 128 * MIN, `ADMIN RIGHTS_OP player ${uuidText(PLAYERS.Brindle.n)} "Brindle" state admin by ${noor}`],
+    [T0 + 129 * MIN, 'ADMIN SLAVE_TRUST slave "mining-1" state trusted by CONSOLE'],
+  ];
+  fs.writeFileSync(path.join(dir, at(T0).slice(0, 10) + '.log'), lines.map(([ms, l]) => `${at(ms)} ${l}\r\n`).join(''));
+  fs.writeFileSync(path.join(dir, at(T0 - 24 * 60 * MIN).slice(0, 10) + '.log'), 'server restarted, audit file rotated by hand\n');
+  fs.writeFileSync(path.join(dir, 'digest-' + at(T0).slice(0, 10) + '.md'), '# Digest\n\n2026-11-04 11:00:00 FLAG 9 account 1 severity 1\n');
+  fs.writeFileSync(path.join(dir, 'notes.log'), '2026-11-04 11:00:00 FLAG 9 account 1 severity 1\n');
 }
 
 /** A chunked list as the mods write it: <dir>/chunk_<i>.nbt, elementType only in chunk_0, no file for an empty list. */
@@ -475,6 +508,7 @@ export function buildFixtures(root: string): Fixtures {
   // The bank's own flag thresholds: one changed, one invalid (left at its default), the rest default.
   fs.writeFileSync(path.join(data, 'BankSystem', 'settings.json'), JSON.stringify({ Utilities: { STARTING_BALANCE: 0 },
     Audit: { LAUNDERING_MIN_AMOUNT: 2_000_000, WEALTH_JUMP_PERCENT: 'lots' } }, null, 2));
+  auditLog(data);
   db.insert('NoteFlow', { ts: T0 + 52 * MIN, source: 'banksystem:converter_out', player_uuid: uuidText(PLAYERS.Tavrik.n), item_id: ITEM.money, amount: 40, context: 'converter' });
   db.insert('NoteFlow', { ts: T0 + 69 * MIN, source: 'stockmarket:villager_pay', player_uuid: uuidText(PLAYERS.Ombrelune.n), item_id: ITEM.money, amount: -3, context: 'trade',
     villager_uuid: uuidText(900), dimension: 'minecraft:overworld', x: 120, y: 64, z: -340 });

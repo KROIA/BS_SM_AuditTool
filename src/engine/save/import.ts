@@ -5,11 +5,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { SaveSource, SaveSummary, SaveTable } from '../../shared/api.ts';
+import { time } from '../../shared/fmt.ts';
+import { placeInTime, readAuditLog } from './audit.ts';
 import { readBankAudit, readFiles, readUserCache } from './files.ts';
 import { findDataDir, readIdentity, readLevel } from './locate.ts';
 
 /** Raise when the layout of the cache changes: caches written by an older version are rebuilt. */
-export const CACHE_VERSION = 7;
+export const CACHE_VERSION = 8;
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -21,6 +23,7 @@ CREATE TABLE snapshot (id INTEGER PRIMARY KEY, account INTEGER NOT NULL, item IN
 CREATE TABLE flag (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, account INTEGER NOT NULL, flag_type INTEGER NOT NULL, severity INTEGER NOT NULL, amount INTEGER NOT NULL, ref TEXT, details TEXT, acknowledged INTEGER NOT NULL);
 CREATE TABLE transfer_step (id INTEGER PRIMARY KEY, transfer_id TEXT NOT NULL, ts INTEGER NOT NULL, direction TEXT, path TEXT, step TEXT NOT NULL, account INTEGER, player TEXT, items_json TEXT, ledger_type INTEGER, context TEXT, detail TEXT);
 CREATE TABLE note_flow (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, source TEXT NOT NULL, player TEXT, item INTEGER NOT NULL, amount INTEGER NOT NULL, context TEXT, villager TEXT, dimension TEXT, x INTEGER, y INTEGER, z INTEGER);
+CREATE TABLE audit (id INTEGER PRIMARY KEY, ts INTEGER, approx INTEGER NOT NULL, local INTEGER, kind TEXT NOT NULL, type TEXT, account INTEGER, item INTEGER, amount INTEGER, severity INTEGER, ref TEXT, actor TEXT, actor_uuid TEXT, player TEXT, subject TEXT, state TEXT, text TEXT, row_id INTEGER);
 CREATE TABLE order_origin (ref TEXT PRIMARY KEY, server_uid TEXT, name TEXT NOT NULL);
 CREATE TABLE diag_meta (source TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL);
 CREATE TABLE player (uuid TEXT PRIMARY KEY, name TEXT NOT NULL, bank_admin INTEGER NOT NULL, market_admin INTEGER NOT NULL);
@@ -77,19 +80,19 @@ const TABLES: TableImport[] = [
     columns: [{ to: 'ref', from: 'ref' }, { to: 'server_uid', from: 'origin_server_uid' }, { to: 'name', from: 'origin_name' }] },
   { source: 'marketDiag', from: 'Meta', to: 'diag_meta', columns: same('key', 'value'), fixed: { source: "'market'" } },
 ];
-const FILES: Record<SaveSource['id'], string> = {
+const FILES: Record<Exclude<SaveSource['id'], 'audit'>, string> = {
   bank: 'BankSystem/Database/banksystem.db',
   market: 'StockMarket/Database/stockdata.db',
   bankDiag: 'BankSystem/Database/banksystem_diagnostics.db',
   marketDiag: 'StockMarket/Database/stockmarket_diagnostics.db',
 };
-const SOURCE_IDS = Object.keys(FILES) as SaveSource['id'][];
+const SOURCE_IDS = Object.keys(FILES) as (keyof typeof FILES)[];
 // A database's -wal and -journal hold changes its main file does not show yet; the NBT folders and level.dat feed the summary too.
 const FINGERPRINT_FILES = [
   ...Object.values(FILES).flatMap((f) => [f, f + '-wal', f + '-journal']),
   'ModUtilities/server_identity.json', 'BankSystem/ItemIDs.nbt', 'BankSystem/Meta_data.nbt', 'BankSystem/settings.json', '../level.dat', '../../usercache.json',
 ];
-const FINGERPRINT_DIRS = ['BankSystem/Bank_data', 'BankSystem/Companies', 'StockMarket/MarketManager'];
+const FINGERPRINT_DIRS = ['BankSystem/audit', 'BankSystem/Bank_data', 'BankSystem/Companies', 'StockMarket/MarketManager'];
 const CHUNK = 200_000; // ids per insert; a failing insert is halved until the damage is fenced in
 const SMALLEST = 64;
 
@@ -207,6 +210,64 @@ function copyTable(db: DatabaseSync, t: TableImport, report: Report): Copied | n
   return { rows: countRows() - before, lostIds, newestLost, has };
 }
 
+const hours = (ms: number) => `${ms < 0 ? '-' : '+'}${String(Math.floor(Math.abs(ms) / 3_600_000)).padStart(2, '0')}:${String((Math.abs(ms) / 60_000) % 60).padStart(2, '0')}`;
+
+/**
+ * The bank's audit log into the audit table, after the flags and the ledger: its local times are placed by matching
+ * FLAG entries to flag rows and ADMIN entries to ledger rows (DATA_SOURCES.md, "Files").
+ */
+function auditLog(db: DatabaseSync, dataDir: string, warnings: string[]): SaveSource {
+  const log = readAuditLog(dataDir);
+  if (!log) return { id: 'audit', status: 'none', bytes: 0, tables: [] };
+  const key = (e: (typeof log.entries)[number]) =>
+    e.kind === 'FLAG' ? `F:${e.account}:${e.type}:${e.amount}` : e.kind === 'ADMIN' ? `A:${e.account}:${e.type}:${e.amount}` : null;
+  const rows = [
+    ...(db.prepare('SELECT id, ts, account, flag_type, CAST(amount AS TEXT) AS amount FROM flag').all() as Record<string, number | bigint>[])
+      .map((r) => ({ id: Number(r.id), ts: Number(r.ts), key: `F:${r.account}:${r.flag_type}:${r.amount}` })),
+    ...(db.prepare("SELECT id, ts, account, kind, CAST(amount AS TEXT) AS amount FROM ledger WHERE kind LIKE 'ADMIN%' OR kind IN ('ACCOUNT_FREEZE', 'BANK_CLOSED', 'ACCOUNT_DELETE_LOSS')").all() as Record<string, number | bigint | string>[])
+      .map((r) => ({ id: Number(r.id), ts: Number(r.ts), key: `A:${r.account}:${r.kind}:${r.amount}` })),
+  ];
+  const when = placeInTime(log.entries.map((e) => ({ local: e.local, key: key(e), file: e.file })), rows, log.files.length);
+  const insert = db.prepare(`INSERT INTO audit (ts, approx, local, kind, type, account, item, amount, severity, ref, actor, actor_uuid, player, subject, state, text, row_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  db.exec('BEGIN');
+  log.entries.forEach((e, i) => {
+    const p = when.placed[i]!;
+    insert.run(p.ts, +p.approximate, e.local, e.kind, e.type, e.account, e.item, e.amount, e.severity, e.ref, e.actor, e.actorUuid, e.player, e.subject, e.state, e.text, p.row);
+  });
+  db.exec('COMMIT');
+
+  const raw = log.entries.filter((e) => e.kind === 'RAW').length;
+  const date = (f: number) => time(Date.parse(log.files[f]! + 'T00:00:00Z'), true).split(',')[0]!;
+  // The offsets in file order: "UTC+02:00 until 26 Oct 2026, then UTC+01:00".
+  const runs: { offset: number; from: number }[] = [];
+  when.zones.forEach((z, f) => {
+    if (z.offset !== null && runs.at(-1)?.offset !== z.offset) runs.push({ offset: z.offset, from: f });
+  });
+  let zone = 'times approximate (time zone unknown)';
+  if (runs.length) {
+    zone = 'server time ' + runs.map((r, i) => `UTC${hours(r.offset)}${runs[i + 1] ? ' until ' + date(runs[i + 1]!.from) : ''}`).join(', then ') +
+      `, from ${when.matches} ${when.matches === 1 ? 'entry' : 'entries'} matched to the database`;
+    const rough = when.zones.flatMap((z, f) => (z.how === 'approximate' ? [f] : []));
+    if (rough.length) zone += rough.length <= 3 ? `, times of ${rough.map(date).join(', ')} approximate` : `, times of ${rough.length} days approximate`;
+  } else {
+    warnings.push("The bank's audit log gives its times without a time zone and none of its entries could be matched to the database. " +
+      "Its times are read in this computer's time zone and may be off by whole hours.");
+  }
+  const ts = when.placed.flatMap((p) => (p.ts === null ? [] : [p.ts]));
+  const days = new Map<number, number>();
+  for (const t of ts) {
+    const day = Math.floor(t / 86_400_000) * 86_400_000;
+    days.set(day, (days.get(day) ?? 0) + 1);
+  }
+  return {
+    id: 'audit', status: log.bounded ? 'damaged' : 'read', bytes: log.bytes,
+    tables: [{ name: 'AuditLog', rows: log.entries.length, lostIds: 0, newestLost: log.bounded, from: ts.length ? ts.reduce((a, b) => Math.min(a, b)) : null, to: ts.length ? ts.reduce((a, b) => Math.max(a, b)) : null,
+      days: [...days].sort((a, b) => a[0] - b[0]) }],
+    note: zone + (raw ? `, ${raw} ${raw === 1 ? 'entry' : 'entries'} not readable (kept as text)` : ''),
+  };
+}
+
 /** Reads a save into a new cache database at cacheFile and returns what was found. */
 export function importSave(picked: string, cacheFile: string, report: Report = () => {}): SaveSummary {
   const dataDir = findDataDir(picked);
@@ -313,6 +374,7 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
       const expected = role === 'SLAVE' ? id === 'bankDiag' : id === 'bank' || id === 'market' || current;
       return { id, status: expected ? 'missing' : 'none', bytes: 0, tables: [] };
     });
+    sources.push(auditLog(db, dataDir, warnings));
     if (sources.some((s) => s.status === 'damaged')) {
       warnings.push('A part of this save could not be read and is left out. This is common when the copy was taken while the server was running.');
     }

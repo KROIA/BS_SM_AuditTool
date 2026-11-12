@@ -54,6 +54,7 @@ test.describe('with the invented network loaded', () => {
     // numbers on the screen use the apostrophe: 8 markets x 160 candles + 86 orders
     await expect(master).toContainText("2 tables, 1'366 rows");
     await expect(master).toContainText('Master');
+    await expect(master).toContainText('11 entries, server time UTC+01:00, from 6 entries matched to the database, 1 entry not readable (kept as text)');
     await expect(master).toContainText('Copy taken 4 Nov 2026');
     await expect(master).toContainText('BankSystem 2.2.0 · Minecraft 1.21.1');
     await expect(page.locator('section', { hasText: 'mining-1' }).first()).toContainText('Slaves keep no bank or market data.');
@@ -62,8 +63,9 @@ test.describe('with the invented network loaded', () => {
 
   test('the coverage shows one row per source on one time axis', async () => {
     const rows = page.locator('.crow:not([aria-hidden])');
-    await expect(rows.locator('.clabel')).toHaveText(['Bank log', 'Balance snapshots', 'Market orders', 'Market prices',
+    await expect(rows.locator('.clabel')).toHaveText(['Bank log', 'Balance snapshots', 'Market orders', 'Market prices', 'Bank audit log',
       'Diagnostics, survival-main', 'Diagnostics, mining-1', 'Diagnostics, nether-hub']);
+    await expect(rows.nth(4).locator('.cnote')).toHaveText('since 4 Nov 2026');
     // the bank log starts with the starting balances a day before the scenario; the market only has the scenario day
     await expect(rows.nth(0).locator('.cnote')).toHaveText('since 3 Nov 2026');
     await expect(rows.nth(3).locator('.cnote')).toHaveText('since 4 Nov 2026');
