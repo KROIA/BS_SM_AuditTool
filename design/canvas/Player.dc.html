@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Audit Tool · Players</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;cursor:pointer}
+input{font:inherit;color:inherit}
+.app{--bg:#0e1013;--rail:#0a0c0f;--card:#15181d;--raised:#1d2128;--line:#272c35;--line2:#39404c;--text:#eceef1;--text2:#aab1bc;--text3:#8a929e;--accent:#8fa2ff;--onaccent:#0e1013;--up:#4fd1b5;--down:#f2686f;--crit:#ff6b6b;--high:#ffa94d;--med:#ffd43b;--low:#74a8ff;--buy:#6ea8ff;--sell:#ffa94d}
+.app[data-theme="light"]{--bg:#f5f6f8;--rail:#eceef1;--card:#ffffff;--raised:#eff1f4;--line:#e1e4e9;--line2:#c8cdd5;--text:#14171c;--text2:#48505b;--text3:#5d6570;--accent:#3b5bdb;--onaccent:#ffffff;--up:#0b7a64;--down:#c92a3a;--crit:#c92a2a;--high:#b85c00;--med:#8a6d00;--low:#2b5fc7;--buy:#2b5fc7;--sell:#b85c00}
+.nav{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:8px;color:var(--text2);font-weight:500}
+.nav:hover,.nav[aria-current="page"]{background:var(--raised);color:var(--text)}
+.row:hover{background:var(--raised) !important}
+.btn:hover{background:var(--raised) !important}
+</style>
+</helmet>
+<div class="app" data-theme="{{theme}}" style="min-height: 100vh; display: flex; flex-wrap: wrap; background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; font-size: 14px; line-height: 20px">
+
+<nav aria-label="Sections" style="flex: 1 1 232px; box-sizing: border-box; display: flex; flex-direction: column; gap: 28px; padding: 20px 12px; background: var(--rail); border-right: 1px solid var(--line)">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 12px">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4M8 12l2-3 2 2 2-3"></path></svg>
+<span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600">Audit Tool</span>
+</a>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<a class="nav" href="Main.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M4 4h7v7H4zM13 4h7v4h-7zM13 11h7v9h-7zM4 14h7v6H4z"></path></svg><span>Overview</span></a>
+<a class="nav" href="Findings.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M12 4l9 15H3zM12 10v4M12 16.5v.5"></path></svg><span style="flex: 1">Findings</span><span style="min-width: 22px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; font-size: 12px; line-height: 20px; text-align: center; color: var(--crit); background: color-mix(in srgb, var(--crit) 16%, transparent)">20</span></a>
+<a class="nav" href="Player.dc.html" aria-current="page"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20c.8-3.4 3.8-5.5 7.5-5.5s6.7 2.1 7.5 5.5"></path></svg><span>Players</span></a>
+<a class="nav" href="Market.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M7 3v4M7 15v6M5 7h4v8H5zM17 3v6M17 15v6M15 9h4v6h-4z"></path></svg><span>Markets</span></a>
+<a class="nav" href="Account.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M3 10l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 20h18"></path></svg><span>Bank accounts</span></a>
+<a class="nav" href="Flow.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M4 7h5c3 0 3 10 6 10h5M4 17h5c1.2 0 1.9-1.6 2.6-3.5M17 14l3 3-3 3"></path></svg><span>Money flow</span></a>
+<a class="nav" href="Servers.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01"></path></svg><span>Saves and servers</span></a>
+<a class="nav" href="Case.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"></path></svg><span>Case and report</span></a>
+</div>
+<a class="btn" href="Servers.dc.html" style="margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 10px; border: 1px solid var(--line)">
+<span style="font-weight: 500">3 saves loaded</span>
+<span style="font-size: 13px; color: var(--text3)">Snapshot 5 Nov 2026, 18:25 UTC</span>
+<span style="display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--up)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3"></path></svg>Read-only copies</span>
+</a>
+</nav>
+
+<div style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 32px; border-bottom: 1px solid var(--line)">
+<label style="flex: 1 1 280px; max-width: 460px; display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; box-sizing: border-box; border-radius: 10px; background: var(--card); border: 1px solid var(--line); color: var(--text3)">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4"></path></svg>
+<input aria-label="Search everything" placeholder="Search players, accounts, items, order or transfer ids" style="flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text)">
+</label>
+<div style="flex: 1 1 0"></div>
+<button type="button" class="btn" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--text3)"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 8v4l3 2"></path></svg><span>3 Nov 00:00 to 5 Nov 18:25</span><span style="color: var(--text3)">UTC</span></button>
+<button type="button" class="btn" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--text3)"><path d="M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01"></path></svg><span>All servers</span></button>
+<a class="btn" href="Case.dc.html" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; box-sizing: border-box; border-radius: 10px; border: 1px solid var(--line); background: var(--card)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--text3)"><path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"></path></svg><span>Case</span><span style="color: var(--text3)">4 pinned</span></a>
+</header>
+
+<div style="flex: 1 1 auto; display: flex; flex-wrap: wrap">
+<aside aria-label="Player list" style="flex: 1 1 264px; box-sizing: border-box; padding: 24px 12px; border-right: 1px solid var(--line)">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 12px">
+<h2 style="margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text3)">Players</h2>
+<span style="font-size: 12px; color: var(--text3)">most suspicious first</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px; margin-top: 12px">
+<sc-for list="{{roster}}" as="r" hint-placeholder-count="6">
+<button type="button" class="row" onClick="{{r.pick}}" aria-pressed="{{r.on}}" style="display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 12px; border: 0; border-radius: 8px; text-align: left; background: {{r.bg}}">
+<span aria-hidden="true" style="flex: none; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; background: {{r.avBg}}; color: {{r.avFg}}">{{r.ini}}</span>
+<span style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column">
+<span style="font-weight: 500">{{r.name}}</span>
+<span style="font-size: 13px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.sub}}</span>
+</span>
+<sc-if value="{{r.hasBadge}}" hint-placeholder-val="{{ false }}"><span style="flex: none; min-width: 22px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; font-size: 12px; line-height: 20px; text-align: center; color: {{r.badgeFg}}; background: {{r.badgeBg}}">{{r.badge}}</span></sc-if>
+</button>
+</sc-for>
+</div>
+<p style="margin: 16px 12px 0; font-size: 13px; color: var(--text3)">37 more players with nothing flagged</p>
+</aside>
+
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; padding: 28px 32px 40px">
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px">
+<span aria-hidden="true" style="flex: none; width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 20px; font-weight: 600; background: {{S.avBg}}; color: {{S.avFg}}">{{S.ini}}</span>
+<div style="flex: 1 1 320px; min-width: 0">
+<h1 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em">{{S.name}}</h1>
+<p style="margin: 2px 0 0; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; color: var(--text3); overflow-wrap: anywhere">{{S.uuid}}</p>
+</div>
+<button type="button" class="btn" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line2); background: transparent; font-weight: 500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"></path></svg>Pin player to case</button>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 13px; color: var(--text2)">
+<sc-for list="{{S.facts}}" as="x" hint-placeholder-count="3"><span>{{x}}</span></sc-for>
+</div>
+
+<section aria-label="Key figures" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 16px">
+<sc-for list="{{S.stats}}" as="k" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 20px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="font-size: 13px; color: var(--text2)">{{k.label}}</div>
+<div style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 26px; line-height: 32px; font-weight: 600; letter-spacing: -0.01em; color: {{k.fg}}">{{k.value}}</div>
+<div style="font-size: 13px; color: var(--text3)">{{k.note}}</div>
+</div>
+</sc-for>
+</section>
+
+<section style="padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px">
+<h2 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">Money in the bank</h2>
+<span style="font-size: 13px; color: var(--text3)">all accounts this player can use</span>
+</div>
+<div style="display: flex; gap: 12px; margin-top: 20px">
+<div style="position: relative; flex: 1 1 0; min-width: 0; height: 180px">
+<svg viewBox="0 0 1000 180" preserveAspectRatio="none" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible">
+<path d="M0 0H1000M0 90H1000M0 180H1000" style="fill: none; stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke"></path>
+<path d="{{ch.area}}" style="fill: var(--accent); fill-opacity: 0.12; stroke: none"></path>
+<path d="{{ch.line}}" style="fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke"></path>
+</svg>
+</div>
+<div aria-hidden="true" style="position: relative; flex: none; width: 48px; height: 180px; font-size: 12px; line-height: 16px; color: var(--text3)">
+<span style="position: absolute; left: 0; top: -8px">{{ch.top}}</span>
+<span style="position: absolute; left: 0; top: 82px">{{ch.mid}}</span>
+<span style="position: absolute; left: 0; top: 172px">$0</span>
+</div>
+</div>
+<div aria-hidden="true" style="display: flex; justify-content: space-between; margin: 10px 60px 0 0; font-size: 12px; line-height: 16px; color: var(--text3)">
+<span>3 Nov</span><span>4 Nov</span><span>5 Nov</span><span>18:25</span>
+</div>
+</section>
+
+<div role="tablist" aria-label="Player details" style="display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line)">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+<button type="button" role="tab" aria-selected="{{t.on}}" onClick="{{t.pick}}" style="height: 44px; margin-bottom: -1px; padding: 0 14px; border: 0; border-bottom: 2px solid {{t.line}}; background: transparent; font-weight: 500; color: {{t.fg}}">{{t.label}}</button>
+</sc-for>
+</div>
+
+<sc-if value="{{show.empty}}" hint-placeholder-val="{{ false }}">
+<p style="margin: 0; padding: 24px; border-radius: 14px; border: 1px dashed var(--line2); color: var(--text2)">Nothing recorded for this player in the selected time range.</p>
+</sc-if>
+
+<sc-if value="{{show.trades}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-wrap: wrap; gap: 24px">
+<section style="flex: 1 1 360px; min-width: 0; box-sizing: border-box; padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<h2 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">Profit by market</h2>
+<div style="display: flex; flex-direction: column; gap: 2px; margin: 12px -10px 0">
+<sc-for list="{{byMarket}}" as="m" hint-placeholder-count="4">
+<a class="row" href="Market.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 10px; border-radius: 10px">
+<span aria-hidden="true" style="flex: none; width: 24px; height: 24px; border-radius: 6px; background: {{m.sw}}"></span>
+<span style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column"><span style="font-weight: 500">{{m.name}}</span><span style="font-size: 13px; color: var(--text3)">{{m.sub}}</span></span>
+<span style="flex: none; font-variant-numeric: tabular-nums; font-weight: 500; color: {{m.fg}}">{{m.pnl}}</span>
+</a>
+</sc-for>
+</div>
+</section>
+<section style="flex: 1 1 360px; min-width: 0; box-sizing: border-box; padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<h2 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">Trading sessions</h2>
+<div style="display: flex; flex-direction: column; gap: 2px; margin: 12px -10px 0">
+<sc-for list="{{sessions}}" as="m" hint-placeholder-count="3">
+<a class="row" href="Market.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 10px; border-radius: 10px">
+<span aria-hidden="true" style="flex: none; width: 8px; height: 8px; border-radius: 50%; background: {{m.dot}}"></span>
+<span style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column"><span style="font-weight: 500">{{m.when}} · {{m.market}}</span><span style="font-size: 13px; color: var(--text3)">{{m.sub}}</span></span>
+<span style="flex: none; font-variant-numeric: tabular-nums; font-weight: 500; color: {{m.fg}}">{{m.pnl}}</span>
+</a>
+</sc-for>
+</div>
+</section>
+</div>
+<section style="padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px">
+<h2 style="flex: 1 1 auto; margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">Orders</h2>
+<span style="font-size: 13px; color: var(--text3)">{{S.orderNote}}</span>
+<a href="Market.dc.html" style="font-size: 13px; font-weight: 500; color: var(--accent)">Show all</a>
+</div>
+<div style="overflow-x: auto; margin-top: 12px">
+<table style="width: 100%; min-width: 760px; border-collapse: collapse; font-variant-numeric: tabular-nums">
+<thead>
+<tr style="font-size: 12px; color: var(--text3); text-align: left">
+<th style="padding: 0 12px 10px 0; font-weight: 600">Time on 4 Nov</th>
+<th style="padding: 0 12px 10px; font-weight: 600">Market</th>
+<th style="padding: 0 12px 10px; font-weight: 600">Side</th>
+<th style="padding: 0 12px 10px; font-weight: 600">Kind</th>
+<th style="padding: 0 12px 10px; font-weight: 600; text-align: right">Quantity</th>
+<th style="padding: 0 12px 10px; font-weight: 600; text-align: right">Average price</th>
+<th style="padding: 0 12px 10px; font-weight: 600; text-align: right">Value</th>
+<th style="padding: 0 0 10px 12px; font-weight: 600">Placed on</th>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{orders}}" as="o" hint-placeholder-count="6">
+<tr>
+<td style="padding: 12px 12px 12px 0; border-top: 1px solid var(--line); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px">{{o.time}}</td>
+<td style="padding: 12px; border-top: 1px solid var(--line)">{{o.market}}</td>
+<td style="padding: 12px; border-top: 1px solid var(--line); font-weight: 500; color: {{o.fg}}">{{o.side}}</td>
+<td style="padding: 12px; border-top: 1px solid var(--line); color: var(--text2)">{{o.kind}}</td>
+<td style="padding: 12px; border-top: 1px solid var(--line); text-align: right">{{o.qty}}</td>
+<td style="padding: 12px; border-top: 1px solid var(--line); text-align: right">{{o.price}}</td>
+<td style="padding: 12px; border-top: 1px solid var(--line); text-align: right">{{o.value}}</td>
+<td style="padding: 12px 0 12px 12px; border-top: 1px solid var(--line); color: var(--text2)">{{o.server}}</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{show.bank}}" hint-placeholder-val="{{ false }}">
+<section style="padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px">
+<h2 style="flex: 1 1 auto; margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">Bank history</h2>
+<span style="font-size: 13px; color: var(--text3)">newest first, trades grouped into one line per session</span>
+<a href="Account.dc.html" style="font-size: 13px; font-weight: 500; color: var(--accent)">Open the account</a>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px; margin: 12px -12px 0">
+<sc-for list="{{bank}}" as="b" hint-placeholder-count="6">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding: 12px; border-radius: 10px; border: 1px dashed {{b.border}}; background: {{b.bg}}">
+<span style="flex: 0 0 150px; font-size: 13px; color: var(--text2); font-variant-numeric: tabular-nums">{{b.time}}</span>
+<span style="flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column"><span style="font-weight: 500; color: {{b.fg}}">{{b.what}}</span><span style="font-size: 13px; color: var(--text3)">{{b.detail}}</span></span>
+<span style="flex: 0 0 auto; font-weight: 500; font-variant-numeric: tabular-nums; color: {{b.amtFg}}">{{b.amount}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{show.notes}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; gap: 24px">
+<section style="flex: 1 1 360px; min-width: 0; box-sizing: border-box; padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<h2 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">Banknotes</h2>
+<div style="display: flex; flex-direction: column; margin-top: 12px">
+<sc-for list="{{notes}}" as="x" hint-placeholder-count="4">
+<div style="display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--line)"><span style="color: var(--text2)">{{x.label}}</span><span style="font-weight: 500; font-variant-numeric: tabular-nums">{{x.value}}</span></div>
+</sc-for>
+</div>
+<p style="margin: 12px 0 0; padding: 12px; border-radius: 10px; font-size: 13px; color: var(--text2); background: var(--raised); text-wrap: pretty">{{S.where}}</p>
+</section>
+<section style="flex: 1 1 360px; min-width: 0; box-sizing: border-box; padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<h2 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">Items held in the bank</h2>
+<div style="display: flex; flex-direction: column; gap: 2px; margin: 12px -10px 0">
+<sc-for list="{{items}}" as="m" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 10px">
+<span aria-hidden="true" style="flex: none; width: 24px; height: 24px; border-radius: 6px; background: {{m.sw}}"></span>
+<span style="flex: 1 1 0; min-width: 0; font-weight: 500">{{m.name}}</span>
+<span style="flex: none; font-variant-numeric: tabular-nums">{{m.qty}}</span>
+<span style="flex: 0 0 110px; text-align: right; font-size: 13px; color: var(--text3); font-variant-numeric: tabular-nums">{{m.value}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+</div>
+</sc-if>
+
+<sc-if value="{{show.links}}" hint-placeholder-val="{{ false }}">
+<section style="padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<h2 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">Connected players</h2>
+<p style="margin: 2px 0 0; font-size: 13px; color: var(--text3)">Found from banknote hand-offs, shared locations and matching trade times. A link is a hint, not proof.</p>
+<div style="display: flex; flex-direction: column; gap: 2px; margin: 12px -10px 0">
+<sc-for list="{{links}}" as="l" hint-placeholder-count="3">
+<button type="button" class="row" onClick="{{l.pick}}" style="display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 10px; border: 0; border-radius: 10px; text-align: left; background: transparent">
+<span aria-hidden="true" style="flex: none; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; background: var(--raised); color: var(--text2)">{{l.ini}}</span>
+<span style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column"><span style="font-weight: 500">{{l.name}}</span><span style="font-size: 13px; color: var(--text3); text-wrap: pretty">{{l.why}}</span></span>
+<span style="flex: none; height: 24px; padding: 0 8px; border-radius: 6px; font-size: 12px; line-height: 24px; font-weight: 500; color: {{l.fg}}; background: {{l.bg}}">{{l.strength}}</span>
+</button>
+</sc-for>
+</div>
+</section>
+</sc-if>
+
+</main>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":1360}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { who: 'tavrik', tab: 'trades' };
+  }
+  renderVals() {
+    const st = this.state;
+    // Mock players. Hours on the chart count from 3 Nov 00:00 UTC, values are billions of $.
+    const P = [
+      {
+        id: 'tavrik', name: 'Tavrik', ini: 'TA', uuid: '7f3a91c2-5d1e-4c0a-9b7e-2f6d8a41b04e', risk: 'crit', badge: '3', rsub: '+$15.35B trading profit',
+        facts: ['First seen 2 Nov 2026', 'Last seen 5 Nov, 16:01 on survival-main', 'Last position: overworld -224, 120, -920'],
+        stats: [['Money in the bank now', '$11.54B', 'personal account 11', ''], ['Trading profit, 3 to 5 Nov', '+$15.35B', 'all of it from one market', 'crit'], ['Banknotes still outside the bank', '$3.61B', '$4.12B withdrawn, $512M came back', 'high'], ['Time between orders', '52 ms', 'typical for a script, not a person', 'crit']],
+        ymax: 16, top: '$16B', mid: '$8B',
+        pts: [[0, 0], [17.55, 0.00004], [32.1, 0], [34.38, 0], [34.72, 15.35], [34.74, 14.94], [44.43, 14.94], [44.46, 11.22], [44.67, 11.54], [66.42, 11.54]],
+        byMarket: [['#5ad6e8', 'Diamond', '1,239 orders, bought and sold 9.78M', '+$15.35B', 'crit'], ['#f08c3a', 'Carrot', '212 orders, bought 377,856 and sold at a loss', '-$3.87M', ''], ['#d98a5f', 'Copper ingot', '18 orders', '+$493,064', ''], ['#f2c94c', 'Gold ingot', '9 orders', '-$47,155', '']],
+        sessions: [['4 Nov, 10:23 to 10:43', 'Diamond', '1,239 orders, 52 ms apart', '+$15.35B', 'crit'], ['4 Nov, 08:06 to 08:07', 'Diamond', '9 orders, bought 2,414 diamonds', '-$40,627', ''], ['3 Nov, 17:28 to 17:33', 'Diamond', '14 orders, small test trades', '+$40,618', '']],
+        orderNote: 'the latest 6 of 1,492',
+        orders: [['10:25:01.412', 'Diamond', 'Sell', 'Market', '4,096', '$2,325.85', '$9,526,682', 'survival-main'], ['10:25:01.358', 'Diamond', 'Sell', 'Market', '4,096', '$2,301.10', '$9,425,306', 'survival-main'], ['10:24:58.930', 'Diamond', 'Buy', 'Market', '8,192', '$412.60', '$3,380,019', 'survival-main'], ['10:24:58.877', 'Diamond', 'Buy', 'Market', '8,192', '$96.15', '$787,661', 'survival-main'], ['10:24:58.826', 'Diamond', 'Buy', 'Market', '4,096', '$21.40', '$87,654', 'mining-1'], ['10:24:58.771', 'Diamond', 'Buy', 'Market', '4,096', '$19.85', '$81,306', 'mining-1']],
+        bank: [['4 Nov, 20:40:11', 'Deposit', '320 banknotes of $1,000,000', '+$320,000,000', 'up'], ['4 Nov, 20:27 to 20:28', 'Balance rose with no log entry', 'Probably notes that did not fit in the inventory and went back to the bank.', '+$5,888,000,000', 'gap'], ['4 Nov, 20:27:28', 'Withdrawal', '4,416 banknotes of $1,000,000', '-$4,416,000,000', 'down'], ['4 Nov, 20:26:52', 'Withdrawal', '5,184 banknotes of $1,000,000', '-$5,184,000,000', 'down'], ['4 Nov, 10:44:25', 'Withdrawal', '192 banknotes of $1,000,000', '-$192,000,000', 'down'], ['4 Nov, 10:44:11', 'Withdrawal', '192 banknotes of $1,000,000', '-$192,000,000', 'down'], ['4 Nov, 10:23 to 10:43', '1,239 trades settled', 'Diamond market', '+$15,347,574,215', 'up']],
+        notes: [['Withdrawn as banknotes', '$4.12B'], ['Paid back in by Tavrik', '$320M'], ['Paid in by another player', '$192M'], ['Still outside the bank', '$3.61B']],
+        where: 'Inventory and ender chest could not be checked. This save has no player file for Tavrik.',
+        items: [['#8b6f47', 'Dirt', '2,572', 'about $6,430'], ['#e8e3d3', 'Bone', '102.51', 'about $1,640'], ['#f2c94c', 'Gold ingot', '12', 'about $432']],
+        links: [['ombrelune', 'OM', 'Ombrelune', 'Paid in $192M of banknotes four hours after Tavrik withdrew exactly that amount.', 'Strong'], ['quenby', 'QU', 'Quenby', 'Traded the same market in the same minutes. Their bases are 13 blocks apart.', 'Strong'], ['mikko', 'MI', 'Mikko_82', 'Last seen 4 blocks from where Tavrik last died. Account opened on 5 Nov.', 'Weak']]
+      },
+      {
+        id: 'quenby', name: 'Quenby', ini: 'QU', uuid: 'b1e07d44-93a2-4f6b-8c15-6ad2f0e9c3b7', risk: 'crit', badge: '4', rsub: '+$14.08B trading profit',
+        facts: ['First seen 29 Oct 2026', 'Last seen 5 Nov, 15:48 on survival-main', 'Last position: overworld -237, 120, -919'],
+        stats: [['Money in the bank now', '$8.88M', 'personal account 7', ''], ['Trading profit, 3 to 5 Nov', '+$14.08B', 'diamond market, 5 sessions', 'crit'], ['Banknotes still outside the bank', '$1.91B', '$1.41B of it is in the ender chest', 'high'], ['Time between orders', '20 ms', 'several orders per game tick', 'crit']],
+        ymax: 14, top: '$14B', mid: '$7B',
+        pts: [[0, 0.0006], [34.38, 0.0014], [34.72, 4.0], [34.74, 3.61], [35.82, 3.61], [36.02, 12.19], [36.64, 5.58], [41.5, 5.58], [41.55, 6.14], [42.85, 6.14], [43.03, 7.146], [43.1, 0.0089], [66.42, 0.0089]],
+        byMarket: [['#5ad6e8', 'Diamond', '13,477 orders in 5 sessions', '+$14.08B', 'crit'], ['#3fbf6f', 'Emerald', '412 buy orders, nothing sold', '-$2.38B', ''], ['#f2c94c', 'Gold ingot', '388 buy orders', '-$1.09B', ''], ['#c9ced6', 'Iron ingot', '301 buy orders', '-$457M', '']],
+        sessions: [['4 Nov, 18:51 to 19:08', 'Diamond', '1,904 orders, 21 ms apart', '+$1.01B', 'crit'], ['4 Nov, 11:57 to 12:38', '48 markets', 'bought 16.5M items with the profit', '-$5.02B', 'high'], ['4 Nov, 11:49 to 12:01', 'Diamond', '6,120 orders, 20 ms apart', '+$8.58B', 'crit'], ['4 Nov, 10:22 to 10:43', 'Diamond', '4,102 orders, 20 ms apart', '+$4.00B', 'crit']],
+        orderNote: 'the latest 4 of 15,930',
+        orders: [['19:07:58.204', 'Diamond', 'Sell', 'Market', '99,637', '$2,611.40', '$260,192,062', 'survival-main'], ['19:07:58.183', 'Diamond', 'Sell', 'Market', '93,353', '$2,640.05', '$246,456,588', 'survival-main'], ['19:07:51.730', 'Diamond', 'Buy', 'Market', '93,353', '$1,204.90', '$112,481,030', 'survival-main'], ['19:07:51.709', 'Diamond', 'Buy', 'Market', '99,637', '$318.20', '$31,704,493', 'survival-main']],
+        bank: [['4 Nov, 19:02 to 19:06', 'Balance fell with no log entry', 'Most likely an admin removed it. Nothing in the log says who.', '-$7,136,694,867', 'gap'], ['4 Nov, 12:38:09', 'Withdrawal', '51 banknotes of $1,000,000 and smaller notes', '-$51,200,000', 'down'], ['4 Nov, 12:05:14', 'Withdrawal', '256 banknotes of $1,000,000', '-$256,000,000', 'down'], ['4 Nov, 12:04:33', 'Withdrawal', '1,280 banknotes of $1,000,000', '-$1,280,000,000', 'down'], ['4 Nov, 11:57 to 12:38', '1,101 purchases settled', '48 markets', '-$5,022,800,000', 'down']],
+        notes: [['Withdrawn as banknotes', '$1.97B'], ['Paid back in by Quenby', '$63.9M'], ['Paid in by another player', '$0.2M'], ['Still outside the bank', '$1.91B']],
+        where: 'Found 1,408 banknotes of $1,000,000 in the ender chest. The inventory holds none.',
+        items: [['#3fbf6f', 'Emerald', '1,181,281', 'about $65.0M'], ['#f2c94c', 'Gold ingot', '1,563,830', 'about $56.3M'], ['#c9ced6', 'Iron ingot', '1,472,610', 'about $16.2M']],
+        links: [['tavrik', 'TA', 'Tavrik', 'Traded the same market in the same minutes. Their bases are 13 blocks apart.', 'Strong'], ['ombrelune', 'OM', 'Ombrelune', 'Sold 1,728 diamonds, the exact amount Quenby took out of the bank an hour before.', 'Medium'], ['mikko', 'MI', 'Mikko_82', 'Last seen 10 blocks from Quenby at the shared base.', 'Weak']]
+      },
+      {
+        id: 'ombrelune', name: 'Ombrelune', ini: 'OM', uuid: '2c9d5a10-e4f7-4b38-a6c1-90be7d3f5521', risk: 'high', badge: '1', rsub: 'received $192M in notes',
+        facts: ['First seen 14 Sep 2026', 'Last seen 4 Nov, 20:31 on mining-1', 'Died 8 times on 4 Nov'],
+        stats: [['Money in the bank now', '$192.29M', 'personal account 24', ''], ['Trading profit, 3 to 5 Nov', '+$290,390', 'one sale of 1,728 diamonds', 'high'], ['Banknotes paid in', '$192M', 'withdrawn by Tavrik four hours earlier', 'high'], ['Orders', '1', 'placed by hand', '']],
+        ymax: 0.24, top: '$240M', mid: '$120M',
+        pts: [[0, 0.000002], [35.87, 0.000002], [35.88, 0.00029], [38.86, 0.00029], [38.88, 0.19229], [66.42, 0.19229]],
+        byMarket: [['#5ad6e8', 'Diamond', '1 order, sold 1,728', '+$290,390', 'high']],
+        sessions: [['4 Nov, 11:52', 'Diamond', '1 sell order at $168.05', '+$290,390', 'high']],
+        orderNote: '1 order',
+        orders: [['11:52:40.117', 'Diamond', 'Sell', 'Market', '1,728', '$168.05', '$290,390', 'mining-1']],
+        bank: [['4 Nov, 14:52:06', 'Deposit', '192 banknotes of $1,000,000', '+$192,000,000', 'up'], ['4 Nov, 11:52:40', '1 trade settled', 'Diamond market', '+$290,390', 'up'], ['4 Nov, 11:02:15', 'Deposit', '1,728 diamonds, as items', '+1,728 diamonds', 'up']],
+        notes: [['Withdrawn as banknotes', '$0'], ['Paid in, withdrawn by someone else', '$192M'], ['Still outside the bank', '$0']],
+        where: 'Inventory and ender chest could not be checked. This save has no player file for Ombrelune.',
+        items: [['#d98a5f', 'Copper ingot', '640', 'about $5,120'], ['#d9a0b4', 'Cherry log', '212', 'about $850']],
+        links: [['tavrik', 'TA', 'Tavrik', 'Paid in $192M of banknotes four hours after Tavrik withdrew exactly that amount.', 'Strong'], ['quenby', 'QU', 'Quenby', 'Sold 1,728 diamonds, the exact amount Quenby took out of the bank an hour before.', 'Medium']]
+      },
+      {
+        id: 'mikko', name: 'Mikko_82', ini: 'MI', uuid: '9e44b7f3-0c6a-4d2e-b5a8-1f73c0d6e942', risk: 'low', badge: '1', rsub: 'new account near the base',
+        facts: ['First seen 5 Nov 2026, 10:16', 'Last seen 5 Nov, 15:50 on survival-main', 'Last position: overworld -227, 120, -926'],
+        stats: [['Money in the bank now', '$10.00', 'personal account 27', ''], ['Trading profit, 3 to 5 Nov', '$0', 'never traded', ''], ['Banknotes found', 'None', 'inventory and ender chest checked', ''], ['Orders', '0', '', '']],
+        ymax: 0.00000002, top: '$20', mid: '$10', pts: [[0, 0], [58.26, 0], [58.27, 0.00000001], [66.42, 0.00000001]],
+        byMarket: [], sessions: [], orderNote: '', orders: [],
+        bank: [['5 Nov, 10:16:02', 'Starting balance', 'Paid by the bank when the account was opened', '+$10.00', 'up']],
+        notes: [['Withdrawn as banknotes', '$0'], ['Still outside the bank', '$0']], where: 'No banknotes in the inventory or ender chest.', items: [],
+        links: [['quenby', 'QU', 'Quenby', 'Last seen 10 blocks from Quenby at the shared base.', 'Weak'], ['tavrik', 'TA', 'Tavrik', 'Last seen 4 blocks from where Tavrik last died.', 'Weak']]
+      },
+      {
+        id: 'noor', name: 'AdmiralNoor', ini: 'AN', uuid: '5a02c8e6-71bd-4e93-8f04-d3b6a92c17f0', risk: '', badge: '', rsub: 'server admin',
+        facts: ['Server admin', 'Last seen 4 Nov, 19:20 on survival-main', 'Tested the exploit on 4 Nov, 18:37 to 19:19'],
+        stats: [['Money in the bank now', '$0', 'personal account 10, reset by hand', ''], ['Trading profit, 3 to 5 Nov', '-$8.59B', 'paid from money set by command', ''], ['Admin commands logged', '6', 'money set, added and removed', ''], ['Orders', '329', 'on the diamond market', '']],
+        ymax: 10, top: '$10B', mid: '$5B', pts: [[0, 0], [42.6, 0], [42.62, 8.6], [43.3, 0.01], [43.33, 0], [66.42, 0]],
+        byMarket: [['#5ad6e8', 'Diamond', '329 orders', '-$8.59B', '']],
+        sessions: [['4 Nov, 18:37 to 19:19', 'Diamond', '329 orders, reproduction by an admin', '-$8.59B', '']],
+        orderNote: '', orders: [],
+        bank: [['4 Nov, 19:20:14', 'Set by an admin', 'money set AdmiralNoor: 1,204,551 to 0', '-$12,045.51', 'down'], ['4 Nov, 18:36:50', 'Set by an admin', 'money set AdmiralNoor: 0 to 860,000,000,000', '+$8,600,000,000', 'up']],
+        notes: [], where: 'No banknotes in the inventory or ender chest.', items: [], links: []
+      },
+      {
+        id: 'brindle', name: 'Brindle', ini: 'BR', uuid: 'e8f1640d-2ab9-4c75-9d3e-47a05b8c6f1a', risk: '', badge: '', rsub: '+$41,280 trading profit',
+        facts: ['First seen 2 Aug 2026', 'Last seen 5 Nov, 17:40 on mining-1', 'Last position: overworld 1,204, 64, 388'],
+        stats: [['Money in the bank now', '$68,410', 'personal account 3', ''], ['Trading profit, 3 to 5 Nov', '+$41,280', '9 markets', ''], ['Banknotes still outside the bank', '$1,200', '', ''], ['Time between orders', '41 s', 'placed by hand', '']],
+        ymax: 0.0001, top: '$100k', mid: '$50k',
+        pts: [[0, 0.000027], [9, 0.000031], [20, 0.000038], [33, 0.000044], [40, 0.000052], [52, 0.000061], [66.42, 0.0000684]],
+        byMarket: [['#59606b', 'Coal', '31 orders', '+$18,204', ''], ['#c9ced6', 'Iron ingot', '22 orders', '+$12,930', ''], ['#d9b45a', 'Wheat', '40 orders', '+$6,112', '']],
+        sessions: [['5 Nov, 16:10 to 17:38', '6 markets', '38 orders, 41 s apart', '+$9,480', ''], ['4 Nov, 09:02 to 09:55', '4 markets', '27 orders, 58 s apart', '+$14,060', '']],
+        orderNote: 'the latest 3 of 118',
+        orders: [['17:38:20.551', 'Coal', 'Sell', 'Limit', '256', '$4.31', '$1,103', 'mining-1'], ['17:36:02.907', 'Wheat', 'Sell', 'Market', '640', '$1.58', '$1,011', 'mining-1'], ['17:31:44.060', 'Iron ingot', 'Sell', 'Limit', '128', '$11.40', '$1,459', 'mining-1']],
+        bank: [['5 Nov, 17:40:03', 'Withdrawal', '12 banknotes of $100', '-$1,200', 'down'], ['5 Nov, 16:10 to 17:38', '38 trades settled', '6 markets', '+$9,480', 'up'], ['5 Nov, 16:04:51', 'Deposit', '512 coal, as items', '+512 coal', 'up']],
+        notes: [['Withdrawn as banknotes', '$1,200'], ['Still outside the bank', '$1,200']], where: 'Found 12 banknotes of $100 in the inventory.',
+        items: [['#59606b', 'Coal', '1,840', 'about $7,730'], ['#c9ced6', 'Iron ingot', '412', 'about $4,530']],
+        links: []
+      }
+    ];
+    const S = P.find((p) => p.id === st.who) || P[0];
+    const tone = (t) => t === 'crit' ? 'var(--crit)' : t === 'high' ? 'var(--high)' : t === 'low' ? 'var(--low)' : 'var(--text)';
+    const tint = (t) => t ? 'color-mix(in srgb, var(--' + t + ') 16%, transparent)' : 'var(--raised)';
+    const f = (n) => n.toFixed(1);
+    const line = S.pts.map((p, i) => (i ? 'L' : 'M') + f(p[0] / 66.42 * 1000) + ' ' + f(180 - Math.min(1, p[1] / S.ymax) * 180)).join(' ');
+    const TABS = [['trades', 'Trades'], ['bank', 'Bank history'], ['notes', 'Banknotes and items'], ['links', 'Connected players']];
+    const counts = { trades: S.byMarket.length + S.sessions.length + S.orders.length, bank: S.bank.length, notes: S.notes.length + S.items.length, links: S.links.length };
+    const empty = counts[st.tab] === 0;
+    const amt = (t) => t === 'up' ? 'var(--up)' : t === 'down' ? 'var(--down)' : 'var(--high)';
+    return this.sep({
+      theme: this.props.theme ?? 'dark',
+      roster: P.map((p) => ({
+        name: p.name, ini: p.ini, sub: p.rsub, on: p.id === S.id, hasBadge: !!p.badge, badge: p.badge,
+        bg: p.id === S.id ? 'var(--raised)' : 'transparent',
+        avBg: tint(p.risk === 'crit' ? 'crit' : ''), avFg: p.risk === 'crit' ? 'var(--crit)' : 'var(--text2)',
+        badgeFg: tone(p.risk), badgeBg: tint(p.risk),
+        pick: () => this.setState({ who: p.id })
+      })),
+      S: {
+        name: S.name, ini: S.ini, uuid: S.uuid, facts: S.facts, orderNote: S.orderNote, where: S.where,
+        avBg: tint(S.risk === 'crit' ? 'crit' : ''), avFg: S.risk === 'crit' ? 'var(--crit)' : 'var(--text2)',
+        stats: S.stats.map((k) => ({ label: k[0], value: k[1], note: k[2], fg: tone(k[3]) }))
+      },
+      ch: { line: line, area: line + ' L1000 180 L0 180 Z', top: S.top, mid: S.mid },
+      tabs: TABS.map((t) => ({
+        label: t[1], on: st.tab === t[0],
+        line: st.tab === t[0] ? 'var(--accent)' : 'transparent',
+        fg: st.tab === t[0] ? 'var(--text)' : 'var(--text2)',
+        pick: () => this.setState({ tab: t[0] })
+      })),
+      show: { empty: empty, trades: st.tab === 'trades' && !empty, bank: st.tab === 'bank' && !empty, notes: st.tab === 'notes' && !empty, links: st.tab === 'links' && !empty },
+      byMarket: S.byMarket.map((m) => ({ sw: m[0], name: m[1], sub: m[2], pnl: m[3], fg: tone(m[4]) })),
+      sessions: S.sessions.map((m) => ({ when: m[0], market: m[1], sub: m[2], pnl: m[3], fg: tone(m[4]), dot: m[4] ? 'var(--' + m[4] + ')' : 'var(--line2)' })),
+      orders: S.orders.map((o) => ({ time: o[0], market: o[1], side: o[2], kind: o[3], qty: o[4], price: o[5], value: o[6], server: o[7], fg: o[2] === 'Buy' ? 'var(--buy)' : 'var(--sell)' })),
+      bank: S.bank.map((b) => ({
+        time: b[0], what: b[1], detail: b[2], amount: b[3], amtFg: amt(b[4]),
+        fg: b[4] === 'gap' ? 'var(--high)' : 'var(--text)',
+        border: b[4] === 'gap' ? 'var(--high)' : 'transparent',
+        bg: b[4] === 'gap' ? 'color-mix(in srgb, var(--high) 10%, transparent)' : 'transparent'
+      })),
+      notes: S.notes.map((x) => ({ label: x[0], value: x[1] })),
+      items: S.items.map((m) => ({ sw: m[0], name: m[1], qty: m[2], value: m[3] })),
+      links: S.links.map((l) => ({
+        ini: l[1], name: l[2], why: l[3], strength: l[4],
+        fg: l[4] === 'Strong' ? 'var(--high)' : 'var(--text2)',
+        bg: l[4] === 'Strong' ? 'color-mix(in srgb, var(--high) 16%, transparent)' : 'var(--raised)',
+        pick: () => this.setState({ who: l[0], tab: 'links' })
+      }))
+    });
+  }
+  // The one number format of the tool: an apostrophe between thousands, 1'532.05.
+  sep(v) {
+    if (typeof v === 'string') return v.replace(/(\d),(?=\d{3}(\D|$))/g, (m, d) => d + "'");
+    if (Array.isArray(v)) return v.map((x) => this.sep(x));
+    if (v && typeof v === 'object') { const o = {}; for (const k in v) o[k] = this.sep(v[k]); return o; }
+    return v;
+  }
+}
+</script>
+</body>
+</html>

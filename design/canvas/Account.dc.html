@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Audit Tool · Bank accounts</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;cursor:pointer}
+input{font:inherit;color:inherit}
+.app{--bg:#0e1013;--rail:#0a0c0f;--card:#15181d;--raised:#1d2128;--line:#272c35;--line2:#39404c;--text:#eceef1;--text2:#aab1bc;--text3:#8a929e;--accent:#8fa2ff;--onaccent:#0e1013;--up:#4fd1b5;--down:#f2686f;--crit:#ff6b6b;--high:#ffa94d;--med:#ffd43b;--low:#74a8ff;--buy:#6ea8ff;--sell:#ffa94d}
+.app[data-theme="light"]{--bg:#f5f6f8;--rail:#eceef1;--card:#ffffff;--raised:#eff1f4;--line:#e1e4e9;--line2:#c8cdd5;--text:#14171c;--text2:#48505b;--text3:#5d6570;--accent:#3b5bdb;--onaccent:#ffffff;--up:#0b7a64;--down:#c92a3a;--crit:#c92a2a;--high:#b85c00;--med:#8a6d00;--low:#2b5fc7;--buy:#2b5fc7;--sell:#b85c00}
+.nav{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:8px;color:var(--text2);font-weight:500}
+.nav:hover,.nav[aria-current="page"]{background:var(--raised);color:var(--text)}
+.row:hover{background:var(--raised) !important}
+.btn:hover{background:var(--raised) !important}
+</style>
+</helmet>
+<div class="app" data-theme="{{theme}}" style="min-height: 100vh; display: flex; flex-wrap: wrap; background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; font-size: 14px; line-height: 20px">
+
+<nav aria-label="Sections" style="flex: 1 1 232px; box-sizing: border-box; display: flex; flex-direction: column; gap: 28px; padding: 20px 12px; background: var(--rail); border-right: 1px solid var(--line)">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 12px">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4M8 12l2-3 2 2 2-3"></path></svg>
+<span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600">Audit Tool</span>
+</a>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<a class="nav" href="Main.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M4 4h7v7H4zM13 4h7v4h-7zM13 11h7v9h-7zM4 14h7v6H4z"></path></svg><span>Overview</span></a>
+<a class="nav" href="Findings.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M12 4l9 15H3zM12 10v4M12 16.5v.5"></path></svg><span style="flex: 1">Findings</span><span style="min-width: 22px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; font-size: 12px; line-height: 20px; text-align: center; color: var(--crit); background: color-mix(in srgb, var(--crit) 16%, transparent)">20</span></a>
+<a class="nav" href="Player.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20c.8-3.4 3.8-5.5 7.5-5.5s6.7 2.1 7.5 5.5"></path></svg><span>Players</span></a>
+<a class="nav" href="Market.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M7 3v4M7 15v6M5 7h4v8H5zM17 3v6M17 15v6M15 9h4v6h-4z"></path></svg><span>Markets</span></a>
+<a class="nav" href="Account.dc.html" aria-current="page"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M3 10l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 20h18"></path></svg><span>Bank accounts</span></a>
+<a class="nav" href="Flow.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M4 7h5c3 0 3 10 6 10h5M4 17h5c1.2 0 1.9-1.6 2.6-3.5M17 14l3 3-3 3"></path></svg><span>Money flow</span></a>
+<a class="nav" href="Servers.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01"></path></svg><span>Saves and servers</span></a>
+<a class="nav" href="Case.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"></path></svg><span>Case and report</span></a>
+</div>
+<a class="btn" href="Servers.dc.html" style="margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 10px; border: 1px solid var(--line)">
+<span style="font-weight: 500">3 saves loaded</span>
+<span style="font-size: 13px; color: var(--text3)">Snapshot 5 Nov 2026, 18:25 UTC</span>
+<span style="display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--up)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3"></path></svg>Read-only copies</span>
+</a>
+</nav>
+
+<div style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 32px; border-bottom: 1px solid var(--line)">
+<label style="flex: 1 1 280px; max-width: 460px; display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; box-sizing: border-box; border-radius: 10px; background: var(--card); border: 1px solid var(--line); color: var(--text3)">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4"></path></svg>
+<input aria-label="Search everything" placeholder="Search players, accounts, items, order or transfer ids" style="flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text)">
+</label>
+<div style="flex: 1 1 0"></div>
+<button type="button" class="btn" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--text3)"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 8v4l3 2"></path></svg><span>3 Nov 00:00 to 5 Nov 18:25</span><span style="color: var(--text3)">UTC</span></button>
+<button type="button" class="btn" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--text3)"><path d="M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01"></path></svg><span>All servers</span></button>
+<a class="btn" href="Case.dc.html" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; box-sizing: border-box; border-radius: 10px; border: 1px solid var(--line); background: var(--card)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--text3)"><path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"></path></svg><span>Case</span><span style="color: var(--text3)">4 pinned</span></a>
+</header>
+
+<div style="flex: 1 1 auto; display: flex; flex-wrap: wrap">
+<aside aria-label="Account list" style="flex: 1 1 264px; box-sizing: border-box; padding: 24px 12px; border-right: 1px solid var(--line)">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 12px">
+<h2 style="margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text3)">Accounts</h2>
+<span style="font-size: 12px; color: var(--text3)">largest gap first</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px; margin-top: 12px">
+<sc-for list="{{list}}" as="r" hint-placeholder-count="6">
+<button type="button" class="row" onClick="{{r.pick}}" aria-pressed="{{r.on}}" style="display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 12px; border: 0; border-radius: 8px; text-align: left; background: {{r.bg}}">
+<span aria-hidden="true" style="flex: none; min-width: 32px; height: 32px; padding: 0 4px; box-sizing: border-box; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--raised); color: var(--text2)">{{r.id}}</span>
+<span style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column">
+<span style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.name}}</span>
+<span style="font-size: 13px; color: var(--text3); font-variant-numeric: tabular-nums">{{r.bal}}</span>
+</span>
+<sc-if value="{{r.flag}}" hint-placeholder-val="{{ false }}"><span role="img" aria-label="The log does not add up" style="flex: none; width: 8px; height: 8px; border-radius: 50%; background: {{r.dot}}"></span></sc-if>
+</button>
+</sc-for>
+</div>
+<p style="margin: 16px 12px 0; font-size: 13px; color: var(--text3)">55 more accounts where the log adds up</p>
+</aside>
+
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; padding: 28px 32px 40px">
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px">
+<div style="flex: 1 1 320px; min-width: 0">
+<h1 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em">Account {{A.id}} · {{A.name}}</h1>
+<div style="display: flex; flex-wrap: wrap; gap: 4px 24px; margin-top: 4px; font-size: 13px; color: var(--text2)">
+<sc-for list="{{A.facts}}" as="x" hint-placeholder-count="3"><span>{{x}}</span></sc-for>
+</div>
+</div>
+<a class="btn" href="Player.dc.html" style="display: inline-flex; align-items: center; height: 40px; padding: 0 14px; box-sizing: border-box; border-radius: 10px; border: 1px solid var(--line2); font-weight: 500">Open the owner</a>
+<button type="button" class="btn" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line2); background: transparent; font-weight: 500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"></path></svg>Pin to case</button>
+</div>
+
+<section style="padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<h2 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">Does the log explain the balance?</h2>
+<p style="margin: 2px 0 0; font-size: 13px; color: var(--text3)">Money only, 3 Nov 00:00 to 5 Nov 18:25. The log is every entry the bank wrote. The balance comes from the bank's own snapshots.</p>
+<div style="display: flex; flex-wrap: wrap; align-items: stretch; gap: 12px 8px; margin-top: 20px">
+<sc-for list="{{recon}}" as="t" hint-placeholder-count="6">
+<div style="display: flex; align-items: center; gap: 8px">
+<span aria-hidden="true" style="flex: none; width: 14px; text-align: center; font-size: 18px; color: var(--text3)">{{t.op}}</span>
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 118px; padding: 12px 14px; border-radius: 10px; background: {{t.bg}}">
+<span style="font-size: 12px; line-height: 16px; color: var(--text3)">{{t.label}}</span>
+<span style="font-size: 17px; line-height: 24px; font-weight: 600; font-variant-numeric: tabular-nums">{{t.value}}</span>
+</div>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-top: 20px; padding: 16px; border-radius: 10px; border: 1px dashed {{verdict.border}}; background: {{verdict.bg}}">
+<div style="flex: none; display: flex; flex-direction: column">
+<span style="font-size: 12px; line-height: 16px; color: var(--text3)">Not explained</span>
+<span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 24px; line-height: 30px; font-weight: 600; color: {{verdict.fg}}">{{verdict.gap}}</span>
+</div>
+<p style="flex: 1 1 320px; min-width: 0; margin: 0; text-wrap: pretty">{{verdict.text}}</p>
+<sc-if value="{{verdict.open}}" hint-placeholder-val="{{ true }}">
+<button type="button" class="btn" onClick="{{showGaps}}" style="flex: none; height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line2); background: transparent; font-weight: 500">Show it in the history</button>
+</sc-if>
+</div>
+</section>
+
+<section style="padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+<h2 style="flex: 1 1 auto; margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">Balance over time</h2>
+<div role="group" aria-label="What to chart" style="display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line)">
+<sc-for list="{{chips}}" as="r" hint-placeholder-count="3">
+<button type="button" onClick="{{r.pick}}" aria-pressed="{{r.on}}" style="height: 32px; padding: 0 12px; border: 0; border-radius: 7px; font-weight: 500; background: {{r.bg}}; color: {{r.fg}}">{{r.label}}</button>
+</sc-for>
+</div>
+</div>
+<div style="display: flex; gap: 12px; margin-top: 20px">
+<div style="position: relative; flex: 1 1 0; min-width: 0; height: 180px">
+<svg viewBox="0 0 1000 180" preserveAspectRatio="none" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible">
+<path d="M0 0H1000M0 90H1000M0 180H1000" style="fill: none; stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke"></path>
+<path d="{{ch.band}}" style="fill: var(--high); fill-opacity: 0.3; stroke: none"></path>
+<path d="{{ch.area}}" style="fill: var(--accent); fill-opacity: 0.12; stroke: none"></path>
+<path d="{{ch.line}}" style="fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke"></path>
+</svg>
+</div>
+<div aria-hidden="true" style="position: relative; flex: none; width: 48px; height: 180px; font-size: 12px; line-height: 16px; color: var(--text3)">
+<span style="position: absolute; left: 0; top: -8px">{{ch.top}}</span>
+<span style="position: absolute; left: 0; top: 82px">{{ch.mid}}</span>
+<span style="position: absolute; left: 0; top: 172px">0</span>
+</div>
+</div>
+<div aria-hidden="true" style="display: flex; justify-content: space-between; margin: 10px 60px 0 0; font-size: 12px; line-height: 16px; color: var(--text3)">
+<span>3 Nov</span><span>4 Nov</span><span>5 Nov</span><span>18:25</span>
+</div>
+<sc-if value="{{ch.hasBand}}" hint-placeholder-val="{{ true }}">
+<p style="display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: 13px; color: var(--text2)"><span aria-hidden="true" style="flex: none; width: 12px; height: 12px; border-radius: 3px; background: var(--high); opacity: 0.6"></span>Orange band: the balance changed and the log has no entry for it.</p>
+</sc-if>
+</section>
+
+<section style="padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+<h2 style="flex: 1 1 auto; margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">History</h2>
+<div role="group" aria-label="Filter the history" style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{filters}}" as="r" hint-placeholder-count="5">
+<button type="button" onClick="{{r.pick}}" aria-pressed="{{r.on}}" style="height: 36px; padding: 0 12px; border-radius: 18px; font-weight: 500; border: 1px solid {{r.border}}; background: {{r.bg}}; color: {{r.fg}}">{{r.label}}</button>
+</sc-for>
+</div>
+</div>
+<div style="overflow-x: auto; margin-top: 16px">
+<table style="width: 100%; min-width: 820px; border-collapse: collapse; font-variant-numeric: tabular-nums">
+<thead>
+<tr style="font-size: 12px; color: var(--text3); text-align: left">
+<th style="padding: 0 12px 10px 12px; font-weight: 600">When</th>
+<th style="padding: 0 12px 10px; font-weight: 600">What happened</th>
+<th style="padding: 0 12px 10px; font-weight: 600; text-align: right">Amount</th>
+<th style="padding: 0 12px 10px; font-weight: 600; text-align: right">Balance after</th>
+<th style="padding: 0 12px 10px; font-weight: 600">Done by</th>
+<th style="padding: 0 12px 10px; font-weight: 600">Reference</th>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{rows}}" as="o" hint-placeholder-count="7">
+<tr style="background: {{o.bg}}">
+<td style="padding: 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--text2); white-space: nowrap">{{o.time}}</td>
+<td style="padding: 12px; border-top: 1px solid var(--line)"><span style="display: block; font-weight: 500; color: {{o.fg}}">{{o.what}}</span><span style="display: block; font-size: 13px; color: var(--text3)">{{o.sub}}</span></td>
+<td style="padding: 12px; border-top: 1px solid var(--line); text-align: right; font-weight: 500; white-space: nowrap; color: {{o.amtFg}}">{{o.amount}}</td>
+<td style="padding: 12px; border-top: 1px solid var(--line); text-align: right; white-space: nowrap; color: var(--text2)">{{o.after}}</td>
+<td style="padding: 12px; border-top: 1px solid var(--line); color: var(--text2)">{{o.by}}</td>
+<td style="padding: 12px; border-top: 1px solid var(--line); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: var(--text3); white-space: nowrap">{{o.ref}}</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+<sc-if value="{{noRows}}" hint-placeholder-val="{{ false }}">
+<p style="margin: 16px 0 0; color: var(--text2)">No entries of this kind in the selected time range.</p>
+</sc-if>
+<p style="margin: 16px 0 0; font-size: 13px; color: var(--text3)">{{A.rowNote}}</p>
+</section>
+
+</main>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":1280}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { acct: 7, series: 0, filter: 'all' };
+  }
+  renderVals() {
+    const st = this.state;
+    // Mock accounts. Chart hours count from 3 Nov 00:00 UTC.
+    // Rows: [when, kind, what, detail, amount, balance after, done by, reference, tone]
+    const ACC = [
+      {
+        id: 7, name: 'Quenby', bal: '$8.88M', flag: 'crit',
+        facts: ['Personal account', 'Owner: Quenby, with every right', 'Opened 29 Oct 2026', 'Not frozen'],
+        recon: [['Balance on 3 Nov, 00:00', '$593,322'], ['Trades, net', '+$9.06B'], ['Paid in', '+$63.9M'], ['Paid out', '-$1.97B'], ['The log adds up to', '$7.15B'], ['The balance is', '$8.88M']],
+        gap: '-$7.14B', open: true,
+        text: 'The log does not explain $7.14B. It left this account on 4 Nov between 19:02 and 19:06 and no entry was written. An admin command is the most likely cause.',
+        series: [
+          { label: 'Money', ymax: 14e9, top: '$14B', mid: '$7B', band: [43.0, 43.1], pts: [[0, 0.6e6], [34.38, 1.4e6], [34.72, 4.0e9], [34.74, 3.61e9], [35.82, 3.61e9], [36.02, 12.19e9], [36.64, 5.58e9], [41.5, 5.58e9], [41.55, 6.14e9], [42.85, 6.14e9], [43.03, 7.146e9], [43.1, 8.9e6], [66.42, 8.9e6]] },
+          { label: 'Emerald', ymax: 1400000, top: '1.4M', mid: '700k', pts: [[0, 317], [35.95, 317], [36.63, 1206877], [38.8, 1181281], [66.42, 1181281]] },
+          { label: 'Diamond', ymax: 160000, top: '160k', mid: '80k', pts: [[0, 7005], [32.08, 7005], [32.12, 101], [32.2, 7005], [34.38, 7005], [34.5, 93000], [34.6, 2000], [34.72, 60000], [35.82, 60000], [35.9, 99000], [36.02, 149306], [66.42, 149144]] }
+        ],
+        rows: [
+          ['4 Nov, 19:02 to 19:06', 'gap', 'Balance fell with no log entry', 'Seen between two balance snapshots', '-$7,136,694,867', '$8,883,667', 'unknown', '', 'gap'],
+          ['4 Nov, 18:32:09', 'cash', 'Withdrawn as banknotes', '2 notes of $100,000', '-$200,000', '$7,145,578,534', 'Quenby', 'transfer 5d1c…e07a', 'down'],
+          ['4 Nov, 12:38:09', 'cash', 'Withdrawn as banknotes', '51 notes of $1,000,000 and 2 of $100,000', '-$51,200,000', '$5,584,310,200', 'Quenby', 'transfer 91af…3c20', 'down'],
+          ['4 Nov, 12:05:14', 'cash', 'Withdrawn as banknotes', '256 notes of $1,000,000', '-$256,000,000', '$8,912,440,318', 'Quenby', 'transfer c46b…08d9', 'down'],
+          ['4 Nov, 12:04:33', 'cash', 'Withdrawn as banknotes', '1,280 notes of $1,000,000', '-$1,280,000,000', '$9,168,440,318', 'Quenby', 'transfer 7e02…b4a6', 'down'],
+          ['4 Nov, 12:01:10', 'trade', 'Sold on the market', '99,637 diamonds at $2,611.40', '+$260,192,062', 'not recorded', 'StockMarket, for Quenby', 'sm:order:1794571270204', 'up'],
+          ['4 Nov, 11:58:44', 'trade', 'Bought on the market', '12,800 emeralds at $2,014.00', '-$25,779,200', 'not recorded', 'StockMarket, for Quenby', 'sm:order:1794571124388', 'down'],
+          ['4 Nov, 10:41:06', 'cash', 'Withdrawn as banknotes', '384 notes of $1,000,000', '-$384,000,000', '$3,612,220,415', 'Quenby', 'transfer 0b7e…a1d4', 'down']
+        ],
+        rowNote: '8 of 14,612 entries. Trade entries carry no balance, the bank does not record one for them.'
+      },
+      {
+        id: 11, name: 'Tavrik', bal: '$11.54B', flag: 'crit',
+        facts: ['Personal account', 'Owner: Tavrik, with every right', 'Opened 2 Nov 2026', 'Not frozen'],
+        recon: [['Balance on 3 Nov, 00:00', '$9.50'], ['Trades, net', '+$15.34B'], ['Paid in', '+$320M'], ['Paid out', '-$10.02B'], ['The log adds up to', '$5.65B'], ['The balance is', '$11.54B']],
+        gap: '+$5.89B', open: true,
+        text: 'The balance is $5.89B higher than the log explains. Two withdrawals did not fit in the inventory and went back into the account, and no entry was written for that.',
+        series: [
+          { label: 'Money', ymax: 16e9, top: '$16B', mid: '$8B', band: [44.4, 44.5], pts: [[0, 0], [17.55, 40000], [32.1, 0], [34.38, 0], [34.72, 15.35e9], [34.74, 14.94e9], [44.43, 14.94e9], [44.46, 11.22e9], [44.67, 11.54e9], [66.42, 11.54e9]] },
+          { label: 'Diamond', ymax: 60000, top: '60k', mid: '30k', pts: [[0, 0], [32.1, 0], [32.12, 2414], [34.38, 2414], [34.45, 50000], [34.52, 0], [34.6, 50000], [34.72, 0], [66.42, 0]] }
+        ],
+        rows: [
+          ['4 Nov, 20:40:11', 'cash', 'Paid in as banknotes', '320 notes of $1,000,000', '+$320,000,000', '$11,542,556,027', 'Tavrik', '', 'up'],
+          ['4 Nov, 20:27 to 20:28', 'gap', 'Balance rose with no log entry', 'Seen between two balance snapshots', '+$5,888,000,000', '$11,222,556,027', 'unknown', '', 'gap'],
+          ['4 Nov, 20:27:28', 'cash', 'Withdrawn as banknotes', '4,416 notes of $1,000,000', '-$4,416,000,000', '$5,334,556,027', 'Tavrik', 'transfer 77c0…19be', 'down'],
+          ['4 Nov, 20:26:52', 'cash', 'Withdrawn as banknotes', '5,184 notes of $1,000,000', '-$5,184,000,000', '$9,750,556,027', 'Tavrik', 'transfer 2e94…c5f1', 'down'],
+          ['4 Nov, 10:44:25', 'cash', 'Withdrawn as banknotes', '192 notes of $1,000,000', '-$192,000,000', '$14,934,556,027', 'Tavrik', 'transfer a03d…7b62', 'down'],
+          ['4 Nov, 10:43:02', 'trade', 'Sold on the market', '50,000 diamonds at $3,109.60', '+$155,480,000', 'not recorded', 'StockMarket, for Tavrik', 'sm:order:1794566582417', 'up']
+        ],
+        rowNote: '6 of 1,518 entries. Trade entries carry no balance, the bank does not record one for them.'
+      },
+      {
+        id: 24, name: 'Ombrelune', bal: '$192.29M', flag: 'high',
+        facts: ['Personal account', 'Owner: Ombrelune, with every right', 'Opened 14 Sep 2026', 'Not frozen'],
+        recon: [['Balance on 3 Nov, 00:00', '$2,037'], ['Trades, net', '+$290,390'], ['Paid in', '+$192M'], ['Paid out', '$0'], ['The log adds up to', '$192.29M'], ['The balance is', '$192.29M']],
+        gap: '$0', open: false,
+        text: 'The log explains every change. The account is flagged for another reason: the bank itself marked the $192M deposit, because this player never withdrew those notes.',
+        series: [{ label: 'Money', ymax: 240e6, top: '$240M', mid: '$120M', pts: [[0, 2037], [35.87, 2037], [35.88, 292427], [38.86, 292427], [38.88, 192292427], [66.42, 192292427]] }],
+        rows: [
+          ['4 Nov, 14:52:06', 'cash', 'Paid in as banknotes', 'Flagged by the bank: notes this player never withdrew', '+$192,000,000', '$192,292,427', 'Ombrelune', '', 'up'],
+          ['4 Nov, 11:52:40', 'trade', 'Sold on the market', '1,728 diamonds at $168.05', '+$290,390', 'not recorded', 'StockMarket, for Ombrelune', 'sm:order:1794570760117', 'up']
+        ],
+        rowNote: '2 of 2 entries.'
+      },
+      {
+        id: 18, name: 'Northreach Rail Co.', bal: '$2.31M', flag: '',
+        facts: ['Company account', 'Founders: Brindle and Hobbart', '3 more players may deposit', 'Not frozen'],
+        recon: [['Balance on 3 Nov, 00:00', '$2,284,100'], ['Trades, net', '$0'], ['Paid in', '+$61,400'], ['Paid out', '-$36,000'], ['The log adds up to', '$2,309,500'], ['The balance is', '$2,309,500']],
+        gap: '$0', open: false, text: 'The log explains every change on this account.',
+        series: [{ label: 'Money', ymax: 3e6, top: '$3M', mid: '$1.5M', pts: [[0, 2284100], [20, 2300100], [44, 2264100], [50, 2309500], [66.42, 2309500]] }],
+        rows: [
+          ['5 Nov, 02:00:00', 'cash', 'Dividend paid to shareholders', 'Payout schedule 2, 12 holders', '-$36,000', '$2,264,100', 'the company', 'run 4c1e…90aa', 'down'],
+          ['3 Nov, 20:11:37', 'cash', 'Transfer received', 'From account 3, Brindle', '+$16,000', '$2,300,100', 'Brindle', '', 'up']
+        ],
+        rowNote: '2 of 9 entries.'
+      },
+      {
+        id: 10, name: 'AdmiralNoor', bal: '$0', flag: '',
+        facts: ['Personal account', 'Owner: AdmiralNoor, a server admin', 'Opened 27 Jul 2026', 'Not frozen'],
+        recon: [['Balance on 3 Nov, 00:00', '$12,046'], ['Trades, net', '-$8.59B'], ['Paid in', '$0'], ['Set by admin commands', '+$8.59B'], ['The log adds up to', '$0'], ['The balance is', '$0']],
+        gap: '$0', open: false, text: 'The log explains every change. All large amounts here come from admin commands that the bank logged.',
+        series: [{ label: 'Money', ymax: 10e9, top: '$10B', mid: '$5B', pts: [[0, 12046], [42.6, 12046], [42.62, 8.6e9], [43.3, 1e7], [43.33, 0], [66.42, 0]] }],
+        rows: [
+          ['4 Nov, 19:20:14', 'admin', 'Balance set by an admin', 'money set AdmiralNoor: 1,204,551 to 0', '-$12,045.51', '$0', 'AdmiralNoor, as admin', '', 'down'],
+          ['4 Nov, 18:36:50', 'admin', 'Balance set by an admin', 'money set AdmiralNoor: 1,204,551 to 860,001,204,551', '+$8,600,000,000', '$8,600,012,046', 'AdmiralNoor, as admin', '', 'up']
+        ],
+        rowNote: '2 of 335 entries.'
+      },
+      {
+        id: 3, name: 'Brindle', bal: '$68,410', flag: '',
+        facts: ['Personal account', 'Owner: Brindle, with every right', 'Opened 2 Aug 2026', 'Not frozen'],
+        recon: [['Balance on 3 Nov, 00:00', '$27,130'], ['Trades, net', '+$41,280'], ['Paid in', '$1,200'], ['Paid out', '-$1,200'], ['The log adds up to', '$68,410'], ['The balance is', '$68,410']],
+        gap: '$0', open: false, text: 'The log explains every change on this account.',
+        series: [{ label: 'Money', ymax: 100000, top: '$100k', mid: '$50k', pts: [[0, 27130], [9, 31000], [20, 38000], [33, 44000], [40, 52000], [52, 61000], [66.42, 68410]] }],
+        rows: [
+          ['5 Nov, 17:40:03', 'cash', 'Withdrawn as banknotes', '12 notes of $100', '-$1,200', '$68,410', 'Brindle', 'transfer e21f…6d03', 'down'],
+          ['5 Nov, 17:38:20', 'trade', 'Sold on the market', '256 coal at $4.31', '+$1,103', 'not recorded', 'StockMarket, for Brindle', 'sm:order:1794678300551', 'up']
+        ],
+        rowNote: '2 of 131 entries.'
+      }
+    ];
+    const A = ACC.find((a) => a.id === st.acct) || ACC[0];
+    const S = A.series[st.series] || A.series[0];
+    const f = (n) => n.toFixed(1);
+    const X = (t) => t / 66.42 * 1000;
+    const line = S.pts.map((p, i) => (i ? 'L' : 'M') + f(X(p[0])) + ' ' + f(180 - Math.min(1, p[1] / S.ymax) * 180)).join(' ');
+    const FILTERS = [['all', 'Everything'], ['cash', 'Paid in and out'], ['trade', 'Trades'], ['admin', 'Admin actions'], ['gap', 'No log entry']];
+    const rows = A.rows.filter((r) => st.filter === 'all' || r[1] === st.filter);
+    const amt = (t) => t === 'up' ? 'var(--up)' : t === 'down' ? 'var(--down)' : 'var(--high)';
+    const ops = ['', '', '', '', '=', ''];
+    return this.sep({
+      theme: this.props.theme ?? 'dark',
+      list: ACC.map((a) => ({
+        id: a.id, name: a.name, bal: a.bal, on: a.id === A.id, flag: !!a.flag,
+        dot: a.flag ? 'var(--' + a.flag + ')' : 'transparent',
+        bg: a.id === A.id ? 'var(--raised)' : 'transparent',
+        pick: () => this.setState({ acct: a.id, series: 0, filter: 'all' })
+      })),
+      A: { id: A.id, name: A.name, facts: A.facts, rowNote: A.rowNote },
+      recon: A.recon.map((t, i) => ({ label: t[0], value: t[1], op: ops[i], bg: i >= 4 ? 'var(--raised)' : 'transparent' })),
+      verdict: {
+        gap: A.gap, text: A.text, open: A.open,
+        fg: A.open ? 'var(--high)' : 'var(--up)',
+        border: A.open ? 'var(--high)' : 'var(--line2)',
+        bg: A.open ? 'color-mix(in srgb, var(--high) 10%, transparent)' : 'transparent'
+      },
+      showGaps: () => this.setState({ filter: 'gap' }),
+      chips: A.series.map((s, i) => ({
+        label: s.label, on: s === S,
+        bg: s === S ? 'var(--raised)' : 'transparent', fg: s === S ? 'var(--text)' : 'var(--text2)',
+        pick: () => this.setState({ series: i })
+      })),
+      ch: {
+        line: line, area: line + ' L1000 180 L0 180 Z', top: S.top, mid: S.mid, hasBand: !!S.band,
+        band: S.band ? 'M' + f(X(S.band[0]) - 4) + ' 0H' + f(X(S.band[1]) + 4) + 'V180H' + f(X(S.band[0]) - 4) + 'Z' : ''
+      },
+      filters: FILTERS.map((r) => ({
+        label: r[1], on: st.filter === r[0],
+        border: st.filter === r[0] ? 'var(--accent)' : 'var(--line)',
+        bg: st.filter === r[0] ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'transparent',
+        fg: st.filter === r[0] ? 'var(--text)' : 'var(--text2)',
+        pick: () => this.setState({ filter: r[0] })
+      })),
+      rows: rows.map((r) => ({
+        time: r[0], what: r[2], sub: r[3], amount: r[4], after: r[5], by: r[6], ref: r[7],
+        amtFg: amt(r[8]),
+        fg: r[8] === 'gap' ? 'var(--high)' : 'var(--text)',
+        bg: r[8] === 'gap' ? 'color-mix(in srgb, var(--high) 10%, transparent)' : 'transparent'
+      })),
+      noRows: rows.length === 0
+    });
+  }
+  // The one number format of the tool: an apostrophe between thousands, 1'532.05.
+  sep(v) {
+    if (typeof v === 'string') return v.replace(/(\d),(?=\d{3}(\D|$))/g, (m, d) => d + "'");
+    if (Array.isArray(v)) return v.map((x) => this.sep(x));
+    if (v && typeof v === 'object') { const o = {}; for (const k in v) o[k] = this.sep(v[k]); return o; }
+    return v;
+  }
+}
+</script>
+</body>
+</html>

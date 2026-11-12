@@ -5,12 +5,12 @@
   import Soon from '../screens/Soon.svelte';
   import Icon from './Icon.svelte';
   import { ICON, SCREENS } from './nav.ts';
-  import { app, openStartupSaves, toggleTheme } from './state.svelte.ts';
+  import { app, start, toggleTheme } from './state.svelte.ts';
 
   const screen = $derived(SCREENS.find((s) => s.id === app.route) ?? SCREENS.find((s) => s.id === 'saves')!);
   const savesLine = $derived(app.saves.length === 0 ? 'No save loaded' : app.saves.length === 1 ? '1 save loaded' : count(app.saves.length) + ' saves loaded');
 
-  void openStartupSaves();
+  void start();
 </script>
 
 <div class="app" data-theme={app.theme}>

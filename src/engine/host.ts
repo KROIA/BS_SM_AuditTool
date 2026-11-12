@@ -1,5 +1,7 @@
-// Entry point of the engine's background process. It answers calls from the window process, one at a time.
+// Entry point of the engine's background process. It answers calls from the window process, one at a time,
+// and reports progress while a save is being read. The workspace folder is its first argument.
 import { api } from './api.ts';
+import { init } from './workspace.ts';
 
 interface Call { id: number; method: string; args: unknown[] }
 interface ParentPort {
@@ -7,6 +9,8 @@ interface ParentPort {
   postMessage(message: unknown): void;
 }
 const port = (process as unknown as { parentPort: ParentPort }).parentPort;
+
+init(process.argv[2]!, (progress) => port.postMessage({ progress }));
 
 port.on('message', ({ data }) => {
   const { id, method, args } = data;

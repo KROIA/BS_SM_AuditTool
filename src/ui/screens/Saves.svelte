@@ -16,9 +16,13 @@
 
   function detail(s: SaveSource): string {
     if (s.status === 'missing') return 'not in this copy';
-    const rows = s.tables.reduce((sum, t) => sum + (t.rows ?? 0), 0);
+    const rows = s.tables.reduce((sum, t) => sum + t.rows, 0), lost = s.tables.reduce((sum, t) => sum + t.lostIds, 0);
     const text = `${count(s.tables.length)} ${s.tables.length === 1 ? 'table' : 'tables'}, ${count(rows)} rows`;
-    return s.status === 'damaged' ? (s.tables.length ? text + ', a part could not be read' : 'the file could not be opened') : text;
+    if (s.status !== 'damaged') return text;
+    if (!s.tables.length) return 'the file could not be opened';
+    const newest = s.tables.filter((t) => t.newestLost).map((t) => t.name);
+    return [text, lost ? `${count(lost)} could not be read` : '', newest.length ? `the newest rows of ${newest.join(' and ')} could not be read` : '']
+      .filter(Boolean).join(', ');
   }
   /** The sources worth a line: everything except what this kind of save never has. */
   const shown = (save: SaveSummary) => save.sources.filter((s) => s.status !== 'none');
@@ -40,6 +44,9 @@
 {#if app.error}
   <p class="problem" role="alert">{app.error}</p>
 {/if}
+{#each app.warnings as w}
+  <p class="problem">{w}</p>
+{/each}
 
 <div class="grid">
   {#each app.saves as save (save.path)}

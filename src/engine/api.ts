@@ -1,10 +1,12 @@
 // The engine's answers. One function per question the screens ask; host.ts hands calls to this object.
 import { DatabaseSync } from 'node:sqlite';
 import type { EngineApi } from '../shared/api.ts';
-import { openSave } from './save/summary.ts';
+import { addSave, removeSave, workspace } from './workspace.ts';
 
 export const api: EngineApi = {
-  openSave,
+  workspace,
+  addSave,
+  removeSave,
   selfCheck() {
     const db = new DatabaseSync(':memory:');
     try {

@@ -4,18 +4,29 @@
 //
 // The table definitions are copied from the mods (BankSystem 3835d933, StockMarket 898aac66):
 // common/src/main/resources/sql/*.sql, BankSystem data/DiagnosticsDatabase.java, StockMarket data/OrderOriginLog.java.
-// NBT files (accounts, item names, player files) are not written yet; they follow in M1 together with their reader.
+// The NBT files follow .claude/DATA_SOURCES.md, "Exact NBT layouts". Player files and region files are not written yet.
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import { byte, comp, float, int, list as nbtList, long, nbtFile, short, str, uuid, type Tag } from './nbt.ts';
 
 const MIN = 60_000;
 /** The first minute of the scenario: 4 Nov 2026, 10:00 UTC. */
 export const T0 = Date.UTC(2026, 10, 4, 10, 0, 0);
 const MINUTES = 160;
 
-// ponytail: item ids are picked freely. The real ids come from ItemIDs.nbt, which the fixtures get in M1.
+// Item ids are per world; ItemIDs.nbt below gives them their names.
 export const ITEM = { money: 1, diamond: 2, emerald: 3, iron: 4, gold: 5, coal: 6, redstone: 7, wheat: 8, oak: 9 } as const;
+const ITEM_NAME: Record<number, string> = {
+  1: 'banksystem:money', 2: 'minecraft:diamond', 3: 'minecraft:emerald', 4: 'minecraft:iron_ingot', 5: 'minecraft:gold_ingot',
+  6: 'minecraft:coal', 7: 'minecraft:redstone', 8: 'minecraft:wheat', 9: 'minecraft:oak_log',
+};
+/** A money item with a custom name: not money, because it has components. */
+export const VOUCHER = 12;
+/** An id whose mod is gone; only Meta_data's name digest knows it. */
+export const GONE = { id: 13, name: 'oldmod:ruby' };
+/** An old coal id merged into the current one. Brindle's coal slot is saved under the old id. */
+export const ALIAS = { from: 40, to: ITEM.coal };
 const BASE_PRICE: Record<number, number> = { 2: 5000, 3: 3000, 4: 400, 5: 900, 6: 120, 7: 150, 8: 60, 9: 80 }; // raw money per item
 
 export const PLAYERS = {
@@ -27,9 +38,21 @@ export const PLAYERS = {
   Brindle: { n: 6, account: 3 },
 } as const;
 type Name = keyof typeof PLAYERS;
+/** Accounts that are not a player's own: one shared by two players, one of a company, and three spare ones. */
+export const SHARED = { account: 30, name: 'Tavrik and Quenby', users: { Tavrik: 7, Quenby: 3 } as Partial<Record<Name, number>>, start: 2_500_000n };
+/** The company account's balance is above 2^53, so only an exact integer keeps it. */
+export const COMPANY = { id: 1, name: 'Northreach Rail Co.', account: 41, founder: 'AdmiralNoor' as Name, start: 9_007_199_254_740_993n };
+const SPARE = [
+  { account: 31, user: 'Mikko_82' as Name, name: 'Old savings', frozen: true },
+  { account: 32, user: 'Brindle' as Name, name: 'Farm', frozen: false },
+  { account: 33, user: 'AdmiralNoor' as Name, name: 'Admin test', frozen: false },
+];
+/** Every account in the order the bank files list them, one per chunk file: chunk_0 to chunk_10. */
+export const ACCOUNT_ORDER = [...Object.values(PLAYERS).map((p) => p.account), SHARED.account, COMPANY.account, ...SPARE.map((s) => s.account)];
+export const MINECRAFT = '1.21.1';
 
 /** Invented UUIDs whose halves do not fit into a floating-point number, like real ones. */
-const uuidText = (n: number) => `a1b2c3d4-e5f6-4a7b-8c9d-${n.toString(16).padStart(12, '0')}`;
+export const uuidText = (n: number) => `a1b2c3d4-e5f6-4a7b-8c9d-${n.toString(16).padStart(12, '0')}`;
 const uuidHalves = (n: number): [bigint, bigint] => [BigInt.asIntN(64, 0xa1b2c3d4e5f64a7bn), BigInt.asIntN(64, 0x8c9d000000000000n + BigInt(n))];
 const MASTER_UID = 'f0000000-0000-4000-8000-000000000001';
 const SLAVES = [
@@ -201,9 +224,13 @@ function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers
   const row = (r: Record<string, SQLInputValue>, extra: Record<string, SQLInputValue>) => db.insert('TransactionLog', legacy ? r : { ...r, ...extra });
 
   const start = T0 - 24 * 60 * MIN;
-  for (const [name, p] of Object.entries(PLAYERS)) {
-    const after = change(p.account, ITEM.money, 10_000_000n, start);
-    row({ account_number: p.account, ...actor(name as Name), kind: legacy ? 'DEPOSIT' : 'STARTING_BALANCE', item_id: ITEM.money, amount: 10_000_000n, ts: start },
+  const starts: [number, Name, bigint][] = [
+    ...Object.entries(PLAYERS).map(([name, p]): [number, Name, bigint] => [p.account, name as Name, 10_000_000n]),
+    [SHARED.account, 'Tavrik', SHARED.start], [COMPANY.account, COMPANY.founder, COMPANY.start],
+  ];
+  for (const [account, by, amount] of starts) {
+    const after = change(account, ITEM.money, amount, start);
+    row({ account_number: account, ...actor(by), kind: legacy ? 'DEPOSIT' : 'STARTING_BALANCE', item_id: ITEM.money, amount, ts: start },
       { type_code: 19, source_kind: 'SYSTEM', balance_after: after });
   }
 
@@ -275,7 +302,82 @@ function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers
     db.insert('SuspicionFlag', { ts: T0 + 70 * MIN + 600, account_number: PLAYERS.Ombrelune.account, flag_type: 1, severity: 2, amount: 300_000_000n,
       details: 'banknote deposit 3000000.00\nown withdrawals in 24 h: 0.00' });
   }
-  return db.close();
+  return { counts: db.close(), balance };
+}
+
+/** A chunked list as the mods write it: <dir>/chunk_<i>.nbt, elementType only in chunk_0, no file for an empty list. */
+function chunked(dir: string, elements: Tag[], perChunk: number) {
+  fs.mkdirSync(dir, { recursive: true });
+  for (let i = 0; i * perChunk < elements.length; i++) {
+    const part = elements.slice(i * perChunk, (i + 1) * perChunk);
+    fs.writeFileSync(path.join(dir, `chunk_${i}.nbt`), nbtFile({ ...(i === 0 ? { elementType: byte(part[0]!.t) } : {}), data: nbtList(part) }));
+  }
+}
+
+/** Minecraft's level.dat with the two values the tool reads. */
+function levelDat(world: string, lastPlayed: number) {
+  fs.writeFileSync(path.join(world, 'level.dat'), nbtFile({ Data: comp({
+    LastPlayed: long(lastPlayed), LevelName: str(path.basename(world)), DataVersion: int(3955),
+    Version: comp({ Id: int(3955), Name: str(MINECRAFT), Snapshot: byte(false) }),
+  }) }));
+}
+
+/**
+ * The bank's and the market's NBT files, with balances equal to what the bank database ends with.
+ * For the old save the same layouts are written: what 2.1.2 kept in NBT is not verified.
+ */
+function nbtFiles(dataDir: string, bankVersion: string, balance: Map<string, bigint>, price: Map<number, number[]>) {
+  const bank = path.join(dataDir, 'BankSystem'), market = path.join(dataDir, 'StockMarket', 'MarketManager');
+  const itemId = (id: number) => comp({ id: short(id) });
+  fs.mkdirSync(bank, { recursive: true });
+  fs.writeFileSync(path.join(bank, 'ItemIDs.nbt'), nbtFile({
+    formatVersion: int(1),
+    itemIDs: nbtList([
+      ...Object.entries(ITEM_NAME).map(([id, name]) => comp({ itemID: itemId(Number(id)), itemStack: comp({ id: str(name), count: int(1) }) })),
+      comp({ itemID: itemId(VOUCHER), itemStack: comp({ id: str('banksystem:money'), count: int(1), components: comp({ 'minecraft:custom_name': str('"Gift voucher"') }) }) }),
+    ]),
+    itemIDAliases: nbtList([comp({ from: short(ALIAS.from), to: short(ALIAS.to) })]),
+    nextShortCounter: int(ALIAS.from + 1),
+  }));
+  fs.writeFileSync(path.join(bank, 'Meta_data.nbt'), nbtFile({
+    formatVersion: int(1), version: str(bankVersion), itemIDShortNameDigest: nbtList([comp({ s: short(GONE.id), n: str(GONE.name) })]),
+  }));
+
+  const user = (name: Name, admin: string, extra: Record<string, Tag>) =>
+    comp({ userUUID: uuid(uuidText(PLAYERS[name].n)), userName: str(name), [admin]: byte(name === 'AdmiralNoor'), ...extra });
+  const names = Object.keys(PLAYERS) as Name[];
+  chunked(path.join(bank, 'Bank_data', 'meta'), [comp({ version: int(1), nextAccountNumber: int(Math.max(...ACCOUNT_ORDER) + 1) })], 1);
+  chunked(path.join(bank, 'Bank_data', 'users'), names.map((n) => user(n, 'isBanksystemAdmin', { customData: comp({}) })), 3);
+
+  const slot = (item: number, v: bigint) => comp({ itemID: itemId(item), balance: long(v), lockedBalance: long(0) });
+  // Brindle's coal is split over the old and the current id; the reader has to add both up.
+  const banks = (account: number) => nbtList([...balance].filter(([k]) => k.startsWith(`${account}:`)).flatMap(([k, v]) => {
+    const item = Number(k.split(':')[1]);
+    return account === PLAYERS.Brindle.account && item === ALIAS.to ? [slot(ALIAS.from, v - 3200n), slot(item, 3200n)] : [slot(item, v)];
+  }));
+  const users = (u: Partial<Record<Name, number>>) => nbtList(Object.entries(u).map(([n, perm]) => comp({ userUUID: uuid(uuidText(PLAYERS[n as Name].n)), permissions: int(perm) })));
+  const created = long(T0 - 30 * 24 * 60 * MIN);
+  const accounts = [
+    ...names.map((n) => comp({ accountNumber: int(PLAYERS[n].account), accountName: str(n), createdAt: created, personalBankOwnerDataUUID: uuid(uuidText(PLAYERS[n].n)),
+      creatorUUID: uuid(uuidText(PLAYERS[n].n)), users: users({ [n]: 7 }), banks: banks(PLAYERS[n].account) })),
+    comp({ accountNumber: int(SHARED.account), accountName: str(SHARED.name), createdAt: created, creatorUUID: uuid(uuidText(PLAYERS.Tavrik.n)), users: users(SHARED.users), banks: banks(SHARED.account) }),
+    comp({ accountNumber: int(COMPANY.account), accountName: str(COMPANY.name), createdAt: created, creatorUUID: uuid(uuidText(PLAYERS[COMPANY.founder].n)),
+      users: users({ [COMPANY.founder]: 7 }), banks: banks(COMPANY.account) }),
+    ...SPARE.map((s) => comp({ accountNumber: int(s.account), accountName: str(s.name), ...(s.frozen ? { frozen: byte(true) } : {}), createdAt: created,
+      users: users({ [s.user]: 7 }), banks: banks(s.account) })), // never used: no slots
+  ];
+  chunked(path.join(bank, 'Bank_data', 'bankAccounts'), accounts, 1); // eleven files, so chunk_10 sorts wrong as text
+
+  // ponytail: the company meta element is not in DATA_SOURCES.md; nextCompanyId is a guess the reader ignores.
+  chunked(path.join(bank, 'Companies', 'meta'), [comp({ nextCompanyId: int(COMPANY.id + 1) })], 1);
+  chunked(path.join(bank, 'Companies', 'companies'), [comp({ companyId: int(COMPANY.id), name: str(COMPANY.name), bankAccountNr: int(COMPANY.account) })], 1);
+
+  chunked(path.join(market, 'users'), names.map((n) => user(n, 'isStockMarketAdmin', { preferences: comp({}) })), 4);
+  chunked(path.join(market, 'markets'), [...price].map(([id, p]) => comp({
+    id: short(id), currentMarketPrice: long(p.at(-1)!), defaultPrice: long(BASE_PRICE[id]!), naturalAbundance: float(1), netPlayerItemFlow: long(0),
+    maintenance: byte(false), tradingOpenMinute: int(0), tradingCloseMinute: int(1440), maxOrderVolume: long(0), tradingOverride: byte(false), orderbook: comp({}),
+  })), 8);
+  chunked(path.join(market, 'meta'), [comp({ nextOrderId: long(1000) })], 1);
 }
 
 export interface Fixtures {
@@ -285,6 +387,10 @@ export interface Fixtures {
   legacy: string;
   /** Rows written per save and table, for tests to compare against. */
   rows: Record<string, Record<string, number>>;
+  /** Final balance per "account:item" (alias already resolved) of the master and the old save. */
+  balances: Record<'master' | 'legacy', Map<string, bigint>>;
+  /** level.dat's LastPlayed per save folder name. */
+  lastPlayed: Record<string, number>;
 }
 
 export function buildFixtures(root: string): Fixtures {
@@ -301,7 +407,9 @@ export function buildFixtures(root: string): Fixtures {
 
   // The master: bank and market data, both diagnostics files, identity.
   const master = path.join(root, 'survival-main'), data = path.join(master, 'data');
-  rows.master = { ...marketDatabase(data, false, price, list), ...bankDatabase(data, false, list, transfers) };
+  const masterBank = bankDatabase(data, false, list, transfers);
+  rows.master = { ...marketDatabase(data, false, price, list), ...masterBank.counts };
+  nbtFiles(data, '2.2.0', masterBank.balance, price);
   identity(data, { server_uid: MASTER_UID, role: 'MASTER', slave_id: '', master_uid: '', first_start_ms: T0 - 100 * 24 * 60 * MIN,
     known_slaves: Object.fromEntries(SLAVES.map((s) => [s.name, { uid: s.uid, last_seen_ms: T0 + MINUTES * MIN }])) });
   let db = database(path.join(data, 'BankSystem/Database/banksystem_diagnostics.db'), [SQL.meta, SQL.transferJournal, SQL.noteFlow], true);
@@ -338,7 +446,14 @@ export function buildFixtures(root: string): Fixtures {
 
   // The old save: thin bank log, no trade rows, no flags, no diagnostics, no identity file.
   const legacy = path.join(root, 'old-world'), legacyData = path.join(legacy, 'data');
-  rows.legacy = { ...marketDatabase(legacyData, true, price, list), ...bankDatabase(legacyData, true, list, []) };
+  const legacyBank = bankDatabase(legacyData, true, list, []);
+  rows.legacy = { ...marketDatabase(legacyData, true, price, list), ...legacyBank.counts };
+  nbtFiles(legacyData, '2.1.2', legacyBank.balance, price);
 
-  return { root, master, slaves, legacy, rows };
+  // When each copy was taken: the slaves shortly before the master, except nether-hub, copied 9 hours earlier.
+  const end = T0 + MINUTES * MIN + 2 * MIN;
+  const lastPlayed = { 'survival-main': end, 'mining-1': end - 5 * MIN, 'nether-hub': end - 9 * 60 * MIN, 'old-world': T0 - 20 * 24 * 60 * MIN };
+  for (const dir of [master, ...slaves, legacy]) levelDat(dir, lastPlayed[path.basename(dir) as keyof typeof lastPlayed]);
+
+  return { root, master, slaves, legacy, rows, balances: { master: masterBank.balance, legacy: legacyBank.balance }, lastPlayed };
 }

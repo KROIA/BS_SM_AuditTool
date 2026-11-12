@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Audit Tool · Overview</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;cursor:pointer}
+input{font:inherit;color:inherit}
+.app{--bg:#0e1013;--rail:#0a0c0f;--card:#15181d;--raised:#1d2128;--line:#272c35;--line2:#39404c;--text:#eceef1;--text2:#aab1bc;--text3:#8a929e;--accent:#8fa2ff;--onaccent:#0e1013;--up:#4fd1b5;--down:#f2686f;--crit:#ff6b6b;--high:#ffa94d;--med:#ffd43b;--low:#74a8ff;--buy:#6ea8ff;--sell:#ffa94d}
+.app[data-theme="light"]{--bg:#f5f6f8;--rail:#eceef1;--card:#ffffff;--raised:#eff1f4;--line:#e1e4e9;--line2:#c8cdd5;--text:#14171c;--text2:#48505b;--text3:#5d6570;--accent:#3b5bdb;--onaccent:#ffffff;--up:#0b7a64;--down:#c92a3a;--crit:#c92a2a;--high:#b85c00;--med:#8a6d00;--low:#2b5fc7;--buy:#2b5fc7;--sell:#b85c00}
+.nav{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:8px;color:var(--text2);font-weight:500}
+.nav:hover,.nav[aria-current="page"]{background:var(--raised);color:var(--text)}
+.row:hover{background:var(--raised) !important}
+.btn:hover{background:var(--raised) !important}
+</style>
+</helmet>
+<div class="app" data-theme="{{theme}}" style="min-height: 100vh; display: flex; flex-wrap: wrap; background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; font-size: 14px; line-height: 20px">
+
+<nav aria-label="Sections" style="flex: 1 1 232px; box-sizing: border-box; display: flex; flex-direction: column; gap: 28px; padding: 20px 12px; background: var(--rail); border-right: 1px solid var(--line)">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 12px">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4M8 12l2-3 2 2 2-3"></path></svg>
+<span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600">Audit Tool</span>
+</a>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<a class="nav" href="Main.dc.html" aria-current="page"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M4 4h7v7H4zM13 4h7v4h-7zM13 11h7v9h-7zM4 14h7v6H4z"></path></svg><span>Overview</span></a>
+<a class="nav" href="Findings.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M12 4l9 15H3zM12 10v4M12 16.5v.5"></path></svg><span style="flex: 1">Findings</span><span style="min-width: 22px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; font-size: 12px; line-height: 20px; text-align: center; color: var(--crit); background: color-mix(in srgb, var(--crit) 16%, transparent)">20</span></a>
+<a class="nav" href="Player.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20c.8-3.4 3.8-5.5 7.5-5.5s6.7 2.1 7.5 5.5"></path></svg><span>Players</span></a>
+<a class="nav" href="Market.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M7 3v4M7 15v6M5 7h4v8H5zM17 3v6M17 15v6M15 9h4v6h-4z"></path></svg><span>Markets</span></a>
+<a class="nav" href="Account.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M3 10l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 20h18"></path></svg><span>Bank accounts</span></a>
+<a class="nav" href="Flow.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M4 7h5c3 0 3 10 6 10h5M4 17h5c1.2 0 1.9-1.6 2.6-3.5M17 14l3 3-3 3"></path></svg><span>Money flow</span></a>
+<a class="nav" href="Servers.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01"></path></svg><span>Saves and servers</span></a>
+<a class="nav" href="Case.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"></path></svg><span>Case and report</span></a>
+</div>
+<a class="btn" href="Servers.dc.html" style="margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 10px; border: 1px solid var(--line)">
+<span style="font-weight: 500">3 saves loaded</span>
+<span style="font-size: 13px; color: var(--text3)">Snapshot 5 Nov 2026, 18:25 UTC</span>
+<span style="display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--up)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3"></path></svg>Read-only copies</span>
+</a>
+</nav>
+
+<div style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 32px; border-bottom: 1px solid var(--line)">
+<label style="flex: 1 1 280px; max-width: 460px; display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; box-sizing: border-box; border-radius: 10px; background: var(--card); border: 1px solid var(--line); color: var(--text3)">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4"></path></svg>
+<input aria-label="Search everything" placeholder="Search players, accounts, items, order or transfer ids" style="flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text)">
+</label>
+<div style="flex: 1 1 0"></div>
+<button type="button" class="btn" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--text3)"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 8v4l3 2"></path></svg><span>3 Nov 00:00 to 5 Nov 18:25</span><span style="color: var(--text3)">UTC</span></button>
+<button type="button" class="btn" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--text3)"><path d="M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01"></path></svg><span>All servers</span></button>
+<a class="btn" href="Case.dc.html" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; box-sizing: border-box; border-radius: 10px; border: 1px solid var(--line); background: var(--card)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--text3)"><path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"></path></svg><span>Case</span><span style="color: var(--text3)">4 pinned</span></a>
+</header>
+
+<main style="display: flex; flex-direction: column; gap: 24px; padding: 28px 32px 40px">
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px">
+<div style="flex: 1 1 320px; min-width: 0">
+<h1 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em">Overview</h1>
+<p style="margin: 4px 0 0; color: var(--text2)">Northreach network · 1 master and 2 slave servers · 43 players · 61 bank accounts</p>
+</div>
+<div role="group" aria-label="Chart time range" style="display: flex; gap: 4px; padding: 4px; border-radius: 10px; background: var(--card); border: 1px solid var(--line)">
+<sc-for list="{{ranges}}" as="r" hint-placeholder-count="3">
+<button type="button" onClick="{{r.pick}}" aria-pressed="{{r.on}}" style="height: 32px; padding: 0 14px; border: 0; border-radius: 7px; font-weight: 500; background: {{r.bg}}; color: {{r.fg}}">{{r.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<section style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div aria-hidden="true" style="flex: none; width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--crit); background: color-mix(in srgb, var(--crit) 16%, transparent)">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M12 4l9 15H3zM12 10v4M12 16.5v.5"></path></svg>
+</div>
+<div style="flex: 1 1 420px; min-width: 0">
+<div style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--crit)">Needs attention</div>
+<p style="margin: 6px 0 0; max-width: 860px; font-size: 20px; line-height: 30px; font-weight: 500; text-wrap: pretty">Two players made $29.4 billion in 21 minutes on the diamond market on 4 Nov. Almost all the money in the bank today did not exist before 10:22 that morning.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px">
+<a href="Findings.dc.html" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 10px; font-weight: 600; background: var(--accent); color: var(--onaccent)">Open the incident<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a>
+<a class="btn" href="Flow.dc.html" style="display: inline-flex; align-items: center; height: 40px; padding: 0 16px; box-sizing: border-box; border-radius: 10px; font-weight: 500; border: 1px solid var(--line2)">See where the money went</a>
+</div>
+</div>
+</section>
+
+<section aria-label="Key figures" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 20px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="font-size: 13px; color: var(--text2)">Money in bank accounts</div>
+<div style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em">$11.75B</div>
+<div style="font-size: 13px; color: var(--text3)">was $2.94M at the start of 3 Nov</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 20px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="font-size: 13px; color: var(--text2)">Paid out by the markets, net</div>
+<div style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em">$24.41B</div>
+<div style="font-size: 13px; color: var(--text3)">money that came from market liquidity, not from players</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 20px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="font-size: 13px; color: var(--text2)">Banknotes outside the bank</div>
+<div style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em">$5.52B</div>
+<div style="font-size: 13px; color: var(--text3)">$3.14B located in the world, $2.38B not found</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 20px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="font-size: 13px; color: var(--text2)">Balance changes nothing explains</div>
+<div style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em; color: var(--high)">$13.03B</div>
+<div style="font-size: 13px; color: var(--text3)">3 time spans on 2 accounts</div>
+</div>
+</section>
+
+<section style="display: flex; flex-wrap: wrap; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="flex: 3 1 520px; min-width: 0; box-sizing: border-box; padding: 24px">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px">
+<h2 style="flex: 1 1 auto; margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">Money and total wealth</h2>
+<span style="display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><span aria-hidden="true" style="width: 16px; height: 3px; border-radius: 2px; background: var(--accent)"></span>Money</span>
+<button type="button" onClick="{{toggleWealth}}" aria-pressed="{{wealthOn}}" style="display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 18px; font-weight: 500; border: 1px solid {{wealthBorder}}; background: transparent; color: {{wealthFg}}"><span aria-hidden="true" style="width: 16px; height: 3px; border-radius: 2px; background: currentColor"></span>Total wealth</button>
+</div>
+<p style="margin: 4px 0 0; font-size: 13px; color: var(--text3); text-wrap: pretty">All accounts added up, from the bank's balance snapshots. Total wealth is money plus every item at its market price of that moment, so it rises when prices are pushed up.</p>
+<div style="display: flex; gap: 12px; margin-top: 24px">
+<div style="position: relative; flex: 1 1 0; min-width: 0; height: 280px">
+<svg viewBox="0 0 1000 280" preserveAspectRatio="none" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible">
+<path d="{{grid}}" style="fill: none; stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke"></path>
+<path d="{{area}}" style="fill: var(--accent); fill-opacity: 0.12; stroke: none"></path>
+<path d="{{line}}" style="fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke"></path>
+<path d="{{wealth}}" style="fill: none; stroke: var(--text); stroke-width: 1.75; stroke-linejoin: round; vector-effect: non-scaling-stroke"></path>
+<path d="{{guide}}" style="fill: none; stroke: var(--text3); stroke-width: 1; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke"></path>
+</svg>
+<sc-for list="{{marks}}" as="m" hint-placeholder-count="5">
+<button type="button" onClick="{{m.pick}}" aria-label="{{m.aria}}" style="position: absolute; left: {{m.left}}; top: {{m.top}}; width: 24px; height: 24px; margin: -12px 0 0 -12px; padding: 0; border-radius: 50%; border: 2px solid var(--card); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; background: {{m.bg}}; color: {{m.fg}}">{{m.n}}</button>
+</sc-for>
+</div>
+<div aria-hidden="true" style="position: relative; flex: none; width: 40px; height: 280px; font-size: 12px; line-height: 16px; color: var(--text3)">
+<sc-for list="{{yticks}}" as="t" hint-placeholder-count="4">
+<span style="position: absolute; left: 0; top: {{t.top}}; transform: translateY(-50%)">{{t.label}}</span>
+</sc-for>
+</div>
+</div>
+<div aria-hidden="true" style="position: relative; height: 16px; margin: 10px 52px 0 0; font-size: 12px; line-height: 16px; color: var(--text3)">
+<sc-for list="{{xticks}}" as="t" hint-placeholder-count="3">
+<span style="position: absolute; left: {{t.left}}; transform: translateX(-50%); white-space: nowrap">{{t.label}}</span>
+</sc-for>
+</div>
+</div>
+<div style="flex: 1 1 320px; min-width: 0; box-sizing: border-box; padding: 24px; border-left: 1px solid var(--line)">
+<h2 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">Key events</h2>
+<div style="display: flex; flex-direction: column; gap: 2px; margin: 12px -10px 0">
+<sc-for list="{{events}}" as="e" hint-placeholder-count="5">
+<button type="button" class="row" onClick="{{e.pick}}" aria-pressed="{{e.on}}" style="display: flex; align-items: flex-start; gap: 12px; padding: 10px; border: 0; border-radius: 10px; text-align: left; background: {{e.bg}}">
+<span aria-hidden="true" style="flex: none; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; background: {{e.dot}}; color: {{e.dotFg}}">{{e.n}}</span>
+<span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<span style="font-weight: 500">{{e.title}}</span>
+<span style="font-size: 13px; color: var(--text3)">{{e.when}} · {{e.sub}}</span>
+</span>
+</button>
+</sc-for>
+</div>
+<a href="Findings.dc.html" style="display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; font-weight: 500; color: var(--accent)">All 20 findings<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a>
+</div>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 24px">
+<section style="flex: 1 1 420px; min-width: 0; box-sizing: border-box; padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px">
+<h2 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">Highest trading profit</h2>
+<a href="Player.dc.html" style="font-size: 13px; font-weight: 500; color: var(--accent)">All players</a>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px; margin: 12px -10px 0">
+<sc-for list="{{gainers}}" as="p" hint-placeholder-count="5">
+<a class="row" href="Player.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 10px; border-radius: 10px">
+<span aria-hidden="true" style="flex: none; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; background: {{p.avBg}}; color: {{p.avFg}}">{{p.ini}}</span>
+<span style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<span style="display: flex; justify-content: space-between; gap: 12px"><span style="font-weight: 500">{{p.name}}</span><span style="font-variant-numeric: tabular-nums">{{p.profit}}</span></span>
+<span style="display: block; height: 4px; border-radius: 2px; background: var(--line)"><span style="display: block; height: 4px; border-radius: 2px; width: {{p.w}}; background: {{p.bar}}"></span></span>
+</span>
+</a>
+</sc-for>
+</div>
+</section>
+<section style="flex: 1 1 420px; min-width: 0; box-sizing: border-box; padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px">
+<h2 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">Markets with unusual prices</h2>
+<a href="Market.dc.html" style="font-size: 13px; font-weight: 500; color: var(--accent)">All markets</a>
+</div>
+<div style="display: flex; flex-direction: column; gap: 2px; margin: 12px -10px 0">
+<sc-for list="{{markets}}" as="k" hint-placeholder-count="4">
+<a class="row" href="Market.dc.html" style="display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 10px; border-radius: 10px">
+<span aria-hidden="true" style="flex: none; width: 32px; height: 32px; border-radius: 8px; background: {{k.sw}}"></span>
+<span style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column">
+<span style="font-weight: 500">{{k.name}}</span>
+<span style="font-size: 13px; color: var(--text3); font-variant-numeric: tabular-nums">{{k.range}} · usual price {{k.usual}}</span>
+</span>
+<span style="flex: none; height: 24px; padding: 0 8px; border-radius: 6px; font-size: 12px; line-height: 24px; font-weight: 500; white-space: nowrap; color: {{k.fg}}; background: {{k.bg}}">{{k.chip}}</span>
+</a>
+</sc-for>
+</div>
+</section>
+</div>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":1480}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { range: 'all', ev: 1, wealth: true };
+  }
+  renderVals() {
+    const st = this.state;
+    // Hours since 3 Nov 00:00 UTC. Mock data shaped like a real pump exploit.
+    const RANGES = [
+      { id: 'all', label: '3 days', a: 0, b: 66.42, ticks: [[0, '3 Nov'], [24, '4 Nov'], [48, '5 Nov']] },
+      { id: 'day', label: '4 Nov', a: 24, b: 48, ticks: [[24, '00:00'], [30, '06:00'], [36, '12:00'], [42, '18:00'], [48, '24:00']] },
+      { id: 'inc', label: '10:00 to 13:00', a: 34, b: 37, ticks: [[34, '10:00'], [35, '11:00'], [36, '12:00'], [37, '13:00']] }
+    ];
+    const R = RANGES.find((r) => r.id === st.range) || RANGES[0];
+    const PTS = [[0, 0.003], [34.37, 0.003], [34.72, 19.35], [34.75, 18.56], [35.82, 18.56], [36.0, 27.14], [36.65, 20.53], [38.86, 20.53], [38.88, 20.72], [41.5, 20.72], [41.55, 21.28], [42.85, 21.28], [43.1, 15.14], [44.43, 15.14], [44.45, 11.43], [44.67, 11.75], [66.42, 11.75]];
+    // Total wealth = money plus every item at its market price of that moment (the bank's own wealth series, summed).
+    const WPTS = [[0, 0.0044], [34.37, 0.0044], [34.72, 19.65], [34.75, 18.58], [35.82, 18.58], [36.0, 27.6], [36.65, 31.2], [37.2, 27.5], [37.8, 25.1], [38.86, 23.53], [38.88, 23.72], [39.8, 22.3], [40.8, 21.5], [41.5, 21.22], [41.55, 21.78], [42.85, 21.63], [43.1, 15.47], [44.43, 15.42], [44.45, 11.71], [44.67, 12.03], [66.42, 11.97]];
+    const at = (pts, t) => {
+      for (let i = 1; i < pts.length; i++) {
+        if (t <= pts[i][0]) {
+          const p = pts[i - 1], q = pts[i];
+          return q[0] === p[0] ? q[1] : p[1] + (q[1] - p[1]) * (t - p[0]) / (q[0] - p[0]);
+        }
+      }
+      return pts[pts.length - 1][1];
+    };
+    const valAt = (t) => at(PTS, t);
+    const TICKS = st.wealth ? [0, 10, 20, 30, 40] : [0, 10, 20, 30];
+    const YMAX = TICKS[TICKS.length - 1];
+    const X = (t) => (t - R.a) / (R.b - R.a) * 1000;
+    const Y = (v) => 280 - v / YMAX * 280;
+    const f = (n) => n.toFixed(1);
+    const path = (pts) => [[R.a, at(pts, R.a)]].concat(pts.filter((p) => p[0] > R.a && p[0] < R.b), [[R.b, at(pts, R.b)]]).map((p, i) => (i ? 'L' : 'M') + f(X(p[0])) + ' ' + f(Y(p[1]))).join(' ');
+    const line = path(PTS);
+    const EVENTS = [
+      { n: 1, t: 34.4, when: '4 Nov, 10:22', title: 'Pump starts on the diamond market', sub: '+$19.35B in 21 minutes' },
+      { n: 2, t: 34.75, when: '4 Nov, 10:41', title: 'First banknote withdrawals', sub: '$797M leaves as notes' },
+      { n: 3, t: 36.3, when: '4 Nov, 11:57', title: 'About 50 markets bought out', sub: '$5.02B spent on 16.5M items' },
+      { n: 4, t: 43.0, when: '4 Nov, 19:02', title: '$7.14B gone with no ledger entry', sub: 'nothing in the bank log explains it' },
+      { n: 5, t: 44.44, when: '4 Nov, 20:26', title: '$9.6B withdrawn, $5.89B put back', sub: 'the refund is missing from the log' }
+    ];
+    const sel = EVENTS.find((e) => e.n === st.ev);
+    const inR = (e) => e.t >= R.a && e.t <= R.b;
+    return this.sep({
+      theme: this.props.theme ?? 'dark',
+      ranges: RANGES.map((r) => ({
+        label: r.label, on: r.id === R.id,
+        bg: r.id === R.id ? 'var(--raised)' : 'transparent',
+        fg: r.id === R.id ? 'var(--text)' : 'var(--text2)',
+        pick: () => this.setState({ range: r.id })
+      })),
+      grid: TICKS.filter((v) => v > 0).map((v) => 'M0 ' + f(Y(v)) + ' H1000').join(' '),
+      yticks: TICKS.map((v) => ({ label: v ? '$' + v + 'B' : '$0', top: (Y(v) / 2.8).toFixed(2) + '%' })),
+      wealth: st.wealth ? path(WPTS) : '',
+      wealthOn: st.wealth,
+      wealthBorder: st.wealth ? 'var(--text2)' : 'var(--line)',
+      wealthFg: st.wealth ? 'var(--text)' : 'var(--text3)',
+      toggleWealth: () => this.setState({ wealth: !st.wealth }),
+      line: line,
+      area: line + ' L1000 280 L0 280 Z',
+      guide: sel && inR(sel) ? 'M' + f(X(sel.t)) + ' 0 V280' : '',
+      xticks: R.ticks.map((t) => ({ label: t[1], left: (X(t[0]) / 10).toFixed(2) + '%' })),
+      marks: EVENTS.filter(inR).map((e) => ({
+        n: e.n, aria: 'Event ' + e.n + ': ' + e.title,
+        left: (X(e.t) / 10).toFixed(2) + '%',
+        top: (Y(valAt(e.t)) / 2.8).toFixed(2) + '%',
+        bg: e.n === st.ev ? 'var(--accent)' : 'var(--raised)',
+        fg: e.n === st.ev ? 'var(--onaccent)' : 'var(--text)',
+        pick: () => this.setState({ ev: e.n })
+      })),
+      events: EVENTS.map((e) => ({
+        n: e.n, title: e.title, when: e.when, sub: e.sub, on: e.n === st.ev,
+        bg: e.n === st.ev ? 'var(--raised)' : 'transparent',
+        dot: e.n === st.ev ? 'var(--accent)' : 'var(--raised)',
+        dotFg: e.n === st.ev ? 'var(--onaccent)' : 'var(--text)',
+        pick: () => this.setState({ ev: e.n })
+      })),
+      gainers: [
+        { name: 'Tavrik', ini: 'TA', profit: '+$15.35B', w: '100%', hot: true },
+        { name: 'Quenby', ini: 'QU', profit: '+$14.08B', w: '92%', hot: true },
+        { name: 'Ombrelune', ini: 'OM', profit: '+$290,390', w: '1%', hot: false },
+        { name: 'Brindle', ini: 'BR', profit: '+$41,280', w: '1%', hot: false },
+        { name: 'Saffi_K', ini: 'SA', profit: '+$18,940', w: '1%', hot: false }
+      ].map((p) => ({
+        name: p.name, ini: p.ini, profit: p.profit, w: p.w,
+        bar: p.hot ? 'var(--crit)' : 'var(--text3)',
+        avBg: p.hot ? 'color-mix(in srgb, var(--crit) 16%, transparent)' : 'var(--raised)',
+        avFg: p.hot ? 'var(--crit)' : 'var(--text2)'
+      })),
+      markets: [
+        { name: 'Diamond', range: '$0.01 to $3,856', usual: '$160', chip: '24 times usual', sev: 'crit', sw: '#5ad6e8' },
+        { name: 'Emerald', range: '$48 to $4,210', usual: '$55', chip: '77 times usual', sev: 'high', sw: '#3fbf6f' },
+        { name: 'Iron ingot', range: '$9 to $640', usual: '$11', chip: '58 times usual', sev: 'high', sw: '#c9ced6' },
+        { name: 'Gold ingot', range: '$31 to $1,460', usual: '$36', chip: '41 times usual', sev: 'high', sw: '#f2c94c' }
+      ].map((k) => ({
+        name: k.name, range: k.range, usual: k.usual, chip: k.chip, sw: k.sw,
+        fg: 'var(--' + k.sev + ')',
+        bg: 'color-mix(in srgb, var(--' + k.sev + ') 16%, transparent)'
+      }))
+    });
+  }
+  // The one number format of the tool: an apostrophe between thousands, 1'532.05.
+  sep(v) {
+    if (typeof v === 'string') return v.replace(/(\d),(?=\d{3}(\D|$))/g, (m, d) => d + "'");
+    if (Array.isArray(v)) return v.map((x) => this.sep(x));
+    if (v && typeof v === 'object') { const o = {}; for (const k in v) o[k] = this.sep(v[k]); return o; }
+    return v;
+  }
+}
+</script>
+</body>
+</html>

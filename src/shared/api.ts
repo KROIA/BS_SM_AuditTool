@@ -1,10 +1,15 @@
 // What the screens may ask the engine. The screens have no other way to reach a file.
 // Everything here crosses the border between two processes, so it is plain data: no classes, no functions.
 
-/** One table of a database and how many rows it has; null when the table could not be read. */
+/** One table of a database: rows that were read, ids that could not be, and the time span the rows cover. */
 export interface SaveTable {
   name: string;
-  rows: number | null;
+  rows: number;
+  lostIds: number;
+  /** The rows written last could not be read (a copy taken while the mod was writing). How many is unknown. */
+  newestLost: boolean;
+  from: number | null;
+  to: number | null;
 }
 
 /**
@@ -28,10 +33,44 @@ export interface SaveSummary {
   /** True when there is no identity file and the role was worked out from the files found. */
   roleAssumed: boolean;
   serverUid: string | null;
+  /** For a slave: the id of the master it belongs to. */
+  masterUid: string | null;
   /** legacy: mod version 2.1.2, before the audit additions. */
   generation: 'legacy' | 'current';
+  /** When the world was last played (level.dat), which is when the copy was taken at the latest. */
+  lastPlayedMs: number | null;
+  minecraft: string | null;
+  /** The BankSystem version that wrote the save, when its files say so. */
+  bankVersion: string | null;
+  /** How many players and bank accounts the save's files list. */
+  players: number;
+  accounts: number;
   sources: SaveSource[];
   warnings: string[];
+}
+
+/** The loaded saves of one network, and what is odd about how they fit together. */
+export interface Workspace {
+  saves: SaveSummary[];
+  warnings: string[];
+}
+
+/** Sent while a save is being read. */
+export interface Progress {
+  save: string;
+  step: string;
+  done: number;
+  total: number;
+}
+
+/**
+ * What every question about the data is limited to (DESIGN_SPEC section 5): the time range and the server filter
+ * of the top bar. Times are epoch ms; null leaves that end open. server is a save's name; null means all servers.
+ */
+export interface Scope {
+  from: number | null;
+  to: number | null;
+  server: string | null;
 }
 
 export interface EngineCheck {
@@ -42,7 +81,10 @@ export interface EngineCheck {
 }
 
 export interface EngineApi {
-  openSave(path: string): SaveSummary;
+  /** The saves of the last session, read again only where they changed on disk. */
+  workspace(): Workspace;
+  addSave(path: string): Workspace;
+  removeSave(path: string): Workspace;
   selfCheck(): EngineCheck;
 }
 

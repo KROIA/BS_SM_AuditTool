@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Audit Tool · Case and report</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;cursor:pointer}
+input{font:inherit;color:inherit}
+.app{--bg:#0e1013;--rail:#0a0c0f;--card:#15181d;--raised:#1d2128;--line:#272c35;--line2:#39404c;--text:#eceef1;--text2:#aab1bc;--text3:#8a929e;--accent:#8fa2ff;--onaccent:#0e1013;--up:#4fd1b5;--down:#f2686f;--crit:#ff6b6b;--high:#ffa94d;--med:#ffd43b;--low:#74a8ff;--buy:#6ea8ff;--sell:#ffa94d}
+.app[data-theme="light"]{--bg:#f5f6f8;--rail:#eceef1;--card:#ffffff;--raised:#eff1f4;--line:#e1e4e9;--line2:#c8cdd5;--text:#14171c;--text2:#48505b;--text3:#5d6570;--accent:#3b5bdb;--onaccent:#ffffff;--up:#0b7a64;--down:#c92a3a;--crit:#c92a2a;--high:#b85c00;--med:#8a6d00;--low:#2b5fc7;--buy:#2b5fc7;--sell:#b85c00}
+.nav{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:8px;color:var(--text2);font-weight:500}
+.nav:hover,.nav[aria-current="page"]{background:var(--raised);color:var(--text)}
+.row:hover{background:var(--raised) !important}
+.btn:hover{background:var(--raised) !important}
+</style>
+</helmet>
+<div class="app" data-theme="{{theme}}" style="min-height: 100vh; display: flex; flex-wrap: wrap; background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; font-size: 14px; line-height: 20px">
+
+<nav aria-label="Sections" style="flex: 1 1 232px; box-sizing: border-box; display: flex; flex-direction: column; gap: 28px; padding: 20px 12px; background: var(--rail); border-right: 1px solid var(--line)">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 12px">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4M8 12l2-3 2 2 2-3"></path></svg>
+<span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600">Audit Tool</span>
+</a>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<a class="nav" href="Main.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M4 4h7v7H4zM13 4h7v4h-7zM13 11h7v9h-7zM4 14h7v6H4z"></path></svg><span>Overview</span></a>
+<a class="nav" href="Findings.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M12 4l9 15H3zM12 10v4M12 16.5v.5"></path></svg><span style="flex: 1">Findings</span><span style="min-width: 22px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; font-size: 12px; line-height: 20px; text-align: center; color: var(--crit); background: color-mix(in srgb, var(--crit) 16%, transparent)">20</span></a>
+<a class="nav" href="Player.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20c.8-3.4 3.8-5.5 7.5-5.5s6.7 2.1 7.5 5.5"></path></svg><span>Players</span></a>
+<a class="nav" href="Market.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M7 3v4M7 15v6M5 7h4v8H5zM17 3v6M17 15v6M15 9h4v6h-4z"></path></svg><span>Markets</span></a>
+<a class="nav" href="Account.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M3 10l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 20h18"></path></svg><span>Bank accounts</span></a>
+<a class="nav" href="Flow.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M4 7h5c3 0 3 10 6 10h5M4 17h5c1.2 0 1.9-1.6 2.6-3.5M17 14l3 3-3 3"></path></svg><span>Money flow</span></a>
+<a class="nav" href="Servers.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01"></path></svg><span>Saves and servers</span></a>
+<a class="nav" href="Case.dc.html" aria-current="page"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"></path></svg><span>Case and report</span></a>
+</div>
+<a class="btn" href="Servers.dc.html" style="margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 10px; border: 1px solid var(--line)">
+<span style="font-weight: 500">3 saves loaded</span>
+<span style="font-size: 13px; color: var(--text3)">Snapshot 5 Nov 2026, 18:25 UTC</span>
+<span style="display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--up)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3"></path></svg>Read-only copies</span>
+</a>
+</nav>
+
+<div style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 32px; border-bottom: 1px solid var(--line)">
+<label style="flex: 1 1 280px; max-width: 460px; display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; box-sizing: border-box; border-radius: 10px; background: var(--card); border: 1px solid var(--line); color: var(--text3)">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4"></path></svg>
+<input aria-label="Search everything" placeholder="Search players, accounts, items, order or transfer ids" style="flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text)">
+</label>
+<div style="flex: 1 1 0"></div>
+<button type="button" class="btn" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--text3)"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 8v4l3 2"></path></svg><span>3 Nov 00:00 to 5 Nov 18:25</span><span style="color: var(--text3)">UTC</span></button>
+<button type="button" class="btn" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--text3)"><path d="M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01"></path></svg><span>All servers</span></button>
+<a class="btn" href="Case.dc.html" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; box-sizing: border-box; border-radius: 10px; border: 1px solid var(--line); background: var(--card)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--text3)"><path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"></path></svg><span>Case</span><span style="color: var(--text3)">{{pinCount}} pinned</span></a>
+</header>
+
+<main style="display: flex; flex-direction: column; gap: 24px; padding: 28px 32px 40px">
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px">
+<div style="flex: 1 1 320px; min-width: 0">
+<h1 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em">Case: diamond market, 4 Nov</h1>
+<p style="margin: 4px 0 0; color: var(--text2)">Collect the evidence, decide what each player may keep, then hand the report to the admins.</p>
+</div>
+<div role="group" aria-label="Report style" style="display: flex; gap: 4px; padding: 4px; border-radius: 10px; background: var(--card); border: 1px solid var(--line)">
+<sc-for list="{{styles}}" as="r" hint-placeholder-count="2">
+<button type="button" onClick="{{r.pick}}" aria-pressed="{{r.on}}" style="height: 32px; padding: 0 14px; border: 0; border-radius: 7px; font-weight: 500; background: {{r.bg}}; color: {{r.fg}}">{{r.label}}</button>
+</sc-for>
+</div>
+<button type="button" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 10px; font-weight: 600; background: var(--accent); color: var(--onaccent)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg>Export the report</button>
+</div>
+<p style="margin: -12px 0 0; font-size: 13px; color: var(--text3)">{{styleNote}}</p>
+
+<section style="padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px">
+<h2 style="flex: 1 1 auto; margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">Where the $29.43B stands</h2>
+<a href="Flow.dc.html" style="font-size: 13px; font-weight: 500; color: var(--accent)">Open the money flow</a>
+</div>
+<div aria-hidden="true" style="display: flex; gap: 3px; height: 14px; margin-top: 16px">
+<sc-for list="{{bar}}" as="g" hint-placeholder-count="4">
+<span style="flex: {{g.pct}} 1 0; border-radius: 4px; background: {{g.color}}"></span>
+</sc-for>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 16px; margin-top: 16px">
+<sc-for list="{{bar}}" as="g" hint-placeholder-count="4">
+<div style="display: flex; align-items: flex-start; gap: 10px">
+<span aria-hidden="true" style="flex: none; width: 10px; height: 10px; margin-top: 5px; border-radius: 3px; background: {{g.color}}"></span>
+<span style="display: flex; flex-direction: column"><span style="font-size: 13px; color: var(--text2)">{{g.label}}</span><span style="font-size: 18px; line-height: 26px; font-weight: 600; font-variant-numeric: tabular-nums">{{g.value}}</span></span>
+</div>
+</sc-for>
+</div>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24px">
+
+<section aria-label="Evidence" style="flex: 1 1 380px; min-width: 0; box-sizing: border-box; padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="display: flex; align-items: baseline; gap: 12px">
+<h2 style="flex: 1 1 auto; margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">Evidence</h2>
+<span style="font-size: 13px; color: var(--text3)">{{pinCount}} pinned</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px; margin-top: 16px">
+<sc-for list="{{pins}}" as="p" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 10px; border: 1px solid var(--line)">
+<div style="display: flex; align-items: flex-start; gap: 12px">
+<span aria-hidden="true" style="flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: {{p.dot}}"></span>
+<a href="Findings.dc.html" style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-weight: 500; text-wrap: pretty">{{p.title}}</span>
+<span style="font-size: 13px; color: var(--text3)">{{p.who}} · {{p.when}}</span>
+</a>
+<button type="button" class="btn" onClick="{{p.remove}}" aria-label="Remove from the case" style="flex: none; width: 36px; height: 36px; margin: -6px -6px 0 0; padding: 0; border: 0; border-radius: 8px; background: transparent; display: flex; align-items: center; justify-content: center; color: var(--text3)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="stroke-width: 2; stroke-linecap: round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-left: 20px">
+<span style="height: 24px; padding: 0 8px; box-sizing: border-box; border-radius: 6px; font-size: 12px; line-height: 22px; font-weight: 500; color: {{p.confFg}}; border: 1px {{p.confLine}} {{p.confBorder}}">{{p.conf}}</span>
+<span style="font-size: 13px; color: var(--text2); text-wrap: pretty">{{p.note}}</span>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{noPins}}" hint-placeholder-val="{{ false }}">
+<p style="margin: 0; padding: 16px; border-radius: 10px; border: 1px dashed var(--line2); color: var(--text2)">Nothing pinned yet. Use Pin to case on any finding, chart, player or account.</p>
+</sc-if>
+</div>
+</section>
+
+<section aria-label="What to take back" style="flex: 1.5 1 520px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div>
+<h2 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 17px; line-height: 24px; font-weight: 600">What to take back</h2>
+<p style="margin: 2px 0 0; font-size: 13px; color: var(--text3)">The tool only works this out. Nothing is changed on the server until an admin runs the commands.</p>
+</div>
+
+<div>
+<h3 style="margin: 0 0 8px; font-size: 14px; line-height: 20px; font-weight: 600">1. Each player keeps the balance they had at</h3>
+<div role="group" aria-label="Moment to keep" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 12px">
+<sc-for list="{{cuts}}" as="c" hint-placeholder-count="2">
+<button type="button" class="btn" onClick="{{c.pick}}" aria-pressed="{{c.on}}" style="display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 10px; text-align: left; border: 1px solid {{c.border}}; background: {{c.bg}}">
+<span style="font-weight: 600">{{c.label}}</span>
+<span style="font-size: 13px; color: var(--text2); text-wrap: pretty">{{c.sub}}</span>
+</button>
+</sc-for>
+</div>
+</div>
+
+<div>
+<h3 style="margin: 0 0 8px; font-size: 14px; line-height: 20px; font-weight: 600">2. Did an admin remove $7.14B from Quenby on 4 Nov at 19:02?</h3>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+<div role="group" aria-label="Answer" style="display: flex; gap: 4px; padding: 4px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line)">
+<sc-for list="{{answers}}" as="r" hint-placeholder-count="3">
+<button type="button" onClick="{{r.pick}}" aria-pressed="{{r.on}}" style="height: 32px; padding: 0 14px; border: 0; border-radius: 7px; font-weight: 500; background: {{r.bg}}; color: {{r.fg}}">{{r.label}}</button>
+</sc-for>
+</div>
+<p style="flex: 1 1 260px; min-width: 0; margin: 0; font-size: 13px; color: var(--text2); text-wrap: pretty">{{answerNote}}</p>
+</div>
+</div>
+
+<div>
+<h3 style="margin: 0 0 8px; font-size: 14px; line-height: 20px; font-weight: 600">3. Per account</h3>
+<div style="overflow-x: auto">
+<table style="width: 100%; min-width: 560px; border-collapse: collapse; font-variant-numeric: tabular-nums">
+<thead>
+<tr style="font-size: 12px; color: var(--text3); text-align: left">
+<th style="padding: 0 12px 10px 0; font-weight: 600">Account</th>
+<th style="padding: 0 12px 10px; font-weight: 600; text-align: right">Has now</th>
+<th style="padding: 0 12px 10px; font-weight: 600; text-align: right">May keep</th>
+<th style="padding: 0 0 10px 12px; font-weight: 600; text-align: right">Take back</th>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{plan}}" as="o" hint-placeholder-count="3">
+<tr>
+<td style="padding: 12px 12px 12px 0; border-top: 1px solid var(--line)"><span style="display: block; font-weight: 500">{{o.name}}</span><span style="display: block; font-size: 13px; color: var(--text3)">{{o.acct}}</span></td>
+<td style="padding: 12px; border-top: 1px solid var(--line); text-align: right; color: var(--text2); white-space: nowrap">{{o.now}}</td>
+<td style="padding: 12px; border-top: 1px solid var(--line); text-align: right; white-space: nowrap">{{o.keep}}</td>
+<td style="padding: 12px 0 12px 12px; border-top: 1px solid var(--line); text-align: right"><span style="display: block; font-weight: 600; white-space: nowrap">{{o.take}}</span><span style="display: block; font-size: 13px; color: var(--text3)">{{o.extra}}</span></td>
+</tr>
+</sc-for>
+<tr>
+<td style="padding: 12px 12px 0 0; border-top: 1px solid var(--line2); font-weight: 600">Total</td>
+<td style="padding: 12px 12px 0; border-top: 1px solid var(--line2)"></td>
+<td style="padding: 12px 12px 0; border-top: 1px solid var(--line2)"></td>
+<td style="padding: 12px 0 0 12px; border-top: 1px solid var(--line2); text-align: right; font-weight: 600; white-space: nowrap">{{total}}</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 8px">
+<h3 style="flex: 1 1 auto; margin: 0; font-size: 14px; line-height: 20px; font-weight: 600">4. Commands for the admins</h3>
+<button type="button" class="btn" style="display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line2); background: transparent; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M9 9h11v11H9zM5 15V5h10"></path></svg>Copy</button>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; line-height: 20px; overflow-x: auto">
+<sc-for list="{{cmds}}" as="c" hint-placeholder-count="3"><span style="white-space: nowrap">{{c}}</span></sc-for>
+</div>
+<p style="margin: 8px 0 0; font-size: 13px; color: var(--text3)">A preview. The exact commands depend on the BankSystem version on the server. Item removals are exported as a separate list.</p>
+</div>
+</section>
+
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { cut: 'a', admin: 'unsure', style: 'admin', gone: {} };
+  }
+  renderVals() {
+    const st = this.state;
+    // Mock case. All numbers are made up but add up.
+    const PINS = [
+      ['crit', 'Bought and sold again at three times the price within 7 seconds', 'Quenby', '4 Nov, 10:26:55', 'Proven', 'Shows how the money was made. Six such rounds on 4 Nov.'],
+      ['crit', '$15.35B trading profit within one hour', 'Tavrik', '4 Nov, 10:00 to 11:00', 'Proven', 'No note yet'],
+      ['high', 'Paid in $192M of banknotes that this player never withdrew', 'Ombrelune', '4 Nov, 14:52:06', 'Proven', 'Links Ombrelune to Tavrik.'],
+      ['high', 'A balance fell by $7.14B and the log has no entry for it', 'Quenby', '4 Nov, 19:02 to 19:06', 'Estimate', 'Asked the admins on 6 Nov, no answer yet.']
+    ];
+    const CUT = {
+      a: {
+        rows: [['Tavrik', 'Account 11', '$11,542,556,026.67', '$40,627.69', '$11,542,515,398.98', ''], ['Quenby', 'Account 7', '$8,883,667.49', '$593,322.41', '$8,290,345.08', 'and 16,524,151 items'], ['Ombrelune', 'Account 24', '$192,292,427.23', '$2,037.23', '$192,290,390.00', '']],
+        total: '$11,743,096,134.06',
+        cmds: ['/money remove Tavrik 11542515398.98', '/money remove Quenby 8290345.08', '/money remove Ombrelune 192290390.00']
+      },
+      b: {
+        rows: [['Tavrik', 'Account 11', '$11,542,556,026.67', '$0.07', '$11,542,556,026.60', ''], ['Quenby', 'Account 7', '$8,883,667.49', '$1,327,704.82', '$7,555,962.67', 'and 16,524,151 items'], ['Ombrelune', 'Account 24', '$192,292,427.23', '$2,037.23', '$192,290,390.00', '']],
+        total: '$11,742,402,379.27',
+        cmds: ['/money remove Tavrik 11542556026.60', '/money remove Quenby 7555962.67', '/money remove Ombrelune 192290390.00']
+      }
+    };
+    const ANS = {
+      yes: ['Removed by an admin already', 'var(--up)', 'Good. That amount is counted as recovered and is not taken a second time.'],
+      unsure: ['Left the account, not confirmed', 'var(--med)', 'Ask before running the commands. If nobody removed it, $7.14B is missing and has to be traced.'],
+      no: ['Gone, nobody knows where', 'var(--crit)', 'Then $7.14B is missing. The report will list it as an open point and the tool keeps the finding open.']
+    };
+    const C = CUT[st.cut], Q = ANS[st.admin];
+    const pins = PINS.map((p, i) => ({ p: p, i: i })).filter((x) => !st.gone[x.i]);
+    const seg = (on) => ({ on: on, bg: on ? 'var(--raised)' : 'transparent', fg: on ? 'var(--text)' : 'var(--text2)' });
+    return this.sep({
+      theme: this.props.theme ?? 'dark',
+      pinCount: pins.length,
+      noPins: pins.length === 0,
+      styles: [['admin', 'For admins'], ['tech', 'Technical']].map((r) => Object.assign(seg(st.style === r[0]), { label: r[1], pick: () => this.setState({ style: r[0] }) })),
+      styleNote: st.style === 'admin' ? 'For admins: two pages in plain language, what happened, who, what to take back and what to look for in the world. English or German.' : 'Technical: every finding with its rule, the record ids behind it and the data gaps. Markdown, plus the tables as CSV.',
+      bar: [
+        ['Taken back by this plan', '$11.74B', 40, 'var(--accent)'],
+        [Q[0], '$7.14B', 24, Q[1]],
+        ['Spent on items, removed as items', '$5.02B', 17, 'var(--text3)'],
+        ['Banknotes still to find in the world', '$5.52B', 19, 'var(--high)']
+      ].map((g) => ({ label: g[0], value: g[1], pct: g[2], color: g[3] })),
+      pins: pins.map((x) => ({
+        title: x.p[1], who: x.p[2], when: x.p[3], conf: x.p[4], note: x.p[5], dot: 'var(--' + x.p[0] + ')',
+        confFg: x.p[4] === 'Proven' ? 'var(--text2)' : 'var(--high)',
+        confLine: x.p[4] === 'Proven' ? 'solid' : 'dashed',
+        confBorder: x.p[4] === 'Proven' ? 'var(--line2)' : 'var(--high)',
+        remove: () => { const g = Object.assign({}, st.gone); g[x.i] = true; this.setState({ gone: g }); }
+      })),
+      cuts: [
+        ['a', 'The end of 3 Nov', 'Recommended. Before any flagged trade, so players keep what normal trading earned them.'],
+        ['b', '4 Nov, 10:22, right before the first flagged order', 'Also treats the morning of 4 Nov as normal, including a small test run at 08:05.']
+      ].map((c) => ({
+        label: c[1], sub: c[2], on: st.cut === c[0],
+        border: st.cut === c[0] ? 'var(--accent)' : 'var(--line)',
+        bg: st.cut === c[0] ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
+        pick: () => this.setState({ cut: c[0] })
+      })),
+      answers: [['yes', 'Yes'], ['unsure', 'Not sure'], ['no', 'No']].map((r) => Object.assign(seg(st.admin === r[0]), { label: r[1], pick: () => this.setState({ admin: r[0] }) })),
+      answerNote: Q[2],
+      plan: C.rows.map((o) => ({ name: o[0], acct: o[1], now: o[2], keep: o[3], take: o[4], extra: o[5] })),
+      total: C.total,
+      cmds: C.cmds
+    });
+  }
+  // The one number format of the tool: an apostrophe between thousands, 1'532.05.
+  sep(v) {
+    if (typeof v === 'string') return v.replace(/(\d),(?=\d{3}(\D|$))/g, (m, d) => d + "'");
+    if (Array.isArray(v)) return v.map((x) => this.sep(x));
+    if (v && typeof v === 'object') { const o = {}; for (const k in v) o[k] = this.sep(v[k]); return o; }
+    return v;
+  }
+}
+</script>
+</body>
+</html>

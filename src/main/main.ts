@@ -10,8 +10,10 @@ let nextId = 1;
 const waiting = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 
 function startEngine() {
-  engine = utilityProcess.fork(path.join(here, '../engine/host.js'), [], { serviceName: 'Audit Tool engine' });
-  engine.on('message', (m: { id: number; ok: boolean; result?: unknown; error?: string }) => {
+  // The engine keeps its workspace (the list of saves and the cache) in the program's own data folder, never in a save.
+  engine = utilityProcess.fork(path.join(here, '../engine/host.js'), [path.join(app.getPath('userData'), 'workspace')], { serviceName: 'Audit Tool engine' });
+  engine.on('message', (m: { id: number; ok: boolean; result?: unknown; error?: string; progress?: unknown }) => {
+    if (m.progress) return void win?.webContents.send('progress', m.progress);
     const call = waiting.get(m.id);
     if (!call) return;
     waiting.delete(m.id);
@@ -61,6 +63,8 @@ function createWindow() {
   void win.loadFile(path.join(here, '../../ui/index.html'));
 }
 
+// The screen tests give the program a data folder of its own, so they never see a person's workspace.
+if (process.env.AUDIT_TOOL_DATA) app.setPath('userData', path.resolve(process.env.AUDIT_TOOL_DATA));
 Menu.setApplicationMenu(null);
 ipcMain.handle('engine', (_e, method, args) => callEngine(method, args));
 ipcMain.handle('startupPaths', () => startupPaths());

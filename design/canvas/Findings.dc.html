@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Audit Tool · Findings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;cursor:pointer}
+input{font:inherit;color:inherit}
+.app{--bg:#0e1013;--rail:#0a0c0f;--card:#15181d;--raised:#1d2128;--line:#272c35;--line2:#39404c;--text:#eceef1;--text2:#aab1bc;--text3:#8a929e;--accent:#8fa2ff;--onaccent:#0e1013;--up:#4fd1b5;--down:#f2686f;--crit:#ff6b6b;--high:#ffa94d;--med:#ffd43b;--low:#74a8ff;--buy:#6ea8ff;--sell:#ffa94d}
+.app[data-theme="light"]{--bg:#f5f6f8;--rail:#eceef1;--card:#ffffff;--raised:#eff1f4;--line:#e1e4e9;--line2:#c8cdd5;--text:#14171c;--text2:#48505b;--text3:#5d6570;--accent:#3b5bdb;--onaccent:#ffffff;--up:#0b7a64;--down:#c92a3a;--crit:#c92a2a;--high:#b85c00;--med:#8a6d00;--low:#2b5fc7;--buy:#2b5fc7;--sell:#b85c00}
+.nav{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:8px;color:var(--text2);font-weight:500}
+.nav:hover,.nav[aria-current="page"]{background:var(--raised);color:var(--text)}
+.row:hover{background:var(--raised) !important}
+.btn:hover{background:var(--raised) !important}
+</style>
+</helmet>
+<div class="app" data-theme="{{theme}}" style="min-height: 100vh; display: flex; flex-wrap: wrap; background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; font-size: 14px; line-height: 20px">
+
+<nav aria-label="Sections" style="flex: 1 1 232px; box-sizing: border-box; display: flex; flex-direction: column; gap: 28px; padding: 20px 12px; background: var(--rail); border-right: 1px solid var(--line)">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 12px">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4M8 12l2-3 2 2 2-3"></path></svg>
+<span style="font-family: 'Space Grotesk', Inter, sans-serif; font-size: 16px; font-weight: 600">Audit Tool</span>
+</a>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<a class="nav" href="Main.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M4 4h7v7H4zM13 4h7v4h-7zM13 11h7v9h-7zM4 14h7v6H4z"></path></svg><span>Overview</span></a>
+<a class="nav" href="Findings.dc.html" aria-current="page"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M12 4l9 15H3zM12 10v4M12 16.5v.5"></path></svg><span style="flex: 1">Findings</span><span style="min-width: 22px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; font-size: 12px; line-height: 20px; text-align: center; color: var(--crit); background: color-mix(in srgb, var(--crit) 16%, transparent)">20</span></a>
+<a class="nav" href="Player.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20c.8-3.4 3.8-5.5 7.5-5.5s6.7 2.1 7.5 5.5"></path></svg><span>Players</span></a>
+<a class="nav" href="Market.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M7 3v4M7 15v6M5 7h4v8H5zM17 3v6M17 15v6M15 9h4v6h-4z"></path></svg><span>Markets</span></a>
+<a class="nav" href="Account.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M3 10l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 20h18"></path></svg><span>Bank accounts</span></a>
+<a class="nav" href="Flow.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M4 7h5c3 0 3 10 6 10h5M4 17h5c1.2 0 1.9-1.6 2.6-3.5M17 14l3 3-3 3"></path></svg><span>Money flow</span></a>
+<a class="nav" href="Servers.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01"></path></svg><span>Saves and servers</span></a>
+<a class="nav" href="Case.dc.html"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"></path></svg><span>Case and report</span></a>
+</div>
+<a class="btn" href="Servers.dc.html" style="margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 10px; border: 1px solid var(--line)">
+<span style="font-weight: 500">3 saves loaded</span>
+<span style="font-size: 13px; color: var(--text3)">Snapshot 5 Nov 2026, 18:25 UTC</span>
+<span style="display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 13px; color: var(--up)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3"></path></svg>Read-only copies</span>
+</a>
+</nav>
+
+<div style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 32px; border-bottom: 1px solid var(--line)">
+<label style="flex: 1 1 280px; max-width: 460px; display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; box-sizing: border-box; border-radius: 10px; background: var(--card); border: 1px solid var(--line); color: var(--text3)">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4"></path></svg>
+<input aria-label="Search everything" placeholder="Search players, accounts, items, order or transfer ids" style="flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text)">
+</label>
+<div style="flex: 1 1 0"></div>
+<button type="button" class="btn" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--text3)"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 8v4l3 2"></path></svg><span>3 Nov 00:00 to 5 Nov 18:25</span><span style="color: var(--text3)">UTC</span></button>
+<button type="button" class="btn" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--text3)"><path d="M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01"></path></svg><span>All servers</span></button>
+<a class="btn" href="Case.dc.html" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; box-sizing: border-box; border-radius: 10px; border: 1px solid var(--line); background: var(--card)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; color: var(--text3)"><path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"></path></svg><span>Case</span><span style="color: var(--text3)">{{pinCount}} pinned</span></a>
+</header>
+
+<main style="display: flex; flex-direction: column; gap: 24px; padding: 28px 32px 40px">
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px">
+<div style="flex: 1 1 320px; min-width: 0">
+<h1 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em">Findings</h1>
+<p style="margin: 4px 0 0; color: var(--text2)">20 findings between 3 and 5 Nov. 14 of them belong to one incident.</p>
+</div>
+<div role="group" aria-label="Filter by severity" style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{filters}}" as="r" hint-placeholder-count="4">
+<button type="button" onClick="{{r.pick}}" aria-pressed="{{r.on}}" style="height: 36px; padding: 0 12px; border-radius: 18px; font-weight: 500; border: 1px solid {{r.border}}; background: {{r.bg}}; color: {{r.fg}}">{{r.label}}</button>
+</sc-for>
+</div>
+<button type="button" class="btn" style="height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line2); background: transparent; font-weight: 500">Detection rules</button>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24px">
+
+<section aria-label="List of findings" style="flex: 1 1 400px; min-width: 0; box-sizing: border-box; padding: 16px 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<sc-for list="{{items}}" as="it" hint-placeholder-count="10">
+<sc-if value="{{it.isGroup}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: baseline; gap: 8px; padding: 12px 12px 6px">
+<h2 style="flex: 1 1 auto; margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text3)">{{it.title}}</h2>
+<span style="font-size: 12px; color: var(--text3)">{{it.count}}</span>
+</div>
+</sc-if>
+<sc-if value="{{it.isItem}}" hint-placeholder-val="{{ true }}">
+<button type="button" class="row" onClick="{{it.pick}}" aria-pressed="{{it.on}}" style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 0; border-radius: 10px; text-align: left; background: {{it.bg}}; opacity: {{it.op}}">
+<span aria-hidden="true" style="flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: {{it.dot}}"></span>
+<span style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-weight: 500; text-wrap: pretty">{{it.title}}</span>
+<span style="font-size: 13px; color: var(--text3)">{{it.who}} · {{it.when}}</span>
+</span>
+<sc-if value="{{it.pinned}}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" role="img" aria-label="Pinned to the case" style="flex: none; margin-top: 2px; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; color: var(--accent)"><path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"></path></svg></sc-if>
+</button>
+</sc-if>
+</sc-for>
+</div>
+<p style="margin: 12px 12px 4px; font-size: 13px; color: var(--text3)">The 10 most important are shown. <a href="Findings.dc.html" style="font-weight: 500; color: var(--accent)">Show all 20</a></p>
+</section>
+
+<section aria-label="Selected finding" style="flex: 1.4 1 480px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; padding: 28px; border-radius: 14px; background: var(--card); border: 1px solid var(--line)">
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<span style="height: 24px; padding: 0 8px; border-radius: 6px; font-size: 12px; line-height: 24px; font-weight: 600; color: {{D.sevFg}}; background: {{D.sevBg}}">{{D.sev}}</span>
+<span style="height: 24px; padding: 0 8px; border-radius: 6px; font-size: 12px; line-height: 24px; font-weight: 500; color: var(--text2); background: var(--raised)">{{D.src}}</span>
+<span style="height: 24px; padding: 0 8px; border-radius: 6px; font-size: 12px; line-height: 24px; font-weight: 500; color: var(--text2); background: var(--raised)">{{D.conf}}</span>
+</div>
+<div>
+<h2 style="margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 22px; line-height: 30px; font-weight: 600; text-wrap: balance">{{D.title}}</h2>
+<p style="margin: 4px 0 0; font-size: 13px; color: var(--text3)">{{D.who}} · {{D.when}}</p>
+</div>
+<p style="margin: 0; max-width: 680px; font-size: 15px; line-height: 24px; color: var(--text2); text-wrap: pretty">{{D.summary}}</p>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 12px">
+<sc-for list="{{D.facts}}" as="x" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 10px; background: var(--raised)">
+<span style="font-size: 12px; line-height: 16px; color: var(--text3)">{{x.label}}</span>
+<span style="font-weight: 600; font-variant-numeric: tabular-nums">{{x.value}}</span>
+</div>
+</sc-for>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 16px; border-radius: 10px; border: 1px solid var(--line)">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px">
+<span style="flex: 1 1 auto; font-weight: 600">Rule: {{D.rule}}</span>
+<a href="Findings.dc.html" style="font-size: 13px; font-weight: 500; color: var(--accent)">Change this rule</a>
+</div>
+<p style="margin: 0; font-size: 13px; color: var(--text2); text-wrap: pretty">{{D.ruleText}}</p>
+<p style="margin: 0; font-size: 13px"><span style="color: var(--text3)">Measured here: </span><span style="font-weight: 500">{{D.measured}}</span></p>
+</div>
+
+<div>
+<h3 style="margin: 0 0 8px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text3)">The records behind it</h3>
+<div style="overflow-x: auto">
+<table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+<thead>
+<tr style="font-size: 12px; color: var(--text3); text-align: left">
+<sc-for list="{{D.cols}}" as="c" hint-placeholder-count="4"><th style="padding: 0 16px 8px 0; font-weight: 600">{{c}}</th></sc-for>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{D.rows}}" as="r" hint-placeholder-count="2">
+<tr>
+<sc-for list="{{r}}" as="c" hint-placeholder-count="4"><td style="padding: 10px 16px 10px 0; border-top: 1px solid var(--line); white-space: nowrap">{{c}}</td></sc-for>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="font-size: 13px; color: var(--text3)">Open:</span>
+<sc-for list="{{D.inv}}" as="x" hint-placeholder-count="3">
+<a class="btn" href="{{x.href}}" style="display: inline-flex; align-items: center; height: 36px; padding: 0 12px; box-sizing: border-box; border-radius: 18px; border: 1px solid var(--line2); font-weight: 500">{{x.label}}</a>
+</sc-for>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 12px; padding-top: 20px; border-top: 1px solid var(--line)">
+<button type="button" onClick="{{D.togglePin}}" aria-pressed="{{D.pinned}}" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 10px; font-weight: 600; background: var(--accent); color: var(--onaccent)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" style="flex: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M9 4h6l-1 6 3 3H7l3-3zM12 13v7"></path></svg>{{D.pinLabel}}</button>
+<button type="button" class="btn" onClick="{{D.toggleDismiss}}" aria-pressed="{{D.dismissed}}" style="height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line2); background: transparent; font-weight: 500">{{D.dismissLabel}}</button>
+<button type="button" class="btn" style="height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line2); background: transparent; font-weight: 500">Add a note</button>
+</div>
+</section>
+
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":1240}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { sel: 1, filter: 'all', pinned: { 1: true, 3: true, 6: true, 7: true }, dismissed: {} };
+  }
+  renderVals() {
+    const st = this.state;
+    const P = 'Player.dc.html', M = 'Market.dc.html', A = 'Account.dc.html', S = 'Servers.dc.html';
+    // Mock findings. g = group: 1 the diamond incident, 2 everything else.
+    const F = [
+      { id: 1, g: 1, sev: 'crit', title: 'Bought and sold again at three times the price within 7 seconds', who: 'Quenby', when: '4 Nov, 10:26:55', src: 'Found by this tool', conf: 'Proven from the data',
+        summary: 'Quenby bought 2,689 diamonds and sold 2,433 of them 7.1 seconds later at three times the price. No other player traded diamonds in between, so only the market’s own price bot can have moved the price. The same pattern shows 6 times on 4 Nov.',
+        facts: [['Bought', '2,689 at $1,028.00'], ['Sold', '2,433 at $3,153.92'], ['Time between', '7.1 seconds'], ['Profit from this one round', '$4,909,195']],
+        rule: 'Quick round trip', ruleText: 'Flags a buy followed by a sell at 2 times the price or more within 30 seconds, when no other player traded that item in between.', measured: '3.07 times the price, 7.1 seconds apart',
+        cols: ['Order', 'Time', 'Side', 'Quantity', 'Price'], rows: [['2963', '10:26:55.581', 'Buy', '2,689', '$1,028.00'], ['2964', '10:27:02.721', 'Sell', '2,433', '$3,153.92']],
+        inv: [['Quenby', P], ['Diamond market', M], ['Account 7', A]] },
+      { id: 2, g: 1, sev: 'crit', title: '13,477 orders with 20 milliseconds between them', who: 'Quenby', when: '4 Nov, in 5 sessions', src: 'Found by this tool', conf: 'Proven from the data',
+        summary: 'Nobody clicks this fast. One game tick lasts 50 ms, so several orders arrived inside every tick. This points to a script or a changed game client that sends orders directly.',
+        facts: [['Orders on 4 Nov', '13,477'], ['Typical gap', '20 ms'], ['Busiest second', '61 orders'], ['Kind of order', 'All market orders']],
+        rule: 'Order rate', ruleText: 'Flags more than 5 orders by one player inside any one second.', measured: '61 orders in one second',
+        cols: ['Session', 'Orders', 'Typical gap', 'Market'], rows: [['10:22 to 10:43', '4,102', '20 ms', 'Diamond'], ['11:49 to 12:01', '6,120', '20 ms', 'Diamond'], ['18:51 to 19:08', '1,904', '21 ms', 'Diamond']],
+        inv: [['Quenby', P], ['Diamond market', M]] },
+      { id: 3, g: 1, sev: 'crit', title: '$15.35B trading profit within one hour', who: 'Tavrik', when: '4 Nov, 10:00 to 11:00', src: 'Found by this tool', conf: 'Proven from the data',
+        summary: 'Tavrik bought 9.78 million diamonds at $1,322 on average and sold the same 9.78 million at $2,892 on average. All other players together made $1,940 from trading in that hour.',
+        facts: [['Bought', '9,779,094 at $1,322 on average'], ['Sold', '9,779,094 at $2,892 on average'], ['Profit', '$15,347,574,215'], ['All other players that hour', '$1,940']],
+        rule: 'Profit per hour', ruleText: 'Flags a player whose trading profit inside one clock hour is above $1,000,000.', measured: '$15,347,574,215 in one hour',
+        cols: ['Market', 'Orders', 'Bought', 'Sold', 'Profit'], rows: [['Diamond', '1,239', '9,779,094', '9,779,094', '+$15.35B']],
+        inv: [['Tavrik', P], ['Diamond market', M], ['Account 11', A]] },
+      { id: 4, g: 1, sev: 'crit', title: 'The diamond price swung between $0.01 and $3,856 inside single minutes', who: 'Diamond market', when: '4 Nov, 10:22 to 10:43', src: 'Found by this tool', conf: 'Proven from the data',
+        summary: 'For 22 minutes every one-minute candle covered almost the whole price range the market allows. The usual price is $160. Players cannot move a price this far this fast alone, so the price bot did most of it.',
+        facts: [['Lowest price', '$0.01'], ['Highest price', '$3,856'], ['Usual price', '$160'], ['Traded per minute', 'up to 41M, normally about 5,000']],
+        rule: 'Price spike', ruleText: 'Flags a market when the high of a one-minute candle is more than 5 times its low.', measured: '385,600 times, 22 minutes in a row',
+        cols: ['Minute', 'Open', 'High', 'Low', 'Volume'], rows: [['10:27', '$1,028', '$3,856', '$0.01', '41.2M'], ['10:28', '$3,154', '$3,790', '$0.04', '38.6M'], ['10:29', '$22.10', '$3,402', '$0.01', '29.9M']],
+        inv: [['Diamond market', M]] },
+      { id: 5, g: 1, sev: 'high', title: '$9.6B withdrawn as banknotes within 36 seconds', who: 'Tavrik', when: '4 Nov, 20:26:52', src: 'Raised by the bank mod on the server', conf: 'Proven from the data',
+        summary: 'The bank mod raised this itself while the server was running. Two withdrawals followed each other within 36 seconds. $5.89B of it did not fit in the inventory and went back into the account.',
+        facts: [['First withdrawal', '$5,184,000,000'], ['Second withdrawal', '$4,416,000,000'], ['Went back, not logged', '$5,888,000,000'], ['Really taken out', '$3,712,000,000']],
+        rule: 'Large banknote withdrawal', ruleText: 'A rule of the bank mod. It flags banknote withdrawals by one player that add up to $10,000,000 or more in one burst.', measured: '$9,600,000,000 in one burst',
+        cols: ['Time', 'Entry', 'Amount', 'Banknotes'], rows: [['20:26:52', 'Withdrawal', '-$5,184,000,000', '5,184 of $1,000,000'], ['20:27:28', 'Withdrawal', '-$4,416,000,000', '4,416 of $1,000,000']],
+        inv: [['Tavrik', P], ['Account 11', A]] },
+      { id: 6, g: 1, sev: 'high', title: 'Paid in $192M of banknotes that this player never withdrew', who: 'Ombrelune', when: '4 Nov, 14:52:06', src: 'Raised by the bank mod on the server', conf: 'Proven from the data',
+        summary: 'The bank mod raised this itself. Ombrelune has never withdrawn banknotes, so the notes came from someone else. Tavrik withdrew exactly $192M in the same note size four hours earlier.',
+        facts: [['Paid in', '192 notes of $1,000,000'], ['Own withdrawals before', '$0'], ['Matching withdrawal', 'Tavrik, 10:44:11, $192M'], ['Time between', '4 hours 8 minutes']],
+        rule: 'Banknotes from someone else', ruleText: 'A rule of the bank mod. It flags a banknote deposit of $1,000,000 or more when the player withdrew less than that in the 24 hours before.', measured: '$192,000,000 paid in, $0 withdrawn',
+        cols: ['Time', 'Player', 'Entry', 'Amount'], rows: [['10:44:11', 'Tavrik', 'Withdrawal', '-$192,000,000'], ['14:52:06', 'Ombrelune', 'Deposit', '+$192,000,000']],
+        inv: [['Ombrelune', P], ['Tavrik', P], ['Account 24', A]] },
+      { id: 7, g: 1, sev: 'high', title: 'A balance fell by $7.14B and the log has no entry for it', who: 'Quenby', when: '4 Nov, 19:02 to 19:06', src: 'Found by this tool', conf: 'Amount proven, cause is a guess',
+        summary: 'Between two balance snapshots the account lost $7,136,694,867. No trade, withdrawal or admin entry covers it. In the mod version this server ran, an admin setting a balance by hand left no entry, so that is the most likely cause. Ask the admins before removing money a second time.',
+        facts: [['Before', '$7,145,578,534'], ['After', '$8,883,667'], ['Explained by the log', '$0'], ['Not explained', '$7,136,694,867']],
+        rule: 'Unexplained balance change', ruleText: 'Compares each change between two balance snapshots with the trades and log entries in that time. Flags a difference above $1,000.', measured: '$7,136,694,867 not explained',
+        cols: ['Snapshot', 'Balance'], rows: [['4 Nov, 19:02', '$7,145,578,534'], ['4 Nov, 19:06', '$8,883,667']],
+        inv: [['Quenby', P], ['Account 7', A]] },
+      { id: 8, g: 1, sev: 'med', title: 'A balance rose by $5.89B and the log has no entry for it', who: 'Tavrik', when: '4 Nov, 20:27', src: 'Found by this tool', conf: 'Amount proven, cause is a guess',
+        summary: 'Right after two large withdrawals the balance went up again by $5,888,000,000. The amount is a whole number of $1,000,000 notes, which fits notes that did not fit into the inventory and were put back without a log entry.',
+        facts: [['Before', '$5,334,556,027'], ['After', '$11,222,556,027'], ['Explained by the log', '$0'], ['Not explained', '$5,888,000,000']],
+        rule: 'Unexplained balance change', ruleText: 'Compares each change between two balance snapshots with the trades and log entries in that time. Flags a difference above $1,000.', measured: '$5,888,000,000 not explained',
+        cols: ['Snapshot', 'Balance'], rows: [['4 Nov, 20:27', '$5,334,556,027'], ['4 Nov, 20:28', '$11,222,556,027']],
+        inv: [['Tavrik', P], ['Account 11', A]] },
+      { id: 9, g: 2, sev: 'med', title: 'A transfer from the master server to mining-1 never arrived', who: 'Hobbart', when: '2 Nov, 16:40:22', src: 'Found by this tool', conf: 'Proven from the data',
+        summary: 'The master bank took $12,400 out of the account to hand it out as banknotes on the slave server mining-1. The save of mining-1 has no record that the notes were delivered, and the master never gave the money back.',
+        facts: [['Left the master', '$12,400'], ['Arrived on mining-1', 'Nothing recorded'], ['Given back', 'No'], ['Transfer id', '8c5e…41f7']],
+        rule: 'Cross-server transfer check', ruleText: 'Joins the master bank log with the journal of each slave server by transfer id and compares what left with what arrived.', measured: '$12,400 left, $0 arrived',
+        cols: ['Server', 'What it recorded', 'Amount'], rows: [['survival-main', 'Withdrawal for a hand-out', '-$12,400'], ['mining-1', 'No journal row', '']],
+        inv: [['Hobbart', P], ['Saves and servers', S]] },
+      { id: 10, g: 2, sev: 'low', title: 'A new account close to a flagged base', who: 'Mikko_82', when: '5 Nov, 10:16', src: 'Found by this tool', conf: 'Estimate',
+        summary: 'The account was opened the day after the incident and the player was last seen 10 blocks from Quenby. This can be a second account of the same person, or simply a friend. Keep an eye on it.',
+        facts: [['Account opened', '5 Nov, 10:16'], ['Distance to Quenby', '10 blocks'], ['Money', '$10.00'], ['Banknotes found', 'None']],
+        rule: 'Possible second account', ruleText: 'Flags a new account whose player was last seen within 16 blocks of a flagged player.', measured: '10 blocks',
+        cols: ['Player', 'Last position'], rows: [['Mikko_82', 'overworld -227, 120, -926'], ['Quenby', 'overworld -237, 120, -919']],
+        inv: [['Mikko_82', P]] }
+    ];
+    const SEV = { crit: 'Critical', high: 'High', med: 'Medium', low: 'Low' };
+    const D = F.find((x) => x.id === st.sel) || F[0];
+    const keep = (x) => st.filter === 'all' || x.sev === st.filter || (st.filter === 'med' && x.sev === 'low');
+    const items = [];
+    [[1, 'Incident: money created on the diamond market', '14 findings'], [2, 'Not part of an incident', '6 findings']].forEach((g) => {
+      const list = F.filter((x) => x.g === g[0] && keep(x));
+      if (!list.length) return;
+      items.push({ isGroup: true, isItem: false, title: g[1], count: g[2] });
+      list.forEach((x) => items.push({
+        isGroup: false, isItem: true, title: x.title, who: x.who, when: x.when, on: x.id === D.id,
+        dot: 'var(--' + x.sev + ')', bg: x.id === D.id ? 'var(--raised)' : 'transparent',
+        op: st.dismissed[x.id] ? '0.45' : '1', pinned: !!st.pinned[x.id],
+        pick: () => this.setState({ sel: x.id })
+      }));
+    });
+    const flip = (key) => () => { const m = Object.assign({}, st[key]); m[D.id] = !m[D.id]; this.setState({ [key]: m }); };
+    return this.sep({
+      theme: this.props.theme ?? 'dark',
+      pinCount: Object.keys(st.pinned).filter((k) => st.pinned[k]).length,
+      filters: [['all', 'All 20'], ['crit', 'Critical 3'], ['high', 'High 5'], ['med', 'Medium and low 12']].map((r) => ({
+        label: r[1], on: st.filter === r[0],
+        border: st.filter === r[0] ? 'var(--accent)' : 'var(--line)',
+        bg: st.filter === r[0] ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'transparent',
+        fg: st.filter === r[0] ? 'var(--text)' : 'var(--text2)',
+        pick: () => this.setState({ filter: r[0] })
+      })),
+      items: items,
+      D: {
+        sev: SEV[D.sev], sevFg: 'var(--' + D.sev + ')', sevBg: 'color-mix(in srgb, var(--' + D.sev + ') 16%, transparent)',
+        src: D.src, conf: D.conf, title: D.title, who: D.who, when: D.when, summary: D.summary,
+        facts: D.facts.map((x) => ({ label: x[0], value: x[1] })),
+        rule: D.rule, ruleText: D.ruleText, measured: D.measured, cols: D.cols, rows: D.rows,
+        inv: D.inv.map((x) => ({ label: x[0], href: x[1] })),
+        pinned: !!st.pinned[D.id], pinLabel: st.pinned[D.id] ? 'Pinned to the case' : 'Pin to the case', togglePin: flip('pinned'),
+        dismissed: !!st.dismissed[D.id], dismissLabel: st.dismissed[D.id] ? 'Marked as not a problem' : 'Not a problem', toggleDismiss: flip('dismissed')
+      }
+    });
+  }
+  // The one number format of the tool: an apostrophe between thousands, 1'532.05.
+  sep(v) {
+    if (typeof v === 'string') return v.replace(/(\d),(?=\d{3}(\D|$))/g, (m, d) => d + "'");
+    if (Array.isArray(v)) return v.map((x) => this.sep(x));
+    if (v && typeof v === 'object') { const o = {}; for (const k in v) o[k] = this.sep(v[k]); return o; }
+    return v;
+  }
+}
+</script>
+</body>
+</html>
