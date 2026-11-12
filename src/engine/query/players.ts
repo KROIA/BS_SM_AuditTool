@@ -128,12 +128,14 @@ export function orders(filter: { player?: string; item?: number }, scope: Scope)
 
 /** Kinds whose amount is stored with its sign (DATA_SOURCES sign rules; RAW_CHANGE and the EXTERNAL pair are BS-254, LedgerType.java:13-15). */
 const SIGNED = new Set(['TRANSFER', 'SHARE_TRADE', 'RAW_CHANGE', 'EXTERNAL_BIND', 'EXTERNAL_UNBIND']);
-const OUT = new Set(['WITHDRAW', 'ADMIN_REMOVE', 'BANK_CLOSED', 'CONVERTER_WITHDRAW', 'DOWNLOAD_WITHDRAW', 'CRAFT_CONSUME', 'SHARE_STAMP',
+const OUT = new Set(['WITHDRAW', 'ADMIN_REMOVE', 'BANK_CLOSED', 'CONVERTER_WITHDRAW', 'DOWNLOAD_WITHDRAW', 'CRAFT_CONSUME',
   'ACCOUNT_DELETE_PAYOUT', 'ADMIN_DISALLOW_ITEM', 'ACCOUNT_DELETE_LOSS', 'TRANSFER_OUT']);
-const IN = new Set(['DEPOSIT', 'WITHDRAW_REFUND', 'ADMIN_ADD', 'CONVERTER_DEPOSIT', 'UPLOAD_DEPOSIT', 'CRAFT_OUTPUT', 'STARTING_BALANCE',
-  'SHARE_REDEEM', 'TRANSFER_IN']);
-/** No change to free plus locked: an unlock moves locked money to free, the others are not balance changes. */
-const NONE = new Set(['ADMIN_UNLOCK', 'ADMIN_ACCOUNT_EDIT', 'ACCOUNT_FREEZE']);
+const IN = new Set(['DEPOSIT', 'WITHDRAW_REFUND', 'ADMIN_ADD', 'CONVERTER_DEPOSIT', 'UPLOAD_DEPOSIT', 'CRAFT_OUTPUT', 'STARTING_BALANCE', 'TRANSFER_IN']);
+/**
+ * No change to free plus locked: an unlock moves locked money to free, an edit and a freeze change no balance, and the
+ * share rows only count a company's issued shares (item 0, amount 1 share; ShareStamperBlockEntity.java:302-319).
+ */
+const NONE = new Set(['ADMIN_UNLOCK', 'ADMIN_ACCOUNT_EDIT', 'ACCOUNT_FREEZE', 'SHARE_STAMP', 'SHARE_REDEEM']);
 
 /** What a row did to its balance; null when the save does not say. TRANSFER_IN and _OUT are the kinds of 2.1.2. */
 function change(kind: string, amount: bigint, note: string | null, balanceAfter: bigint | null): bigint | null {
