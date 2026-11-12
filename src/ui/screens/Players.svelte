@@ -3,7 +3,9 @@
   // Findings, trading sessions, banknotes and connected players come with M2 to M4.
   import type { ItemRow, LedgerRow, OrderRow, PlayerDetail, PlayerRow } from '../../shared/api.ts';
   import { count, items as quantity, money, moneyShort, time } from '../../shared/fmt.ts';
+  import StepChart from '../app/StepChart.svelte';
   import { app, engine } from '../app/state.svelte.ts';
+  import { tone, words } from '../app/words.ts';
 
   let { selected }: { selected: string | null } = $props();
 
@@ -50,42 +52,14 @@
   });
 
   // ---- Words ----
-  /** "minecraft:iron_ingot" -> "Iron ingot" */
-  function itemName(id: number): string {
-    const name = itemRows.get(id)?.name;
-    if (!name) return 'Item ' + id;
-    const base = name.slice(name.indexOf(':') + 1).replaceAll('_', ' ');
-    return base.charAt(0).toUpperCase() + base.slice(1);
-  }
-  const isMoney = (id: number) => itemRows.get(id)?.money ?? false;
+  const { itemName, isMoney, what, amount: bankAmount, amountTone: bankTone } = $derived(words(itemRows));
   const initials = (name: string) => (name.replace(/[^A-Za-z0-9]/g, '').slice(0, 2) || '?').toUpperCase();
   const signed = (raw: bigint) => (raw > 0n ? '+' : '') + moneyShort(raw);
-  const tone = (raw: bigint) => (raw > 0n ? 'var(--up)' : raw < 0n ? 'var(--down)' : 'var(--text)');
   const when = (ms: number | null) => (ms === null ? 'none in this time range' : time(ms));
-  /** A balance change of any item: money as money, other items as a count with their name. */
-  function change(item: number, raw: bigint): string {
-    if (isMoney(item)) return (raw > 0n ? '+' : '') + money(raw);
-    return (raw > 0n ? '+' : '') + quantity(raw) + ' ' + itemName(item);
-  }
 
-  const KIND: Record<string, string> = {
-    DEPOSIT: 'Deposit', WITHDRAW: 'Withdrawal', TRANSFER: 'Transfer', WITHDRAW_REFUND: 'Withdrawal returned to the account',
-    ADMIN_SET: 'Set by an admin', ADMIN_ADD: 'Added by an admin', ADMIN_REMOVE: 'Removed by an admin', ADMIN_UNLOCK: 'Locked money released by an admin',
-    ADMIN_ACCOUNT_EDIT: 'Account changed by an admin', BANK_CLOSED: 'Item slot closed', CONVERTER_DEPOSIT: 'Paid in through a converter',
-    CONVERTER_WITHDRAW: 'Paid out through a converter', UPLOAD_DEPOSIT: 'Paid in through an upload block', DOWNLOAD_WITHDRAW: 'Paid out through a download block',
-    CRAFT_CONSUME: 'Used for crafting', CRAFT_OUTPUT: 'Made by crafting', STARTING_BALANCE: 'Starting balance', PAYOUT: 'Company payout', DIVIDEND: 'Dividend',
-    SHARE_STAMP: 'Shares stamped', SHARE_REDEEM: 'Shares redeemed', SHARE_TRADE: 'Shares traded', ACCOUNT_DELETE_PAYOUT: 'Paid out when the account was deleted',
-    ACCOUNT_FREEZE: 'Account frozen or unfrozen', ADMIN_DISALLOW_ITEM: 'Item disallowed by an admin', ACCOUNT_DELETE_LOSS: 'Lost when the account was deleted',
-    RAW_CHANGE: 'Balance changed outside the bank', EXTERNAL_BIND: 'External account bound', EXTERNAL_UNBIND: 'External account unbound',
-    TRANSFER_IN: 'Transfer', TRANSFER_OUT: 'Transfer', UNKNOWN_LEGACY: 'Change of an unknown kind',
-  };
-  function what(r: LedgerRow): string {
-    if (r.kind === 'TRADE_BUY' || r.kind === 'TRADE_SELL') return `${r.kind === 'TRADE_BUY' ? 'Bought' : 'Sold'} ${quantity(r.amount < 0n ? -r.amount : r.amount)} ${itemName(r.item)}`;
-    return KIND[r.kind] ?? r.kind;
-  }
+  /** The rest of a row's detail line, after its account numbers (those are links). */
   function detailOf(r: LedgerRow): string {
-    const parts = ['Account ' + r.account];
-    if (r.otherAccount !== null) parts.push(`${r.change !== null && r.change < 0n ? 'to' : 'from'} account ${r.otherAccount}`);
+    const parts = [''];
     const order = /^sm:order:(\d+)$/.exec(r.ref ?? '');
     if (order) parts.push('order ' + order[1]);
     else if (r.ref?.startsWith('sm:im:')) parts.push('inter-market order');
@@ -95,8 +69,6 @@
     if (r.change === null) parts.push('the log does not say in which direction');
     return parts.join(' · ');
   }
-  const bankAmount = (r: LedgerRow) => (r.money ? change(r.money.item, r.money.change) : r.change === null ? quantity(r.amount) : change(r.item, r.change));
-  const bankTone = (r: LedgerRow) => { const v = r.money?.change ?? r.change; return v === null ? 'var(--text3)' : tone(v); };
   const SIDE = { market: 'Market', limit: 'Limit', intermarket: 'Inter-market' };
 
   // ---- Figures ----
@@ -123,28 +95,11 @@
     ];
   });
 
-  // ---- Money over time: a step line, because a balance holds until the next snapshot ----
-  const W = 1000, H = 180;
-  const chart = $derived.by(() => {
-    const pts = shown?.money ?? [];
-    if (!pts.length) return null;
-    let lo = 0n, hi = 0n;
-    for (const [, v] of pts) [lo, hi] = [v < lo ? v : lo, v > hi ? v : hi];
-    if (hi === lo) hi = lo + 100n;
-    const x0 = pts[0]![0], x1 = Math.max(pts.at(-1)![0], x0 + 1);
-    const x = (ms: number) => (((ms - x0) / (x1 - x0)) * W).toFixed(1);
-    const y = (v: bigint) => (H - (Number(v - lo) / Number(hi - lo)) * H).toFixed(1); // only the drawing goes through a float
-    let line = `M0 ${y(pts[0]![1])}`;
-    for (const [ms, v] of pts.slice(1)) line += ` H${x(ms)} V${y(v)}`;
-    line += ` H${W}`;
-    return { line, area: `${line} V${y(lo < 0n ? 0n : lo)} H0 Z`, zero: y(0n), top: moneyShort(hi), mid: moneyShort((hi + lo) / 2n), bottom: moneyShort(lo), from: time(x0), to: time(x1) };
-  });
-
   const ownAccounts = $derived(shown?.accounts.filter((a) => a.owner) ?? []);
   const sharedAccounts = $derived(shown?.accounts.filter((a) => !a.owner) ?? []);
 </script>
 
-<div class="players">
+<div class="split">
   <aside aria-label="Player list">
     <div class="listhead">
       <h2>Players</h2>
@@ -198,8 +153,8 @@
       <div class="facts">
         <span>First activity: {when(shown.firstMs)}</span>
         <span>Last activity: {when(shown.lastMs)}</span>
-        {#each ownAccounts as a (a.number)}<span>Own account {a.number}, {a.name}</span>{/each}
-        {#each sharedAccounts as a (a.number)}<span>{a.company ? 'Company' : 'Shared'} account {a.number}, {a.name}</span>{/each}
+        {#each ownAccounts as a (a.number)}<span>Own account <a href="#/accounts/{a.number}">{a.number}</a>, {a.name}</span>{/each}
+        {#each sharedAccounts as a (a.number)}<span>{a.company ? 'Company' : 'Shared'} account <a href="#/accounts/{a.number}">{a.number}</a>, {a.name}</span>{/each}
       </div>
 
       <section aria-label="Key figures" class="figures">
@@ -217,20 +172,8 @@
           <h2 class="h2 h3">Money in the bank</h2>
           <span class="small">the player's own accounts</span>
         </div>
-        {#if chart}
-          <div class="chart">
-            <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" role="img" aria-label="Money in the bank from {chart.from} to {chart.to}">
-              <path d="M0 0H{W}M0 {H / 2}H{W}M0 {H}H{W}" class="grid" />
-              <path d={chart.area} class="area" />
-              <path d={chart.line} class="line" />
-            </svg>
-            <div class="yaxis" aria-hidden="true">
-              <span style="top: -8px">{chart.top}</span>
-              <span style="top: {H / 2 - 8}px">{chart.mid}</span>
-              <span style="top: {H - 8}px">{chart.bottom}</span>
-            </div>
-          </div>
-          <div class="xaxis" aria-hidden="true"><span>{chart.from}</span><span>{chart.to}</span></div>
+        {#if shown.money.length}
+          <StepChart points={shown.money} label="Money in the bank" fmt={moneyShort} />
         {:else}
           <p class="small" style="margin: 12px 0 0">No balance snapshots of the player's own accounts in this time range.</p>
         {/if}
@@ -307,7 +250,8 @@
                   <span class="etime">{time(r.time)}</span>
                   <span class="who" style="flex: 1 1 260px">
                     <span style="font-weight: 500">{what(r)}</span>
-                    <span class="small">{detailOf(r)}</span>
+                    <span class="small"><a class="ref" href="#/accounts/{r.account}">Account {r.account}</a>{#if r.otherAccount !== null}{` · ${r.change !== null && r.change < 0n ? 'to' : 'from'} `}<a
+                          class="ref" href="#/accounts/{r.otherAccount}">account {r.otherAccount}</a>{/if}{detailOf(r)}</span>
                   </span>
                   <span class="num" style="color: {bankTone(r)}">{bankAmount(r)}</span>
                 </div>
@@ -321,54 +265,16 @@
 </div>
 
 <style>
-  .players { display: flex; flex-wrap: wrap; min-height: 100%; }
-  aside { flex: 1 1 264px; max-width: 320px; box-sizing: border-box; padding: 24px 12px; border-right: 1px solid var(--line); }
-  .listhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 12px; }
-  .listhead h2 { margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text3); }
-  .pad { margin: 12px; }
-  .roster { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
-  .pick { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 12px; border-radius: 8px; }
-  .pick[aria-current] { background: var(--raised); }
   .avatar { flex: none; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; background: var(--raised); color: var(--text2); }
   .pick[aria-current] .avatar { background: var(--card); }
   .avatar.big { width: 56px; height: 56px; border-radius: 14px; font-family: var(--font-head); font-size: 20px; }
-  .who { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
-  .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .detail { flex: 999 1 560px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; padding: 28px 32px 40px; }
   .head { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
   .uuid { margin: 2px 0 0; font-family: var(--font-mono); font-size: 13px; color: var(--text3); overflow-wrap: anywhere; }
-  .lead { margin: -8px 0 0; font-size: 16px; line-height: 24px; text-wrap: pretty; }
-  .facts { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: -8px; font-size: 13px; color: var(--text2); }
-  .figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 16px; }
-  .figure { display: flex; flex-direction: column; gap: 6px; padding: 20px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
-  .flabel { font-size: 13px; color: var(--text2); }
-  .fvalue { font-family: var(--font-head); font-size: 26px; line-height: 32px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-  .h3 { font-size: 17px; line-height: 24px; }
-  .cardhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
-  .chart { display: flex; gap: 12px; margin-top: 20px; }
-  .chart svg { flex: 1 1 0; min-width: 0; height: 180px; overflow: visible; }
-  .grid { fill: none; stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
-  .area { fill: var(--accent); fill-opacity: 0.12; stroke: none; }
-  .line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-  .yaxis { position: relative; flex: none; width: 88px; height: 180px; font-size: 12px; line-height: 16px; color: var(--text3); }
-  .yaxis span { position: absolute; left: 0; white-space: nowrap; }
-  .xaxis { display: flex; justify-content: space-between; margin: 10px 100px 0 0; font-size: 12px; line-height: 16px; color: var(--text3); }
   .tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); }
   .tabs button { height: 44px; margin-bottom: -1px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; font-weight: 500; color: var(--text2); }
   .tabs button[aria-selected='true'] { border-bottom-color: var(--accent); color: var(--text); }
-  .empty { margin: 0; padding: 24px; border-radius: 14px; border: 1px dashed var(--line2); color: var(--text2); }
   .markets { display: flex; flex-direction: column; gap: 2px; margin: 12px -10px 0; }
   .market { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 10px; border-radius: 10px; }
-  .num { flex: none; font-weight: 500; font-variant-numeric: tabular-nums; }
-  .link { padding: 0; border: 0; background: none; font-size: 13px; font-weight: 500; color: var(--accent); }
-  table { width: 100%; min-width: 760px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-  th { padding: 0 12px 10px; font-size: 12px; font-weight: 600; color: var(--text3); text-align: left; }
-  td { padding: 12px; border-top: 1px solid var(--line); }
-  th:first-child, td:first-child { padding-left: 0; }
-  th:last-child, td:last-child { padding-right: 0; }
-  .r { text-align: right; }
-  .dim { color: var(--text2); }
-  .mono { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
   .history { display: flex; flex-direction: column; gap: 4px; margin: 12px -12px 0; }
   .entry { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding: 12px; border-radius: 10px; }
   .etime { flex: 0 0 170px; font-size: 13px; color: var(--text2); font-variant-numeric: tabular-nums; }

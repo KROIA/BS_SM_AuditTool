@@ -1,28 +1,13 @@
 // What the Players screen asks: items, players with their profit, one player in detail, orders and ledger rows.
 // Reads the master's cache database. Money and volumes are read as bigint and never pass through a float.
-import type { DatabaseSync, SQLInputValue, SQLOutputValue } from 'node:sqlite';
-import type { ItemRow, LedgerRow, OrderRow, PlayerAccount, PlayerDetail, PlayerRow, Point, Scope } from '../../shared/api.ts';
+import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
+import type { ItemRow, LedgerRow, OrderRow, PlayerAccount, PlayerDetail, PlayerRow, Scope } from '../../shared/api.ts';
 import { mainData, mainName } from '../workspace.ts';
+import { all, big, names, num, series, text } from './db.ts';
 import { profit } from './profit.ts';
-
-type Row = Record<string, SQLOutputValue>;
-function all(db: DatabaseSync, sql: string, params: Record<string, SQLInputValue> = {}): Row[] {
-  const st = db.prepare(sql);
-  st.setReadBigInts(true);
-  return st.all(params) as Row[];
-}
-const num = (v: SQLOutputValue) => (v === null ? null : Number(v));
-const big = (v: SQLOutputValue) => (v === null ? null : BigInt(v as bigint));
-const text = (v: SQLOutputValue) => (v === null ? null : String(v));
 
 /** Inclusive at both ends; null leaves that end open. */
 const inTime = (ms: number, s: Scope) => (s.from === null || ms >= s.from) && (s.to === null || ms <= s.to);
-
-/** Player names: the one lookup every name goes through (DESIGN_SPEC rule 11). Unknown players get the name a row gave, else the start of their UUID. */
-function names(db: DatabaseSync) {
-  const map = new Map(all(db, 'SELECT uuid, name FROM player').map((r) => [String(r.uuid), String(r.name)]));
-  return (uuid: string, fallback?: string | null) => map.get(uuid) ?? fallback ?? uuid.slice(0, 8);
-}
 
 const TYPE = ['market', 'limit', 'intermarket'] as const;
 
@@ -122,23 +107,11 @@ export function player(uuid: string, scope: Scope): PlayerDetail | null {
   const moneyNow = big(all(db, `SELECT coalesce(sum(b.balance + b.locked), 0) AS v FROM balance b JOIN account a ON a.number = b.account
     JOIN item i ON i.id = b.item AND i.money = 1 WHERE a.owner = :uuid`, { uuid })[0]!.v)!;
 
-  // Money over time: per account and money item the last snapshot at or before each point, summed (DESIGN_SPEC 8.1).
+  // Money over time on the owned accounts, all money items together.
   const params: Record<string, SQLInputValue> = { uuid };
   if (scope.to !== null) params.to = scope.to;
-  const last = new Map<string, bigint>();
-  let sum = 0n, before: bigint | null = null;
-  const money: Point[] = [];
-  for (const r of all(db, `SELECT s.account, s.item, s.time, s.balance + s.locked AS v FROM snapshot s JOIN account a ON a.number = s.account
-    JOIN item i ON i.id = s.item AND i.money = 1 WHERE a.owner = :uuid ${scope.to !== null ? 'AND s.time <= :to' : ''} ORDER BY s.time, s.id`, params)) {
-    const key = `${r.account}:${r.item}`, v = big(r.v)!, t = num(r.time)!;
-    sum += v - (last.get(key) ?? 0n);
-    last.set(key, v);
-    if (scope.from !== null && t < scope.from) before = sum;
-    else if (money.at(-1)?.[0] === t) money.at(-1)![1] = sum;
-    else money.push([t, sum]);
-  }
-  // The range starts with what the accounts held at its start.
-  if (before !== null && money[0]?.[0] !== scope.from) money.unshift([scope.from!, before]);
+  const money = series(all(db, `SELECT s.account, s.item, s.time, s.balance + s.locked AS v FROM snapshot s JOIN account a ON a.number = s.account
+    JOIN item i ON i.id = s.item AND i.money = 1 WHERE a.owner = :uuid ${scope.to !== null ? 'AND s.time <= :to' : ''} ORDER BY s.time, s.id`, params), scope);
 
   return { ...row, accounts, moneyNow, money };
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   // The frame around every screen: left menu, top bar, and the screen itself.
   import { count } from '../../shared/fmt.ts';
+  import Accounts from '../screens/Accounts.svelte';
   import Players from '../screens/Players.svelte';
   import Saves from '../screens/Saves.svelte';
   import Soon from '../screens/Soon.svelte';
@@ -50,11 +51,13 @@
     </header>
 
     <main>
-      <div class="page" class:flush={screen.id === 'players'}>
+      <div class="page" class:flush={screen.id === 'players' || screen.id === 'accounts'}>
         {#if screen.id === 'saves'}
           <Saves />
         {:else if screen.id === 'players'}
           <Players selected={route[1] ? decodeURIComponent(route[1]) : null} />
+        {:else if screen.id === 'accounts'}
+          <Accounts selected={route[1] ? Number(route[1]) : null} />
         {:else}
           <Soon {screen} />
         {/if}

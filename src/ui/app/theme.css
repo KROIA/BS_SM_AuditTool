@@ -48,3 +48,36 @@ input { font: inherit; color: inherit; }
 .btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; box-sizing: border-box; border-radius: 10px; border: 1px solid var(--line); background: var(--card); }
 .btn:hover:not(:disabled), .row:hover { background: var(--raised); }
 .icon { flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+
+/* A screen with a list on the left and the picked entry on the right: Players, Bank accounts */
+.split { display: flex; flex-wrap: wrap; min-height: 100%; }
+.split > aside { flex: 1 1 264px; max-width: 320px; box-sizing: border-box; padding: 24px 12px; border-right: 1px solid var(--line); }
+.split .listhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 12px; }
+.split .listhead h2 { margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text3); }
+.split .pad { margin: 12px; }
+.split .roster { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
+.split .pick { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 12px; border-radius: 8px; }
+.split .pick[aria-current] { background: var(--raised); }
+.split .who { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+.split .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.split .detail { flex: 999 1 560px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; padding: 28px 32px 40px; }
+.split .lead { margin: -8px 0 0; font-size: 16px; line-height: 24px; text-wrap: pretty; }
+.split .facts { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: -8px; font-size: 13px; color: var(--text2); }
+.split .facts a, .split .ref { color: var(--accent); }
+.split .figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 16px; }
+.split .figure { display: flex; flex-direction: column; gap: 6px; padding: 20px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
+.split .flabel { font-size: 13px; color: var(--text2); }
+.split .fvalue { font-family: var(--font-head); font-size: 26px; line-height: 32px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.split .h3 { font-size: 17px; line-height: 24px; }
+.split .cardhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
+.split .empty { margin: 0; padding: 24px; border-radius: 14px; border: 1px dashed var(--line2); color: var(--text2); }
+.split .num { flex: none; font-weight: 500; font-variant-numeric: tabular-nums; }
+.split .link { padding: 0; border: 0; background: none; font-size: 13px; font-weight: 500; color: var(--accent); }
+.split table { width: 100%; min-width: 760px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.split th { padding: 0 12px 10px; font-size: 12px; font-weight: 600; color: var(--text3); text-align: left; }
+.split td { padding: 12px; border-top: 1px solid var(--line); }
+.split th:first-child, .split td:first-child { padding-left: 0; }
+.split th:last-child, .split td:last-child { padding-right: 0; }
+.split .r { text-align: right; }
+.split .dim { color: var(--text2); }
+.split .mono { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
