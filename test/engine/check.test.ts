@@ -6,7 +6,7 @@ import { after, before, test } from 'node:test';
 import { api } from '../../src/engine/api.ts';
 import { allGaps, rate } from '../../src/engine/query/check.ts';
 import { addSave, init } from '../../src/engine/workspace.ts';
-import type { Scope } from '../../src/shared/api.ts';
+import { DEFAULT_RULES, type RuleSettings, type Scope } from '../../src/shared/api.ts';
 import { buildFixtures, CHECK, ITEM, PLAYERS, T0, type Fixtures } from '../fixtures/build.ts';
 
 const MIN = 60_000;
@@ -18,7 +18,9 @@ const open = (save: string) => {
   addSave(save);
 };
 const at = (minute: number) => T0 + minute * MIN;
-const money = (account: number, scope = ALL) => api.check(account, scope).find((c) => c.item === ITEM.money)!;
+/** Every difference counts as a gap: the cases below keep their figures whatever the default threshold is. */
+const EVERY: RuleSettings = { ...DEFAULT_RULES, balance: { on: true, money: 0n, items: 0n } };
+const money = (account: number, scope = ALL, settings = EVERY) => api.check(account, scope, settings).find((c) => c.item === ITEM.money)!;
 
 before(() => (fx = buildFixtures(fs.mkdtempSync(path.join(os.tmpdir(), 'audittool-check-')))));
 after(() => {
@@ -45,8 +47,8 @@ test('current save: the ordinary accounts explain every change, only the cases s
     [CHECK.raw, ITEM.money, at(102), at(110), 100_000n, [], 'high'],
   ]);
   // An item first bought in the range has one snapshot only: nothing to compare.
-  assert.deepEqual(api.check(PLAYERS.Ombrelune.account, ALL).map((c) => [c.item, c.verdict]), [[ITEM.money, 'explained'], [ITEM.gold, 'unchecked']]);
-  for (const p of Object.values(PLAYERS)) assert.ok(api.check(p.account, ALL).every((c) => c.unexplained === 0n), `account ${p.account}`);
+  assert.deepEqual(api.check(PLAYERS.Ombrelune.account, ALL, EVERY).map((c) => [c.item, c.verdict]), [[ITEM.money, 'explained'], [ITEM.gold, 'unchecked']]);
+  for (const p of Object.values(PLAYERS)) assert.ok(api.check(p.account, ALL, EVERY).every((c) => c.unexplained === 0n), `account ${p.account}`);
 });
 
 test('an unexplained gain is flagged', () => {
@@ -63,6 +65,16 @@ test('a pair that cancels within 15 minutes is joined to nothing, one 38 minutes
   assert.deepEqual(money(CHECK.pair).gaps.map((g) => g.difference), [100_000n, -100_000n]);
 });
 
+test('the verdict counts a gap only above the "Balance not explained" threshold', () => {
+  open(fx.master);
+  // The pair's two gaps are exactly $1'000, the default threshold: not above it. The total difference stays.
+  const pair = money(CHECK.pair, ALL, DEFAULT_RULES);
+  assert.deepEqual([pair.gaps, pair.verdict, pair.unexplained], [[], 'explained', 0n]);
+  assert.equal(money(CHECK.gain, ALL, DEFAULT_RULES).verdict, 'unexplained');
+  const high: RuleSettings = { ...DEFAULT_RULES, balance: { on: true, money: 500_000n, items: 100_000n } };
+  assert.deepEqual([money(CHECK.gain, ALL, high).verdict, money(CHECK.gain, ALL, high).unexplained], ['explained', 500_000n]);
+});
+
 test('an admin set without a readable note labels its gap', () => {
   open(fx.master);
   const c = money(CHECK.set);
@@ -71,12 +83,12 @@ test('an admin set without a readable note labels its gap', () => {
 
 test('a share stamp moves no balance', () => {
   open(fx.master);
-  assert.deepEqual(api.check(CHECK.stamp, ALL).map((c) => [c.item, c.paidIn, c.verdict]), [[ITEM.money, 0n, 'explained']]);
+  assert.deepEqual(api.check(CHECK.stamp, ALL, EVERY).map((c) => [c.item, c.paidIn, c.verdict]), [[ITEM.money, 0n, 'explained']]);
 });
 
 test('BS-254 with an older StockMarket: a fill logged as trade and raw change counts once', () => {
   open(fx.master);
-  const [m, d] = api.check(CHECK.raw, { from: null, to: at(102), server: null });
+  const [m, d] = api.check(CHECK.raw, { from: null, to: at(102), server: null }, EVERY);
   assert.deepEqual([m!.item, m!.trades, m!.paidIn, m!.verdict], [ITEM.money, 200_000n, 0n, 'explained']);
   assert.deepEqual([d!.item, d!.trades, d!.paidOut, d!.verdict], [ITEM.diamond, -4_000n, 0n, 'explained']);
 });
@@ -84,13 +96,13 @@ test('BS-254 with an older StockMarket: a fill logged as trade and raw change co
 test('a deleted account with snapshots only is checked', () => {
   open(fx.master);
   assert.equal(api.account(CHECK.gone, ALL), null);
-  assert.deepEqual(api.check(CHECK.gone, ALL).map((c) => [c.item, c.start, c.is, c.verdict]), [[ITEM.money, 250_000n, 250_000n, 'explained']]);
-  assert.deepEqual(api.check(999, ALL), []);
+  assert.deepEqual(api.check(CHECK.gone, ALL, EVERY).map((c) => [c.item, c.start, c.is, c.verdict]), [[ITEM.money, 250_000n, 250_000n, 'explained']]);
+  assert.deepEqual(api.check(999, ALL, EVERY), []);
 });
 
 test('legacy save: orders stand in for trades, the unlogged admin actions are the only gaps, rated low', () => {
   open(fx.legacy);
-  const tavrik = api.check(PLAYERS.Tavrik.account, ALL);
+  const tavrik = api.check(PLAYERS.Tavrik.account, ALL, EVERY);
   assert.deepEqual(tavrik.map((c) => [c.item, c.verdict]), [[ITEM.money, 'explained'], [ITEM.diamond, 'explained']]);
   assert.ok(tavrik[0]!.trades > 0n);
   assert.deepEqual(allGaps().map((g) => [g.account, g.from, g.to, g.difference, g.rating]), [

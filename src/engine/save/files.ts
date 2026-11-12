@@ -26,6 +26,32 @@ export function readUserCache(dataDir: string): Map<string, string> {
   return out;
 }
 
+/** The bank mod's flag settings and their defaults (BS BankSystemModSettings.java:456-480; DATA_SOURCES.md). Money in whole units. */
+const BANK_AUDIT: Record<string, number | boolean> = {
+  LAUNDERING_FLAG_ENABLED: true, LAUNDERING_MIN_AMOUNT: 1_000_000, LAUNDERING_WINDOW_HOURS: 24,
+  LARGE_NOTE_WITHDRAWAL_FLAG_ENABLED: true, LARGE_NOTE_WITHDRAWAL_AMOUNT: 10_000_000,
+  WEALTH_JUMP_FLAG_ENABLED: true, WEALTH_SWEEP_MINUTES: 10, WEALTH_JUMP_PERCENT: 100, WEALTH_JUMP_AMOUNT: 1_000_000, WEALTH_JUMP_COOLDOWN_HOURS: 6,
+  NEW_ACCOUNT_TRANSFER_FLAG_ENABLED: true, NEW_ACCOUNT_TRANSFER_AMOUNT: 1_000_000, NEW_ACCOUNT_AGE_HOURS: 24,
+  MONEY_SUPPLY_FLAG_ENABLED: true, MONEY_SUPPLY_GROWTH_PERCENT: 10, MONEY_SUPPLY_GROWTH_AMOUNT: 10_000_000, MONEY_SUPPLY_COOLDOWN_HOURS: 6,
+};
+
+/** The "Audit" group of the bank's settings.json. Only the known keys, only values of the default's type; anything else gives the default. */
+export function readBankAudit(dataDir: string): Record<string, number | boolean> {
+  const out = { ...BANK_AUDIT };
+  try {
+    const file = readSmallFile(path.join(dataDir, 'BankSystem', 'settings.json'));
+    const audit: unknown = file && (JSON.parse(file.toString('utf8')) as { Audit?: unknown } | null)?.Audit;
+    if (typeof audit !== 'object' || audit === null) return out;
+    for (const [key, def] of Object.entries(BANK_AUDIT)) {
+      const v = (audit as Record<string, unknown>)[key];
+      if (typeof v === typeof def && (typeof v !== 'number' || (Number.isFinite(v) && v >= 0))) out[key] = v as number | boolean;
+    }
+  } catch {
+    // unreadable: the defaults
+  }
+  return out;
+}
+
 /** All elements of a chunked list: <dir>/chunk_<i>.nbt in number order, or <dir>.old when <dir> is missing. */
 export function readChunks(dir: string): Nbt[] {
   const folder = fs.existsSync(dir) ? dir : dir + '.old';

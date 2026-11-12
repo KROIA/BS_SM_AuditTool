@@ -280,13 +280,86 @@ export interface ItemCheck {
   paidOut: bigint;
   shouldBe: bigint | null;
   is: bigint | null;
+  /** is - shouldBe: every difference, also those below the threshold. */
   unexplained: bigint;
+  /** Only the gaps whose difference is above the "Balance not explained" threshold. */
   gaps: Gap[];
   /**
-   * unchecked: fewer than two snapshots in the scope. explained: no gap with a difference. unexplained: at least one gap
+   * unchecked: fewer than two snapshots in the scope. explained: no gap above the threshold. unexplained: at least one gap
    * no row can explain. unknown-rows: every gap holds a row whose sign the save does not give.
    */
   verdict: 'unchecked' | 'explained' | 'unexplained' | 'unknown-rows';
+}
+
+// ---- Findings (DESIGN_SPEC 8.2). Money thresholds are raw (real x 100), item thresholds raw too (count x 100).
+
+export type RuleId = 'round-trip' | 'order-rate' | 'hour-profit' | 'far-price' | 'price-spike' | 'balance' | 'order-ledger' | 'bank-flag' | 'last-save'
+  | 'market-alert' | 'transfer' | 'banknotes';
+export type Level = 'low' | 'medium' | 'high' | 'critical';
+
+/** Each rule on or off, with its thresholds. Turned off, a rule is not run. */
+export interface RuleSettings {
+  'round-trip': { on: boolean; times: number; seconds: number };
+  'order-rate': { on: boolean; orders: number };
+  'hour-profit': { on: boolean; money: bigint };
+  'far-price': { on: boolean; times: number };
+  'price-spike': { on: boolean; times: number };
+  'balance': { on: boolean; money: bigint; items: bigint };
+  'order-ledger': { on: boolean };
+  'bank-flag': { on: boolean };
+  'last-save': { on: boolean };
+}
+export const DEFAULT_RULES: RuleSettings = {
+  'round-trip': { on: true, times: 2, seconds: 30 },
+  'order-rate': { on: true, orders: 5 },
+  'hour-profit': { on: true, money: 100_000_000n },
+  'far-price': { on: true, times: 10 },
+  'price-spike': { on: true, times: 5 },
+  'balance': { on: true, money: 100_000n, items: 100_000n },
+  'order-ledger': { on: true },
+  'bank-flag': { on: true },
+  'last-save': { on: true },
+};
+
+/** One value of a finding's facts. Which keys a rule fills is listed at the rule in engine/query/findings.ts. */
+export type Fact = string | number | bigint | boolean | null | string[];
+
+export interface Finding {
+  /** rule:key. The key is built from the data alone, so the same data and settings give the same id (pins and dismissals point at it). */
+  id: string;
+  rule: RuleId;
+  level: Level;
+  basis: 'proven' | 'estimate' | 'hint' | 'as raised';
+  source: 'tool' | 'bank mod' | 'market mod';
+  start: number;
+  end: number;
+  players: { uuid: string; name: string }[];
+  markets: number[];
+  accounts: number[];
+  /** Where its orders were placed; empty for bank data, which shows under every server filter. */
+  servers: string[];
+  /** The most extreme value of the finding against the rule's threshold (null: the rule has none, or the server's setting is unknown). */
+  measured: { value: number | bigint; threshold: number | bigint | null; unit: 'times' | 'orders' | 'money' | 'items' | 'shares' | 'rows' };
+  facts: Record<string, Fact>;
+  records: { orders: number[]; ledger: number[]; flags: number[]; candles: { market: number; time: number }[] };
+  /** Bank mod flags only: acknowledged by an admin. null for every other rule. */
+  acknowledged: boolean | null;
+}
+
+export interface RuleStatus {
+  rule: RuleId;
+  on: boolean;
+  /** Findings over all loaded data; null when the rule did not run. */
+  found: number | null;
+  /** Why the rule does not apply to this save; null when it does. */
+  notApplicable: string | null;
+}
+
+export interface FindingsResult {
+  findings: Finding[];
+  rules: RuleStatus[];
+  /** The bank mod's flag settings from the save's settings.json ("Audit" group, whole money units), defaults filled in. Shown, never changed. */
+  bankSettings: Record<string, number | boolean>;
 }
 
 export interface SearchResult {
@@ -327,11 +400,20 @@ export interface QueryApi {
   search(text: string): SearchResult;
   /** The sessions that overlap the time range, whole, oldest first. Only orders of the filtered server form sessions. */
   sessions(uuid: string, scope: Scope): Session[];
-  /** Per item of the account, lowest item id first. Works on accounts gone from the bank's files too. */
-  check(account: number, scope: Scope): ItemCheck[];
+  /**
+   * Per item of the account, lowest item id first. Works on accounts gone from the bank's files too. A gap counts only
+   * above the "Balance not explained" threshold of the settings; smaller ones are cut-off noise.
+   */
+  check(account: number, scope: Scope, settings: RuleSettings): ItemCheck[];
+  /**
+   * The rules run over all loaded data, kept per workspace and settings; this returns the findings that overlap the
+   * time range, under a server filter those whose orders were placed there plus every finding without a server.
+   * Sorted by level, highest first, then by time.
+   */
+  findings(scope: Scope, settings: RuleSettings): FindingsResult;
 }
 
-export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check'> {
+export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
   addSave(path: string): Workspace;

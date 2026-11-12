@@ -5,11 +5,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { SaveSource, SaveSummary, SaveTable } from '../../shared/api.ts';
-import { readFiles, readUserCache } from './files.ts';
+import { readBankAudit, readFiles, readUserCache } from './files.ts';
 import { findDataDir, readIdentity, readLevel } from './locate.ts';
 
 /** Raise when the layout of the cache changes: caches written by an older version are rebuilt. */
-export const CACHE_VERSION = 6;
+export const CACHE_VERSION = 7;
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -87,7 +87,7 @@ const SOURCE_IDS = Object.keys(FILES) as SaveSource['id'][];
 // A database's -wal and -journal hold changes its main file does not show yet; the NBT folders and level.dat feed the summary too.
 const FINGERPRINT_FILES = [
   ...Object.values(FILES).flatMap((f) => [f, f + '-wal', f + '-journal']),
-  'ModUtilities/server_identity.json', 'BankSystem/ItemIDs.nbt', 'BankSystem/Meta_data.nbt', '../level.dat', '../../usercache.json',
+  'ModUtilities/server_identity.json', 'BankSystem/ItemIDs.nbt', 'BankSystem/Meta_data.nbt', 'BankSystem/settings.json', '../level.dat', '../../usercache.json',
 ];
 const FINGERPRINT_DIRS = ['BankSystem/Bank_data', 'BankSystem/Companies', 'StockMarket/MarketManager'];
 const CHUNK = 200_000; // ids per insert; a failing insert is halved until the damage is fenced in
@@ -324,6 +324,7 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
     };
     const put = db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)');
     put.run('summary', JSON.stringify(summary));
+    put.run('bank_audit', JSON.stringify(readBankAudit(dataDir)));
     put.run('fingerprint', print); // written last: a cache without it is incomplete and gets rebuilt
     return summary;
   } finally {

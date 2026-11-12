@@ -2,7 +2,7 @@
 // the change of free plus locked against what the ledger (or, before the save has trade rows, the orders) explains.
 // Accounts that are gone from the bank's files are checked too: everything here starts from the snapshot and ledger rows.
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
-import type { Gap, ItemCheck, Rating, Scope } from '../../shared/api.ts';
+import type { Gap, ItemCheck, Rating, RuleSettings, Scope } from '../../shared/api.ts';
 import { mainData, mainSave } from '../workspace.ts';
 import { all, big, num, text } from './db.ts';
 import { change } from './players.ts';
@@ -124,11 +124,19 @@ function join(list: RawGap[]): RawGap[] {
 
 const gap = (g: RawGap, rating: (from: number) => Rating): Gap => ({ from: g.from, to: g.to, difference: g.diff, labels: g.labels, rating: rating(g.from) });
 
-/** Per item of the account: the sum from the first to the last snapshot in the scope, and its gaps. */
-export function check(account: number, scope: Scope): ItemCheck[] {
+export const moneyItems = (db: DatabaseSync) => new Set(all(db, 'SELECT id FROM item WHERE money = 1').map((r) => num(r.id)!));
+/** The "Balance not explained" threshold of an item: money or goods (DESIGN_SPEC 8.2). */
+export function threshold(db: DatabaseSync, s: RuleSettings['balance']) {
+  const money = moneyItems(db);
+  return (item: number) => (money.has(item) ? s.money : s.items);
+}
+
+/** Per item of the account: the sum from the first to the last snapshot in the scope, and its gaps above the threshold. */
+export function check(account: number, scope: Scope, settings: RuleSettings): ItemCheck[] {
   const db = mainData();
   if (!db) return [];
   const { snaps, moves, rating } = read(db, account);
+  const limit = threshold(db, settings.balance);
   const items = [...new Set([...snaps.keys(), ...moves.keys()])].map((k) => Number(k.split(':')[1])).sort((a, b) => a - b);
   return items.map((item): ItemCheck => {
     const whole = snaps.get(`${account}:${item}`) ?? [];
@@ -141,7 +149,7 @@ export function check(account: number, scope: Scope): ItemCheck[] {
     const trades = sum((g) => g.trades), paidIn = sum((g) => g.paidIn), paidOut = sum((g) => g.paidOut);
     const first = s[0]?.[1] ?? null, is = s.at(-1)?.[1] ?? null;
     const shouldBe = first === null ? null : first + trades + paidIn - paidOut;
-    const list = join(raw).map((g) => gap(g, rating));
+    const list = join(raw).filter((g) => abs(g.diff) > limit(item)).map((g) => gap(g, rating));
     return {
       item, start: first, trades, paidIn, paidOut, shouldBe, is, unexplained: is === null ? 0n : is - shouldBe!, gaps: list,
       verdict: s.length < 2 ? 'unchecked' : list.length === 0 ? 'explained' : list.some((g) => g.labels.length === 0) ? 'unexplained' : 'unknown-rows',
