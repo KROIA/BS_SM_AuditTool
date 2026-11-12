@@ -1,7 +1,7 @@
 // What the Markets screen asks: the markets with their swing, one market's facts, its candles and who traded there.
 // Candles cover months at one per minute, so long ranges read the 1-hour table and only the minutes at the range's edges.
-import type { SQLInputValue } from 'node:sqlite';
-import type { Candle, MarketFacts, MarketRow, Scope, Trader } from '../../shared/api.ts';
+import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
+import type { Candle, MarketFacts, MarketRow, OrderRow, Scope, Trader } from '../../shared/api.ts';
 import { mainData } from '../workspace.ts';
 import { all, big, names, num, type Row } from './db.ts';
 import { profit } from './profit.ts';
@@ -71,24 +71,41 @@ export function markets(scope: Scope): MarketRow[] {
   return [...rows.values()].sort((a, b) => (b.swing ?? -1) - (a.swing ?? -1) || b.orders - a.orders || a.item - b.item);
 }
 
+/** The usual price (DESIGN_SPEC 8.1): the median open of the 1-minute candles in the scope, else the median price of the orders given. */
+function usual(db: DatabaseSync, item: number, scope: Scope, list: OrderRow[]): bigint | null {
+  const m = minuteWhere(item, scope);
+  const n = Number(all(db, `SELECT count(*) AS n FROM candle WHERE ${m.where}`, m.params)[0]!.n);
+  if (n > 0) {
+    const mid = all(db, `SELECT open FROM candle WHERE ${m.where} ORDER BY open LIMIT :k OFFSET :o`, { ...m.params, k: BigInt(2 - (n % 2)), o: BigInt((n - 1) >> 1) });
+    return middle(big(mid[0]!.open)!, mid[1] ? big(mid[1].open)! : undefined);
+  }
+  return median(list.map((o) => o.price));
+}
+
+/** The median of whole numbers (DESIGN_SPEC 8.1); null for none. */
+export function median(values: bigint[]): bigint | null {
+  if (values.length === 0) return null;
+  const p = BigInt64Array.from(values).sort();
+  return middle(p[(p.length - 1) >> 1]!, p.length % 2 ? undefined : p[p.length >> 1]);
+}
+
+const usualCache = new WeakMap<DatabaseSync, Map<number, bigint | null>>();
+/** The usual price over all loaded data, for the rules. Worked out once per market while the same saves stay loaded. */
+export function usualPrice(item: number): bigint | null {
+  const db = mainData();
+  if (!db) return null;
+  const known = usualCache.get(db) ?? usualCache.set(db, new Map()).get(db)!;
+  if (!known.has(item)) known.set(item, usual(db, item, { from: null, to: null, server: null }, readOrders(db, { item }, null)));
+  return known.get(item)!;
+}
+
 export function market(item: number, scope: Scope): MarketFacts {
   const db = mainData();
   if (!db) return { usual: null, low: null, high: null, volume: 0, traders: 0 };
   const src = source(scope, item);
   const f = all(db, `SELECT min(low) AS lo, max(high) AS hi, total(volume) AS v FROM (${src.sql})`, src.params)[0]!;
   const list = readOrders(db, { item }, scope.to).filter((o) => counts(o, scope));
-
-  const m = minuteWhere(item, scope);
-  const n = Number(all(db, `SELECT count(*) AS n FROM candle WHERE ${m.where}`, m.params)[0]!.n);
-  let usual: bigint | null = null;
-  if (n > 0) {
-    const mid = all(db, `SELECT open FROM candle WHERE ${m.where} ORDER BY open LIMIT :k OFFSET :o`, { ...m.params, k: BigInt(2 - (n % 2)), o: BigInt((n - 1) >> 1) });
-    usual = middle(big(mid[0]!.open)!, mid[1] ? big(mid[1].open)! : undefined);
-  } else if (list.length > 0) {
-    const p = list.map((o) => o.price).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-    usual = middle(p[(p.length - 1) >> 1]!, p.length % 2 ? undefined : p[p.length >> 1]);
-  }
-  return { usual, low: big(f.lo), high: big(f.hi), volume: Number(f.v), traders: new Set(list.map((o) => o.player)).size };
+  return { usual: usual(db, item, scope, list), low: big(f.lo), high: big(f.hi), volume: Number(f.v), traders: new Set(list.map((o) => o.player)).size };
 }
 
 export function candles(item: number, minutes: 1 | 5 | 15 | 60 | 1440, scope: Scope): { candles: Candle[]; capped: boolean } {

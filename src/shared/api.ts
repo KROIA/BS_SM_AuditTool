@@ -239,6 +239,20 @@ export interface Trader {
   profit: bigint;
 }
 
+/** Orders of one player less than 5 minutes apart (DESIGN_SPEC 8.1). Times are when the orders were placed. */
+export interface Session {
+  start: number;
+  end: number;
+  orders: number;
+  /** Item ids, in the order they were first traded. */
+  markets: number[];
+  /** Realised profit of the session's sales; the average cost carries over from every earlier trade. */
+  profit: bigint;
+  soldWithoutPurchase: bigint;
+  /** Median time between neighbouring orders; null for a session of one order. */
+  medianGapMs: number | null;
+}
+
 export interface SearchResult {
   players: { uuid: string; name: string }[];
   accounts: { number: number; name: string }[];
@@ -275,9 +289,11 @@ export interface QueryApi {
   traders(item: number, scope: Scope): Trader[];
   /** At most 5 hits per group. */
   search(text: string): SearchResult;
+  /** The sessions that overlap the time range, whole, oldest first. Only orders of the filtered server form sessions. */
+  sessions(uuid: string, scope: Scope): Session[];
 }
 
-export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search'> {
+export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
   addSave(path: string): Workspace;

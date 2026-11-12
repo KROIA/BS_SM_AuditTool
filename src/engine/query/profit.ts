@@ -15,10 +15,11 @@ export interface Trade {
  * trades must be in the order they happened. A sale takes its cost from the average cost of what the player holds;
  * the part of a sale beyond the holding was never bought on the market and is soldWithoutPurchase, not profit.
  * Whole-number division cuts towards zero at each step, so the figures are exact and repeatable, not rounded.
+ * onSale hears every sale, in or out of the scope: its index in trades, its realised profit and what it sold without a purchase.
  */
-export function profit(trades: Trade[]): MarketProfit[] {
+export function profit(trades: Trade[], onSale?: (index: number, profit: bigint, withoutPurchase: bigint) => void): MarketProfit[] {
   const byItem = new Map<number, MarketProfit & { qty: bigint; cost: bigint }>();
-  for (const t of trades) {
+  for (const [i, t] of trades.entries()) {
     let m = byItem.get(t.item);
     if (!m) byItem.set(t.item, (m = { item: t.item, orders: 0, bought: 0n, sold: 0n, profit: 0n, soldWithoutPurchase: 0n, qty: 0n, cost: 0n }));
     if (t.counts) m.orders++;
@@ -33,6 +34,7 @@ export function profit(trades: Trade[]): MarketProfit[] {
       const coveredMoney = (got * covered) / volume;
       m.qty -= covered;
       m.cost -= cost;
+      onSale?.(i, coveredMoney - cost, got - coveredMoney);
       if (t.counts) {
         m.sold += got;
         m.profit += coveredMoney - cost;
