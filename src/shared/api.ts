@@ -112,6 +112,8 @@ export interface OrderRow {
   money: bigint;
   /** When the order was placed. 0 when the save has no time for it. */
   time: number;
+  /** When the order finished (SM-317, epoch ms). null on saves before it. */
+  finishMs: number | null;
   /** The save where it was placed (OrderOrigin); null when the save does not say. */
   server: string | null;
 }
@@ -276,7 +278,7 @@ export interface QueryApi {
   search(text: string): SearchResult;
 }
 
-export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances'> {
+export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
   addSave(path: string): Workspace;

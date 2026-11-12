@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { amount, bytes, count, items, money, moneyShort, time } from '../../src/shared/fmt.ts';
+import { amount, bytes, count, countShort, items, money, moneyShort, time } from '../../src/shared/fmt.ts';
 
 test('apostrophe between thousands, point before decimals', () => {
   assert.equal(amount(153205n), "1'532.05");
@@ -21,6 +21,14 @@ test('money in full and shortened', () => {
   assert.equal(moneyShort(-714_000_000_000n), '-$7.14B');
   assert.equal(moneyShort(1_240_000n), "$12'400.00"); // below a million: in full
   assert.equal(moneyShort(99_999_600_000n), '$1B'); // 999.996M rounds up to the next unit
+});
+
+test('counts shortened for headlines', () => {
+  assert.equal(countShort(390_669), "390'669"); // below a million: in full
+  assert.equal(countShort(2_597_241_136_171_946), "2'597.24T");
+  assert.equal(countShort(12_500_000), '12.5M');
+  assert.equal(countShort(999_996_000), '1B'); // rounds up to the next unit, not to 1000M
+  assert.equal(countShort(-3_000_000), '-3M');
 });
 
 test('item counts drop empty decimals', () => {

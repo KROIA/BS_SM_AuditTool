@@ -2,6 +2,7 @@
   // The frame around every screen: left menu, top bar, and the screen itself.
   import { count } from '../../shared/fmt.ts';
   import Accounts from '../screens/Accounts.svelte';
+  import Markets from '../screens/Markets.svelte';
   import Players from '../screens/Players.svelte';
   import Saves from '../screens/Saves.svelte';
   import Soon from '../screens/Soon.svelte';
@@ -9,7 +10,7 @@
   import { ICON, SCREENS } from './nav.ts';
   import { app, start, toggleTheme } from './state.svelte.ts';
 
-  // An address is the screen and, for a player or an account, what it shows: #/players/<uuid>
+  // An address is the screen and, for a player, an account or a market, what it shows: #/players/<uuid>
   const route = $derived(app.route.split('/'));
   const screen = $derived(SCREENS.find((s) => s.id === route[0]) ?? SCREENS.find((s) => s.id === 'saves')!);
   const savesLine = $derived(app.saves.length === 0 ? 'No save loaded' : app.saves.length === 1 ? '1 save loaded' : count(app.saves.length) + ' saves loaded');
@@ -51,13 +52,15 @@
     </header>
 
     <main>
-      <div class="page" class:flush={screen.id === 'players' || screen.id === 'accounts'}>
+      <div class="page" class:flush={screen.id === 'players' || screen.id === 'accounts' || screen.id === 'markets'}>
         {#if screen.id === 'saves'}
           <Saves />
         {:else if screen.id === 'players'}
           <Players selected={route[1] ? decodeURIComponent(route[1]) : null} />
         {:else if screen.id === 'accounts'}
           <Accounts selected={route[1] ? Number(route[1]) : null} />
+        {:else if screen.id === 'markets'}
+          <Markets selected={route[1] ? Number(route[1]) : null} />
         {:else}
           <Soon {screen} />
         {/if}

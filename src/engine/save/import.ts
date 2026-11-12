@@ -9,13 +9,13 @@ import { readFiles, readUserCache } from './files.ts';
 import { findDataDir, readIdentity, readLevel } from './locate.ts';
 
 /** Raise when the layout of the cache changes: caches written by an older version are rebuilt. */
-export const CACHE_VERSION = 4;
+export const CACHE_VERSION = 5;
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE candle (id INTEGER PRIMARY KEY, market INTEGER NOT NULL, time INTEGER NOT NULL, open INTEGER NOT NULL, low INTEGER NOT NULL, high INTEGER NOT NULL, volume REAL NOT NULL);
 CREATE TABLE candle_hour (market INTEGER NOT NULL, time INTEGER NOT NULL, open INTEGER NOT NULL, low INTEGER NOT NULL, high INTEGER NOT NULL, volume REAL NOT NULL, PRIMARY KEY (market, time)) WITHOUT ROWID;
-CREATE TABLE orders (id INTEGER PRIMARY KEY, order_id INTEGER, item INTEGER NOT NULL, account INTEGER NOT NULL, player TEXT NOT NULL, type INTEGER NOT NULL, amount INTEGER NOT NULL, price INTEGER NOT NULL, time INTEGER NOT NULL);
+CREATE TABLE orders (id INTEGER PRIMARY KEY, order_id INTEGER, item INTEGER NOT NULL, account INTEGER NOT NULL, player TEXT NOT NULL, type INTEGER NOT NULL, amount INTEGER NOT NULL, price INTEGER NOT NULL, time INTEGER NOT NULL, finish_time INTEGER);
 CREATE TABLE ledger (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, account INTEGER NOT NULL, actor TEXT, actor_name TEXT, source_kind TEXT, kind TEXT NOT NULL, type_code INTEGER, item INTEGER NOT NULL, amount INTEGER NOT NULL, other_account INTEGER, company_id INTEGER, note TEXT, ref TEXT, tag TEXT, money_amount INTEGER, price INTEGER, currency_item INTEGER, balance_after INTEGER, virtual_qty INTEGER);
 CREATE TABLE snapshot (id INTEGER PRIMARY KEY, account INTEGER NOT NULL, item INTEGER NOT NULL, time INTEGER NOT NULL, balance INTEGER NOT NULL, locked INTEGER NOT NULL);
 CREATE TABLE flag (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, account INTEGER NOT NULL, flag_type INTEGER NOT NULL, severity INTEGER NOT NULL, amount INTEGER NOT NULL, ref TEXT, details TEXT, acknowledged INTEGER NOT NULL);
@@ -56,7 +56,7 @@ const TABLES: TableImport[] = [
   { source: 'market', from: 'MarketPrice', to: 'candle', time: 'time',
     columns: [...same('id', 'time', 'open', 'low', 'high'), { to: 'market', from: 'marketid' }, { to: 'volume', from: 'traded_volume' }] },
   { source: 'market', from: 'OrderHistory', to: 'orders', time: 'time',
-    columns: [...same('id', 'order_id', 'type', 'amount', 'price', 'time'), { to: 'item', from: 'itemid' }, { to: 'account', from: 'accountid' },
+    columns: [...same('id', 'order_id', 'type', 'amount', 'price', 'time', 'finish_time'), { to: 'item', from: 'itemid' }, { to: 'account', from: 'accountid' },
       { to: 'player', from: uuid('userid_one', 'userid_two'), needs: ['userid_one', 'userid_two'] }] },
   { source: 'bank', from: 'TransactionLog', to: 'ledger', time: 'ts',
     columns: [...same('id', 'ts', 'actor_name', 'source_kind', 'kind', 'type_code', 'amount', 'other_account', 'company_id', 'note', 'ref', 'tag', 'money_amount', 'price', 'currency_item', 'balance_after', 'virtual_qty'),

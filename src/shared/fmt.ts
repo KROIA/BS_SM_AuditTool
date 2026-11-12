@@ -11,6 +11,22 @@ export function count(n: bigint | number): string {
   return (v < 0n ? '-' : '') + group(abs(v).toString());
 }
 
+const UNITS: [number, string][] = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M']];
+/**
+ * A count shortened for headlines: 390'669 stays, 2'597'241'136'171'946 -> 2'597.24T. For market volumes, which the
+ * mods keep as floating-point numbers, so their last digits mean nothing anyway.
+ */
+export function countShort(n: number): string {
+  const a = Math.abs(n);
+  for (const [unit, suffix] of UNITS) {
+    const hundredths = Math.round((a / unit) * 100); // the largest unit that still gives at least 1 after rounding
+    if (hundredths < 100) continue;
+    const decimals = String(hundredths % 100).padStart(2, '0').replace(/0+$/, '');
+    return (n < 0 ? '-' : '') + count(Math.floor(hundredths / 100)) + (decimals ? '.' + decimals : '') + suffix;
+  }
+  return count(n);
+}
+
 /** A raw amount with both decimals: 153205n -> 1'532.05 */
 export function amount(raw: bigint): string {
   const a = abs(raw);

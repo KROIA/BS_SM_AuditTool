@@ -63,7 +63,8 @@ const SLAVES = [
 const SQL = {
   orderHistory: `CREATE TABLE OrderHistory (id INTEGER PRIMARY KEY AUTOINCREMENT, itemid INTEGER NOT NULL, accountid INTEGER NOT NULL,
     userid_one INTEGER NOT NULL, userid_two INTEGER NOT NULL, type INTEGER NOT NULL, amount INTEGER NOT NULL, price INTEGER NOT NULL,
-    time DATETIME NOT NULL, intermarket_group_one INTEGER NOT NULL DEFAULT 0, intermarket_group_two INTEGER NOT NULL DEFAULT 0, order_id INTEGER);
+    time DATETIME NOT NULL, intermarket_group_one INTEGER NOT NULL DEFAULT 0, intermarket_group_two INTEGER NOT NULL DEFAULT 0, order_id INTEGER,
+    finish_time INTEGER, limit_price INTEGER, target_volume INTEGER, final_status INTEGER);
     CREATE INDEX idx_itemid_userid_time ON OrderHistory (itemid, accountid)`,
   orderHistoryLegacy: `CREATE TABLE OrderHistory (id INTEGER PRIMARY KEY AUTOINCREMENT, itemid INTEGER NOT NULL, accountid INTEGER NOT NULL,
     userid_one INTEGER NOT NULL, userid_two INTEGER NOT NULL, type INTEGER NOT NULL, amount INTEGER NOT NULL, price INTEGER NOT NULL,
@@ -157,12 +158,13 @@ function bump(m: number, start: number, peak: number, end: number, top: number):
   return 1 + (top - 1) * t;
 }
 
-interface Order { id: number; item: number; player: Name; type: number; amount: bigint; price: bigint; time: number }
+interface Order { id: number; item: number; player: Name; type: number; amount: bigint; price: bigint; time: number; finish: number }
 
 function orders(price: Map<number, number[]>): Order[] {
   const list: Order[] = [];
   const add = (player: Name, item: number, minute: number, offsetMs: number, amount: bigint, type = 0) =>
-    list.push({ id: 0, item, player, type, amount, price: BigInt(price.get(item)![minute]!), time: T0 + minute * MIN + offsetMs });
+    list.push({ id: 0, item, player, type, amount, price: BigInt(price.get(item)![minute]!), time: T0 + minute * MIN + offsetMs,
+      finish: T0 + minute * MIN + offsetMs + (type === 1 ? 7 * MIN : 400) }); // SM-317: a limit order waits in the book, a market order fills at once
   // Ordinary trading
   add('Brindle', ITEM.coal, 5, 1200, 6400n);
   add('Brindle', ITEM.coal, 62, 400, 3200n);
@@ -201,7 +203,7 @@ function marketDatabase(dataDir: string, legacy: boolean, price: Map<number, num
     const [one, two] = uuidHalves(PLAYERS[o.player].n);
     db.insert('OrderHistory', {
       itemid: o.item, accountid: PLAYERS[o.player].account, userid_one: one, userid_two: two, type: o.type, amount: o.amount, price: o.price, time: o.time,
-      ...(legacy ? {} : { order_id: o.id }),
+      ...(legacy ? {} : { order_id: o.id, finish_time: o.finish }),
     });
   }
   return db.close();

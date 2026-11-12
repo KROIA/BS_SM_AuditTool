@@ -194,7 +194,7 @@
               {#each shown.markets as m (m.item)}
                 <div class="market">
                   <span class="who">
-                    <span style="font-weight: 500">{itemName(m.item)}</span>
+                    <a class="ref" href="#/markets/{m.item}" style="font-weight: 500">{itemName(m.item)}</a>
                     <span class="small">{count(m.orders)} {m.orders === 1 ? 'order' : 'orders'}{m.bought ? `, bought for ${moneyShort(m.bought)}` : ''}{m.sold ? `, sold for ${moneyShort(m.sold)}` : ''}{m.soldWithoutPurchase ? `, ${moneyShort(m.soldWithoutPurchase)} of it without a purchase` : ''}</span>
                   </span>
                   <span class="num" style="color: {tone(m.profit)}" title={money(m.profit)}>{signed(m.profit)}</span>
@@ -217,7 +217,7 @@
                   {#each allOrders ? orders : orders.slice(0, ROWS) as o (o.id)}
                     <tr>
                       <td class="mono">{o.time ? time(o.time, false, true) : 'no time recorded'}</td>
-                      <td>{itemName(o.item)}</td>
+                      <td><a class="ref" href="#/markets/{o.item}">{itemName(o.item)}</a></td>
                       <td style="font-weight: 500; color: {o.amount > 0n ? 'var(--buy)' : 'var(--sell)'}">{o.amount > 0n ? 'Buy' : 'Sell'}</td>
                       <td class="dim">{SIDE[o.type]}</td>
                       <td class="r">{quantity(o.amount < 0n ? -o.amount : o.amount)}</td>

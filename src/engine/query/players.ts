@@ -12,7 +12,7 @@ const inTime = (ms: number, s: Scope) => (s.from === null || ms >= s.from) && (s
 const TYPE = ['market', 'limit', 'intermarket'] as const;
 
 /** Orders up to `to`, oldest first; the time range's start and the server filter are left to the caller. */
-function readOrders(db: DatabaseSync, filter: { player?: string; item?: number }, to: number | null): OrderRow[] {
+export function readOrders(db: DatabaseSync, filter: { player?: string; item?: number }, to: number | null): OrderRow[] {
   const where = ['1'];
   const params: Record<string, SQLInputValue> = {};
   if (filter.player !== undefined) (where.push('o.player = :player'), (params.player = filter.player));
@@ -28,12 +28,12 @@ function readOrders(db: DatabaseSync, filter: { player?: string; item?: number }
       type: TYPE[num(r.type)!] ?? 'market', amount, price,
       // OrderHistory keeps the average price (money x 100 / volume, cut off), not the money: this gives it back the same way.
       money: (amount * price) / 100n,
-      time: num(r.time)!,
+      time: num(r.time)!, finishMs: num(r.finish_time),
       server: origin === null ? null : origin === '' ? master : origin, // an empty origin name is the master
     };
   });
 }
-const counts = (o: OrderRow, s: Scope) => inTime(o.time, s) && (s.server === null || o.server === s.server);
+export const counts = (o: OrderRow, s: Scope) => inTime(o.time, s) && (s.server === null || o.server === s.server);
 const marketsOf = (list: OrderRow[], s: Scope) => profit(list.map((o) => ({ item: o.item, amount: o.amount, money: o.money, counts: counts(o, s) })));
 
 /** First and last order or ledger row of each player in the scope. Rows without a time are left out. */
