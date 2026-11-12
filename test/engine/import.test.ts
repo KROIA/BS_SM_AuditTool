@@ -68,6 +68,12 @@ test('the master: role, format, every table with the rows the builder wrote, and
     Meta: [null, null], // tables without a time column
     OrderOrigin: [null, null],
   });
+  const day = (ms: number) => ms - (ms % 86_400_000);
+  const days = Object.fromEntries(save.sources.flatMap((x) => x.tables.map((t) => [t.name, t.days])));
+  assert.deepEqual(days.MarketPrice, [[day(T0), 8 * 160]]);
+  assert.deepEqual(days.BalanceHistory!.map(([d]) => d), [day(T0) - 86_400_000, day(T0)]);
+  assert.equal(days.BalanceHistory!.reduce((s, [, n]) => s + n, 0), w.BalanceHistory);
+  assert.deepEqual(days.Meta, []);
   assert.equal(save.players, 6);
   assert.equal(save.accounts, ACCOUNT_ORDER.length);
   assert.equal(save.bankVersion, '2.2.0');

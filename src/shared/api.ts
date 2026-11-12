@@ -10,6 +10,8 @@ export interface SaveTable {
   newestLost: boolean;
   from: number | null;
   to: number | null;
+  /** Rows per day, for the coverage bars: [start of the UTC day in epoch ms, rows]. Days without rows are left out. */
+  days: [number, number][];
 }
 
 /**

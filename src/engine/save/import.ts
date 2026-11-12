@@ -9,7 +9,7 @@ import { readFiles } from './files.ts';
 import { findDataDir, readIdentity, readLevel } from './locate.ts';
 
 /** Raise when the layout of the cache changes: caches written by an older version are rebuilt. */
-export const CACHE_VERSION = 2;
+export const CACHE_VERSION = 3;
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -242,13 +242,15 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
         for (const t of TABLES.filter((x) => x.source === id)) {
           const result = copyTable(db, t, report);
           if (!result) continue;
-          let from: number | null = null, to: number | null = null;
+          let from: number | null = null, to: number | null = null, days: [number, number][] = [];
           if (t.time && result.rows) {
+            days = (db.prepare(`SELECT ${t.time} / 86400000 * 86400000 AS d, count(*) AS n FROM main.${t.to} NOT INDEXED WHERE ${t.time} > 0 GROUP BY d ORDER BY d`)
+              .all() as { d: number; n: number }[]).map((r) => [r.d, r.n]);
             // Rows with time 0 have no time (31 orders of the November case): they do not stretch the span to 1970.
             const span = db.prepare(`SELECT min(${t.time}) AS a, max(${t.time}) AS b FROM main.${t.to} WHERE ${t.time} > 0`).get() as { a: number | null; b: number | null };
             [from, to] = [span.a, span.b];
           }
-          entry.tables.push({ name: t.from, rows: result.rows, lostIds: result.lostIds, newestLost: result.newestLost, from, to });
+          entry.tables.push({ name: t.from, rows: result.rows, lostIds: result.lostIds, newestLost: result.newestLost, from, to, days });
           // The current mods are recognised by columns that 2.1.2 did not have.
           if (t.from === 'TransactionLog' && result.has.has('type_code')) current = true;
           if (t.from === 'OrderHistory' && result.has.has('order_id')) current = true;
