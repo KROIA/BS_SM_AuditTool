@@ -24,7 +24,7 @@ const MIN = 60_000, HOUR = 3_600_000;
 /** Hits of one rule on the same subject less than this apart form one finding (DESIGN_SPEC 8.2, repeated hits). */
 const REPEAT = 15 * MIN;
 const UP: Record<Level, Level> = { low: 'medium', medium: 'high', high: 'critical', critical: 'critical' };
-const RANK: Record<Level, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+export const RANK: Record<Level, number> ={ critical: 0, high: 1, medium: 2, low: 3 };
 const abs = (v: bigint) => (v < 0n ? -v : v);
 const ratio = (a: bigint, b: bigint) => Number(a) / Number(b > 0n ? b : 1n); // ponytail: a price of 0 counts as 1 raw, like the markets' swing
 
@@ -90,7 +90,7 @@ interface State {
   kept: Map<RuleId, { key: string; list: Finding[] }>;
 }
 const states = new WeakMap<DatabaseSync, State>();
-function state(db: DatabaseSync): State {
+export function state(db: DatabaseSync): State {
   let st = states.get(db);
   if (st) return st;
   const orders = readOrders(db, {}, null).filter((o) => o.time > 0); // orders without a time cannot be placed in time
@@ -326,6 +326,11 @@ const NOT_AVAILABLE: [RuleId, string][] = [
   ['banknotes', 'The banknote count comes with milestone M3.'],
 ];
 
+/** Overlaps the time range, and under a server filter was placed there or has no server. Findings and incidents alike. */
+export const shown = (x: { start: number; end: number; servers: string[] }, scope: Scope) =>
+  (scope.from === null || x.end >= scope.from) && (scope.to === null || x.start <= scope.to)
+  && (scope.server === null || x.servers.length === 0 || x.servers.includes(scope.server));
+
 export function findings(scope: Scope, settings: RuleSettings): FindingsResult {
   const db = mainData();
   const rules: RuleStatus[] = [];
@@ -346,10 +351,7 @@ export function findings(scope: Scope, settings: RuleSettings): FindingsResult {
       let kept = st.kept.get(rule);
       if (kept?.key !== key) st.kept.set(rule, (kept = { key, list: r.run(db, s as never, st) }));
       rules.push({ rule, on: true, found: kept.list.length, notApplicable: null });
-      for (const f of kept.list) {
-        if ((scope.from === null || f.end >= scope.from) && (scope.to === null || f.start <= scope.to)
-          && (scope.server === null || f.servers.length === 0 || f.servers.includes(scope.server))) out.push(f);
-      }
+      out.push(...kept.list.filter((f) => shown(f, scope)));
     }
   }
   for (const [rule, why] of NOT_AVAILABLE) rules.push({ rule, on: false, found: null, notApplicable: why });

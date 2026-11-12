@@ -5,6 +5,7 @@ import { account, accounts, balances } from './query/accounts.ts';
 import { adminEvents } from './query/admin.ts';
 import { check } from './query/check.ts';
 import { findings } from './query/findings.ts';
+import { incidents } from './query/incidents.ts';
 import { candles, market, markets, traders } from './query/markets.ts';
 import { items, ledger, orders, player, players } from './query/players.ts';
 import { search } from './query/search.ts';
@@ -31,6 +32,7 @@ export const api: EngineApi = {
   sessions,
   check,
   findings,
+  incidents,
   adminEvents,
   selfCheck() {
     const db = new DatabaseSync(':memory:');

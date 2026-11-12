@@ -1,9 +1,12 @@
 <script lang="ts">
   // The time range and the server filter of the top bar. Both set app.scope, which every screen passes to its questions.
+  import { DEFAULT_RULES, type Incident } from '../../shared/api.ts';
   import { time } from '../../shared/fmt.ts';
+  import { incidentTitle } from '../../shared/incident.ts';
   import Icon from './Icon.svelte';
   import { ICON } from './nav.ts';
-  import { app, newest, setRange, type Range } from './state.svelte.ts';
+  import { app, engine, newest, setRange, type Range } from './state.svelte.ts';
+  import { words } from './words.ts';
 
   let rangeMenu = $state<HTMLElement>();
   let serverMenu = $state<HTMLElement>();
@@ -21,6 +24,7 @@
     const { from, to } = app.scope;
     if (app.range === 'day') return 'Last 24 hours';
     if (app.range === 'week') return 'Last 7 days';
+    if (app.range === 'incident') return 'The incident';
     // Within one year the year is left out, as on the canvas: 3 Nov, 00:00 to 5 Nov, 18:25
     if (from !== null && to !== null) return new Date(from).getFullYear() === new Date(to).getFullYear()
       ? `${short(from).replace(/ \d{4},/, ',')} to ${short(to).replace(/ \d{4},/, ',')}` : `${short(from)} to ${short(to)}`;
@@ -31,8 +35,21 @@
   const end = $derived(newest());
   const CHOICES: [Range, string][] = [['all', 'Everything'], ['day', 'Last 24 hours'], ['week', 'Last 7 days']];
 
+  // The strongest incident over all the data of the filtered server (highest level, then largest profit).
+  // ponytail: the default rules until the rule settings have a screen (Findings, detection rules).
+  let strongest = $state<{ incident: Incident; title: string } | null>(null);
+  $effect(() => {
+    const server = app.scope.server;
+    void app.saves;
+    void Promise.all([engine.incidents({ from: null, to: null, server }, DEFAULT_RULES), engine.items()]).then(([r, i]) => {
+      const top = r.incidents[0];
+      strongest = top ? { incident: top, title: incidentTitle(top, words(new Map(i.map((x) => [x.id, x]))).itemName) } : null;
+    });
+  });
+
   function choose(r: Range) {
-    setRange(r);
+    if (r === 'incident' && strongest) setRange(r, strongest.incident.start - 30 * MIN, strongest.incident.end + 30 * MIN);
+    else setRange(r);
     rangeMenu?.hidePopover();
   }
   function opened(e: ToggleEvent) {
@@ -59,6 +76,9 @@
   {#each CHOICES as [r, text] (r)}
     <button type="button" class="choice" aria-pressed={app.range === r} disabled={r !== 'all' && end === null} onclick={() => choose(r)}>{text}</button>
   {/each}
+  {#if strongest}
+    <button type="button" class="choice stack" aria-pressed={app.range === 'incident'} onclick={() => choose('incident')}>The incident<span class="small">{strongest.title}</span></button>
+  {/if}
   <p class="small note">{end === null ? 'No data loaded yet.' : `"Last" counts back from the newest data in the saves, ${short(end)}, not from today.`}</p>
   <form onsubmit={custom}>
     <label>From <input type="datetime-local" bind:value={fromText} /></label>
@@ -84,6 +104,7 @@
   .menu { position-area: bottom span-left; inset: auto; margin: 6px 0 0; width: 300px; padding: 8px; box-sizing: border-box; border-radius: 12px;
     background: var(--card); color: var(--text); border: 1px solid var(--line2); box-shadow: 0 12px 32px rgb(0 0 0 / 0.35); }
   .choice { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: none; text-align: left; font-weight: 500; }
+  .stack { flex-direction: column; align-items: flex-start; gap: 2px; }
   .choice:hover:not(:disabled), .choice[aria-pressed='true'] { background: var(--raised); }
   .note { margin: 8px 10px; }
   form { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 12px 10px 4px; border-top: 1px solid var(--line); }

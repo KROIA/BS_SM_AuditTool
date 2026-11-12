@@ -41,7 +41,8 @@ export const app = $state({
   loading: null as Progress | null,
 });
 
-export type Range = 'all' | 'day' | 'week' | 'custom';
+/** incident: the strongest incident's span, padded by 30 minutes on each side. */
+export type Range = 'all' | 'day' | 'week' | 'incident' | 'custom';
 const DAY = 86_400_000;
 
 /** The newest time any table of the loaded saves reaches: "the last 24 hours" count back from here, not from today. */
@@ -50,7 +51,7 @@ export function newest(): number | null {
   return Math.max(0, ...ends) || null;
 }
 
-/** Sets the time range of the whole tool. from and to are only used for 'custom'. */
+/** Sets the time range of the whole tool. from and to are only used for 'custom' and 'incident'. */
 export function setRange(range: Range, from: number | null = null, to: number | null = null) {
   const end = newest();
   if ((range === 'day' || range === 'week') && end !== null) [from, to] = [end - (range === 'day' ? DAY : 7 * DAY), null];

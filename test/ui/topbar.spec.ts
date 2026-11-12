@@ -50,6 +50,21 @@ test('the time range changes the figures, and "last" counts back from the newest
   await expect(page.locator('.fvalue').nth(1)).toHaveText('60');
 });
 
+test('"The incident" sets the range to the strongest incident, 30 minutes on each side', async () => {
+  await page.getByRole('button', { name: 'Time range: Everything' }).click();
+  const choice = rangeMenu().getByRole('button', { name: /^The incident/ });
+  await expect(choice).toContainText('Tavrik on the diamond market');
+  await page.screenshot({ path: 'test-results/topbar-incident-dark.png' });
+  await choice.click();
+  await expect(rangeMenu()).toBeHidden();
+  await page.getByRole('button', { name: 'Time range: The incident' }).click();
+  await expect(rangeMenu().getByLabel('From')).toHaveValue(local(T0 - 30 * MIN)); // the incident runs from T0 to the end of that hour
+  await expect(rangeMenu().getByLabel('To')).toHaveValue(local(T0 + 89 * MIN)); // its last millisecond, plus 30 minutes, to the minute
+  await expect(choice).toHaveAttribute('aria-pressed', 'true');
+  await rangeMenu().getByRole('button', { name: 'Everything', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Time range: Everything' })).toBeVisible();
+});
+
 test('the server filter hides the orders placed elsewhere and says what it does not filter', async () => {
   await page.getByRole('button', { name: 'Server: all servers' }).click();
   await expect(page.locator('#server-menu')).toContainText('Bank and market data exist only once, on the master.');

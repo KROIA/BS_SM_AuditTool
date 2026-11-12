@@ -365,6 +365,35 @@ export interface FindingsResult {
   bankSettings: Record<string, number | boolean>;
 }
 
+/**
+ * Findings that belong together (DESIGN_SPEC 8.5): they share a player or a market and lie less than 30 minutes apart,
+ * also through other findings. Its title and sentence are made from these figures (shared/incident.ts).
+ */
+export interface Incident {
+  /** The id of its earliest finding. */
+  id: string;
+  /** The highest of its findings. */
+  level: Level;
+  start: number;
+  end: number;
+  /** Of its findings, plus the owner of each personal account they name. Sorted by name. */
+  players: { uuid: string; name: string }[];
+  markets: number[];
+  accounts: number[];
+  servers: string[];
+  /** Its findings' ids, oldest first. */
+  findings: string[];
+  /** Realised profit of its players on its markets within its span, raw money. */
+  profit: bigint;
+}
+
+export interface IncidentsResult {
+  /** Strongest first: highest level, then largest profit. */
+  incidents: Incident[];
+  /** Findings not in an incident with another finding, sorted like findings(). */
+  others: Finding[];
+}
+
 export interface SearchResult {
   players: { uuid: string; name: string }[];
   accounts: { number: number; name: string }[];
@@ -414,6 +443,8 @@ export interface QueryApi {
    * Sorted by level, highest first, then by time.
    */
   findings(scope: Scope, settings: RuleSettings): FindingsResult;
+  /** Findings grouped over all loaded data; returns the incidents and lone findings that findings() would show for the scope. */
+  incidents(scope: Scope, settings: RuleSettings): IncidentsResult;
   /** Admin actions and admin changes from the bank's audit log in the time range, oldest first. Empty without an audit log. */
   adminEvents(scope: Scope): AdminEvent[];
 }
@@ -442,7 +473,7 @@ export interface AdminEvent {
   ledgerId: number | null;
 }
 
-export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'adminEvents'> {
+export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
   addSave(path: string): Workspace;
