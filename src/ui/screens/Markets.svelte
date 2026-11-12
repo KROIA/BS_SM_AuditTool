@@ -1,10 +1,10 @@
 <script lang="ts">
   // Markets: what happened to this price, and who did it? A list on the left, the picked market on the right.
-  // "What stands out" comes with M2 (AT-24), "Use as time range" with the time range of the top bar.
+  // "What stands out" comes with M2.
   import type { Candle, ItemRow, MarketFacts, MarketRow, OrderRow, Scope, Trader } from '../../shared/api.ts';
   import { amount, count, countShort, items as quantity, money, moneyShort } from '../../shared/fmt.ts';
   import CandleChart from '../app/CandleChart.svelte';
-  import { app, engine } from '../app/state.svelte.ts';
+  import { app, engine, setRange } from '../app/state.svelte.ts';
   import { tone, words } from '../app/words.ts';
 
   let { selected }: { selected: number | null } = $props();
@@ -55,6 +55,7 @@
     void Promise.all([engine.market(i, scope), engine.traders(i, scope)]).then(([f, t]) => {
       if (stale) return;
       if (loadedFor !== i) [picked, range, trader, chart] = [null, null, null, null];
+      else range = null; // a new time range of the tool replaces the zoom
       [facts, traders, loadedFor] = [f, t, i];
     });
     return () => (stale = true);
@@ -95,6 +96,13 @@
   }
   function wholeRange() {
     [range, picked] = [null, null];
+  }
+  /** The span on screen becomes the time range of the whole tool. */
+  function useAsRange() {
+    const v = view ?? range;
+    if (!v) return;
+    [range, picked] = [null, null];
+    setRange('custom', v.from, v.to);
   }
 
   // From 100x on, decimals add nothing: 5'515'856x, not 5'515'856.00x.
@@ -208,6 +216,7 @@
             <button type="button" aria-pressed={!log} onclick={() => (log = false)}>Linear</button>
           </div>
           <button type="button" class="toggle" aria-pressed={showUsual} onclick={() => (showUsual = !showUsual)}><span aria-hidden="true" class="dash"></span>Usual price</button>
+          {#if view ?? range}<button type="button" class="link" onclick={useAsRange}>Use as time range</button>{/if}
           {#if range}<button type="button" class="link" onclick={wholeRange}>Show the whole time range</button>{/if}
         </div>
         {#if !chart}

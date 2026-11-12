@@ -4,6 +4,7 @@ import type { EngineApi } from '../shared/api.ts';
 import { account, accounts, balances } from './query/accounts.ts';
 import { candles, market, markets, traders } from './query/markets.ts';
 import { items, ledger, orders, player, players } from './query/players.ts';
+import { search } from './query/search.ts';
 import { addSave, removeSave, workspace } from './workspace.ts';
 
 export const api: EngineApi = {
@@ -22,6 +23,7 @@ export const api: EngineApi = {
   market,
   candles,
   traders,
+  search,
   selfCheck() {
     const db = new DatabaseSync(':memory:');
     try {

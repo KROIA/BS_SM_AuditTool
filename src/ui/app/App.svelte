@@ -8,6 +8,8 @@
   import Soon from '../screens/Soon.svelte';
   import Icon from './Icon.svelte';
   import { ICON, SCREENS } from './nav.ts';
+  import ScopeMenus from './ScopeMenus.svelte';
+  import Search from './Search.svelte';
   import { app, start, toggleTheme } from './state.svelte.ts';
 
   // An address is the screen and, for a player, an account or a market, what it shows: #/players/<uuid>
@@ -37,19 +39,18 @@
 
   <div class="right">
     <header>
-      <!-- Search, time range, server filter and the case arrive with milestone M1; until then they are switched off. -->
-      <label class="search">
-        <Icon d={ICON.search} />
-        <input aria-label="Search everything" placeholder="Search players, accounts, items, order or transfer ids" disabled />
-      </label>
+      <Search />
       <div style="flex: 1 1 0"></div>
-      <button type="button" class="btn" disabled><span style="color: var(--text3); display: flex"><Icon d={ICON.clock} /></span><span>Everything</span></button>
-      <button type="button" class="btn" disabled><span style="color: var(--text3); display: flex"><Icon d={ICON.servers} /></span><span>All servers</span></button>
+      <ScopeMenus />
+      <!-- The case arrives with milestone M4; until then it is switched off. -->
       <button type="button" class="btn" disabled><span style="color: var(--text3); display: flex"><Icon d={ICON.pin} /></span><span>Case</span><span style="color: var(--text3)">0 pinned</span></button>
       <button type="button" class="btn" style="width: 40px; padding: 0; justify-content: center" onclick={toggleTheme} aria-label={app.theme === 'dark' ? 'Switch to the light theme' : 'Switch to the dark theme'}>
         <Icon d={app.theme === 'dark' ? ICON.sun : ICON.moon} />
       </button>
     </header>
+    {#if app.scope.server !== null}
+      <p class="scopenote">Only orders placed on {app.scope.server} are counted: bank and market data exist only once, on the master, and orders whose server the save does not record (saves of version 2.1.2, inter-market legs) are left out.</p>
+    {/if}
 
     <main>
       <div class="page" class:flush={screen.id === 'players' || screen.id === 'accounts' || screen.id === 'markets'}>
@@ -77,8 +78,7 @@
   .readonly { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--up); }
   .right { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
   header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 32px; border-bottom: 1px solid var(--line); }
-  .search { flex: 1 1 280px; max-width: 460px; display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; box-sizing: border-box; border-radius: 10px; background: var(--card); border: 1px solid var(--line); color: var(--text3); }
-  .search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text); }
+  .scopenote { margin: 0; padding: 10px 32px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--text2); background: var(--card); }
   main { flex: 1 1 0; min-height: 0; overflow-y: auto; }
   .page { display: flex; flex-direction: column; gap: 24px; padding: 28px 32px 40px; }
   .page.flush { display: block; height: 100%; padding: 0; } /* a screen with its own list on the left lays itself out */

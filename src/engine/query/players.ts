@@ -12,9 +12,11 @@ const inTime = (ms: number, s: Scope) => (s.from === null || ms >= s.from) && (s
 const TYPE = ['market', 'limit', 'intermarket'] as const;
 
 /** Orders up to `to`, oldest first; the time range's start and the server filter are left to the caller. */
-export function readOrders(db: DatabaseSync, filter: { player?: string; item?: number }, to: number | null): OrderRow[] {
+export function readOrders(db: DatabaseSync, filter: { player?: string; item?: number; orderId?: number }, to: number | null): OrderRow[] {
   const where = ['1'];
   const params: Record<string, SQLInputValue> = {};
+  // An order's id is the mod's order_id; old rows have none and go by their row id.
+  if (filter.orderId !== undefined) (where.push('(o.order_id = :oid OR (o.order_id IS NULL AND o.id = :oid))'), (params.oid = filter.orderId));
   if (filter.player !== undefined) (where.push('o.player = :player'), (params.player = filter.player));
   if (filter.item !== undefined) (where.push('o.item = :item'), (params.item = filter.item));
   if (to !== null) (where.push('o.time <= :to'), (params.to = to));

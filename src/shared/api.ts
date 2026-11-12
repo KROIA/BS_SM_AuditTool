@@ -243,9 +243,8 @@ export interface SearchResult {
   players: { uuid: string; name: string }[];
   accounts: { number: number; name: string }[];
   items: ItemRow[];
-  orders: OrderRow[];
-  /** Transfer ids found in the ledger's ref or a slave's journal. */
-  transfers: string[];
+  /** With the name of the player who placed it. Transfer ids are not searched until they have a screen (M4). */
+  orders: (OrderRow & { name: string })[];
 }
 
 /**
@@ -278,7 +277,7 @@ export interface QueryApi {
   search(text: string): SearchResult;
 }
 
-export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders'> {
+export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
   addSave(path: string): Workspace;

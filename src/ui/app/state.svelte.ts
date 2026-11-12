@@ -34,10 +34,30 @@ export const app = $state({
   queue: [] as string[],
   /** The time range and server filter of the top bar. Every screen passes it to its questions. */
   scope: { from: null, to: null, server: null } as Scope,
+  /** Which choice of the time range menu made scope.from and scope.to. */
+  range: 'all' as Range,
   /** True while the engine reads a save; `loading` then says how far it is. */
   busy: false,
   loading: null as Progress | null,
 });
+
+export type Range = 'all' | 'day' | 'week' | 'custom';
+const DAY = 86_400_000;
+
+/** The newest time any table of the loaded saves reaches: "the last 24 hours" count back from here, not from today. */
+export function newest(): number | null {
+  const ends = app.saves.flatMap((s) => s.sources.flatMap((x) => x.tables.map((t) => t.to ?? 0)));
+  return Math.max(0, ...ends) || null;
+}
+
+/** Sets the time range of the whole tool. from and to are only used for 'custom'. */
+export function setRange(range: Range, from: number | null = null, to: number | null = null) {
+  const end = newest();
+  if ((range === 'day' || range === 'week') && end !== null) [from, to] = [end - (range === 'day' ? DAY : 7 * DAY), null];
+  if (range === 'all') [from, to] = [null, null];
+  app.range = range;
+  app.scope = { ...app.scope, from, to };
+}
 
 addEventListener('hashchange', () => (app.route = routeFromHash()));
 bridge.onProgress((p) => (app.loading = p));
@@ -58,6 +78,9 @@ async function run(call: () => Promise<Workspace>) {
     const w = await call();
     app.saves = w.saves;
     app.warnings = w.warnings;
+    // Other saves move "the last 24 hours", and a server whose save is gone cannot be filtered for.
+    if (app.range === 'day' || app.range === 'week') setRange(app.range);
+    if (app.scope.server !== null && !app.saves.some((s) => s.name === app.scope.server)) app.scope = { ...app.scope, server: null };
   } catch (e) {
     // Electron wraps the engine's sentence in its own; show only the engine's.
     app.errors.push((e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']*': (Error: )?/, ''));
