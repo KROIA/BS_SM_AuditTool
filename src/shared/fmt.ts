@@ -48,14 +48,14 @@ export function moneyShort(raw: bigint): string {
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const two = (n: number) => String(n).padStart(2, '0');
 
-/** A moment (epoch ms): 4 Nov 2026, 10:21:07. In the computer's time zone unless utc is set. */
-export function time(ms: number, utc = false): string {
+/** A moment (epoch ms): 4 Nov 2026, 10:21:07, or 10:21:07.412 with millis (orders placed by a script are milliseconds apart). In the computer's time zone unless utc is set. */
+export function time(ms: number, utc = false, millis = false): string {
   const d = new Date(ms);
   if (Number.isNaN(d.getTime())) return 'unknown time';
   const [day, month, year, h, m, s] = utc
     ? [d.getUTCDate(), d.getUTCMonth(), d.getUTCFullYear(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()]
     : [d.getDate(), d.getMonth(), d.getFullYear(), d.getHours(), d.getMinutes(), d.getSeconds()];
-  return `${day} ${MONTHS[month]} ${year}, ${two(h)}:${two(m)}:${two(s)}`;
+  return `${day} ${MONTHS[month]} ${year}, ${two(h)}:${two(m)}:${two(s)}` + (millis ? '.' + String(d.getMilliseconds()).padStart(3, '0') : '');
 }
 
 /** A file size: 736100352 -> 702 MB */

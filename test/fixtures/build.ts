@@ -225,7 +225,8 @@ function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers
 
   const start = T0 - 24 * 60 * MIN;
   const starts: [number, Name, bigint][] = [
-    ...Object.entries(PLAYERS).map(([name, p]): [number, Name, bigint] => [p.account, name as Name, 10_000_000n]),
+    // Tavrik starts with enough for the pump's buys ($440k): a balance below zero is impossible in the bank.
+    ...Object.entries(PLAYERS).map(([name, p]): [number, Name, bigint] => [p.account, name as Name, name === 'Tavrik' ? 50_000_000n : 10_000_000n]),
     [SHARED.account, 'Tavrik', SHARED.start], [COMPANY.account, COMPANY.founder, COMPANY.start],
   ];
   for (const [account, by, amount] of starts) {
@@ -256,10 +257,12 @@ function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers
         { type_code: code, source_kind: source, balance_after: after });
     } });
   // Banknotes out at the top of the pump, in again through another player, and an admin taking money back.
-  simple('Tavrik', 'Tavrik', 50, 'WITHDRAW', 2, -400_000_000n, 'PLAYER');
-  simple('Tavrik', 'Tavrik', 51, 'WITHDRAW', 2, -400_000_000n, 'PLAYER');
+  simple('Tavrik', 'Tavrik', 50, 'WITHDRAW', 2, -200_000_000n, 'PLAYER');
+  simple('Tavrik', 'Tavrik', 51, 'WITHDRAW', 2, -200_000_000n, 'PLAYER');
   simple('Ombrelune', 'Ombrelune', 70, 'DEPOSIT', 1, 300_000_000n, 'PLAYER');
-  simple('Quenby', 'AdmiralNoor', 120, 'ADMIN_REMOVE', 9, -50_000_000n, 'ADMIN', { note: 'exploit profit removed' });
+  simple('Quenby', 'AdmiralNoor', 120, 'ADMIN_REMOVE', 9, -20_000_000n, 'ADMIN', { note: 'exploit profit removed' });
+  // An admin sets a balance: the row stores |new - old|, the direction is only in the note.
+  simple('AdmiralNoor', 'AdmiralNoor', 125, 'ADMIN_SET', 7, -2_500_000n, 'ADMIN', { note: 'money set AdmiralNoor: 10000000->7500000' });
   // A transfer between two accounts: one signed row on each side. Left out of the old save: how 2.1.2 logged transfers is not verified.
   if (!legacy) events.push({ ts: T0 + 55 * MIN, run: () => {
     const ts = T0 + 55 * MIN, from = PLAYERS.Tavrik.account, to = PLAYERS.Ombrelune.account, amount = 100_000_000n;

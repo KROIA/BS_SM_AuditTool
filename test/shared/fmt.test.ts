@@ -40,6 +40,7 @@ test('time and file size', () => {
   assert.equal(time(Date.UTC(2026, 10, 4, 10, 21, 7), true), '4 Nov 2026, 10:21:07');
   assert.equal(time(Date.UTC(2026, 8, 30, 0, 0, 0), true), '30 Sep 2026, 00:00:00');
   assert.equal(time(Number.NaN), 'unknown time');
+  assert.equal(time(Date.UTC(2026, 10, 4, 10, 21, 7, 41), true, true), '4 Nov 2026, 10:21:07.041');
   assert.equal(bytes(736_100_352), '702 MB');
   assert.equal(bytes(1_252_000_000), "1'194 MB");
   assert.equal(bytes(2048), '2 KB');

@@ -5,11 +5,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { SaveSource, SaveSummary, SaveTable } from '../../shared/api.ts';
-import { readFiles } from './files.ts';
+import { readFiles, readUserCache } from './files.ts';
 import { findDataDir, readIdentity, readLevel } from './locate.ts';
 
 /** Raise when the layout of the cache changes: caches written by an older version are rebuilt. */
-export const CACHE_VERSION = 3;
+export const CACHE_VERSION = 4;
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -86,7 +86,7 @@ const SOURCE_IDS = Object.keys(FILES) as SaveSource['id'][];
 // A database's -wal and -journal hold changes its main file does not show yet; the NBT folders and level.dat feed the summary too.
 const FINGERPRINT_FILES = [
   ...Object.values(FILES).flatMap((f) => [f, f + '-wal', f + '-journal']),
-  'ModUtilities/server_identity.json', 'BankSystem/ItemIDs.nbt', 'BankSystem/Meta_data.nbt', '../level.dat',
+  'ModUtilities/server_identity.json', 'BankSystem/ItemIDs.nbt', 'BankSystem/Meta_data.nbt', '../level.dat', '../../usercache.json',
 ];
 const FINGERPRINT_DIRS = ['BankSystem/Bank_data', 'BankSystem/Companies', 'StockMarket/MarketManager'];
 const CHUNK = 200_000; // ids per insert; a failing insert is halved until the damage is fenced in
@@ -273,8 +273,16 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
       const st = db.prepare(`INSERT OR REPLACE INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
       for (const r of rows) st.run(...Object.values(r));
     };
+    // Names the mods' files lack come from the server's usercache.json, for players that traded or acted (not every visitor).
+    const cache = readUserCache(dataDir);
+    const listed = new Set(files.players.map((p) => p.uuid));
+    const active = (db.prepare('SELECT player AS u FROM orders UNION SELECT actor FROM ledger WHERE actor IS NOT NULL').all() as { u: string }[]).map((r) => r.u);
+    const players = [
+      ...files.players.map((p) => ({ uuid: p.uuid, name: p.name || cache.get(p.uuid) || '', bank_admin: +p.bankAdmin, market_admin: +p.marketAdmin })),
+      ...active.filter((u) => !listed.has(u) && cache.has(u)).map((u) => ({ uuid: u, name: cache.get(u)!, bank_admin: 0, market_admin: 0 })),
+    ];
     db.exec('BEGIN');
-    add('player', files.players.map((p) => ({ uuid: p.uuid, name: p.name, bank_admin: +p.bankAdmin, market_admin: +p.marketAdmin })));
+    add('player', players);
     add('account', files.accounts.map((a) => ({ number: a.number, name: a.name, frozen: +a.frozen, created_ms: a.createdMs, owner: a.owner, company: a.company })));
     add('account_user', files.accounts.flatMap((a) => a.users.map((u) => ({ account: a.number, uuid: u.uuid, permissions: u.permissions }))));
     add('balance', files.accounts.flatMap((a) => a.balances.map((b) => ({ account: a.number, item: b.item, balance: b.balance, locked: b.locked }))));

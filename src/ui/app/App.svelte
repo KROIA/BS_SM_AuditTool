@@ -1,13 +1,16 @@
 <script lang="ts">
   // The frame around every screen: left menu, top bar, and the screen itself.
   import { count } from '../../shared/fmt.ts';
+  import Players from '../screens/Players.svelte';
   import Saves from '../screens/Saves.svelte';
   import Soon from '../screens/Soon.svelte';
   import Icon from './Icon.svelte';
   import { ICON, SCREENS } from './nav.ts';
   import { app, start, toggleTheme } from './state.svelte.ts';
 
-  const screen = $derived(SCREENS.find((s) => s.id === app.route) ?? SCREENS.find((s) => s.id === 'saves')!);
+  // An address is the screen and, for a player or an account, what it shows: #/players/<uuid>
+  const route = $derived(app.route.split('/'));
+  const screen = $derived(SCREENS.find((s) => s.id === route[0]) ?? SCREENS.find((s) => s.id === 'saves')!);
   const savesLine = $derived(app.saves.length === 0 ? 'No save loaded' : app.saves.length === 1 ? '1 save loaded' : count(app.saves.length) + ' saves loaded');
 
   void start();
@@ -47,9 +50,11 @@
     </header>
 
     <main>
-      <div class="page">
+      <div class="page" class:flush={screen.id === 'players'}>
         {#if screen.id === 'saves'}
           <Saves />
+        {:else if screen.id === 'players'}
+          <Players selected={route[1] ? decodeURIComponent(route[1]) : null} />
         {:else}
           <Soon {screen} />
         {/if}
@@ -70,4 +75,5 @@
   .search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text); }
   main { flex: 1 1 0; min-height: 0; overflow-y: auto; }
   .page { display: flex; flex-direction: column; gap: 24px; padding: 28px 32px 40px; }
+  .page.flush { display: block; height: 100%; padding: 0; } /* a screen with its own list on the left lays itself out */
 </style>

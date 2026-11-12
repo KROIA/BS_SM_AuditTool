@@ -5,6 +5,27 @@ import path from 'node:path';
 import { readSmallFile } from './locate.ts';
 import { big, compound, flag, isCompound, list, num, readNbt, str, uuidFromInts, type Nbt, type NbtCompound } from './nbt.ts';
 
+/**
+ * The server's usercache.json, which sits beside the world folder when the server folder was copied: uuid -> name.
+ * The third source of names (DESIGN_SPEC 8.1) for players the mods' files do not name. Malformed entries are skipped.
+ */
+export function readUserCache(dataDir: string): Map<string, string> {
+  const out = new Map<string, string>();
+  try {
+    const file = readSmallFile(path.join(dataDir, '..', '..', 'usercache.json'));
+    const entries: unknown = file ? JSON.parse(file.toString('utf8')) : [];
+    for (const e of Array.isArray(entries) ? entries : []) {
+      const { uuid, name } = (e ?? {}) as { uuid?: unknown; name?: unknown };
+      if (typeof uuid === 'string' && typeof name === 'string' && /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(uuid) && /^\w{1,32}$/.test(name)) {
+        out.set(uuid.toLowerCase(), name);
+      }
+    }
+  } catch {
+    // unreadable: no names from it
+  }
+  return out;
+}
+
 /** All elements of a chunked list: <dir>/chunk_<i>.nbt in number order, or <dir>.old when <dir> is missing. */
 export function readChunks(dir: string): Nbt[] {
   const folder = fs.existsSync(dir) ? dir : dir + '.old';

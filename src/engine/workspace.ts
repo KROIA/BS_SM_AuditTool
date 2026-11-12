@@ -113,6 +113,9 @@ export function removeSave(picked: string): Workspace {
   return state();
 }
 
+/** The name of the save with the bank and market data: where an order without a slave name was placed. */
+export const mainName = (): string | null => mainSave()?.name ?? null;
+
 /** The cache database of the save with the bank and market data, opened read-only; null when none is loaded. */
 export function mainData(): DatabaseSync | null {
   const main = mainSave();

@@ -155,6 +155,21 @@ test('player UUIDs: the order table keeps them as lower-case text that joins wit
   assert.equal(query(cache, "SELECT count(*) AS n FROM orders o JOIN ledger l ON l.ref = 'sm:order:' || o.order_id AND l.actor = o.player")[0]!.n, 86n);
 });
 
+test("names the mods' files lack come from the server's usercache.json, for players that traded or acted only", () => {
+  const server = path.join(fx.root, 'named-server'), world = path.join(server, 'world');
+  fs.cpSync(fx.master, world, { recursive: true });
+  for (const users of ['BankSystem/Bank_data/users', 'StockMarket/MarketManager/users']) fs.rmSync(path.join(world, 'data', users), { recursive: true });
+  const nobody = '00000000-0000-4000-8000-0000000000ff';
+  fs.writeFileSync(path.join(server, 'usercache.json'), JSON.stringify([
+    { name: 'Tavrik', uuid: uuidText(PLAYERS.Tavrik.n).toUpperCase(), expiresOn: '2026-12-01 10:00:00 +0000' },
+    { name: 'Nobody', uuid: nobody }, // never traded or acted: not a player of this case
+    { name: '<script>', uuid: uuidText(PLAYERS.Quenby.n) }, // not a Minecraft name: skipped
+    'junk',
+  ]));
+  const { cache } = load(world);
+  assert.deepEqual(query(cache, 'SELECT uuid, name FROM player'), [{ uuid: uuidText(PLAYERS.Tavrik.n), name: 'Tavrik' }]);
+});
+
 test('importing leaves every file of a save untouched and adds none', () => {
   const before = [fx.master, fx.legacy, fx.slaves[1]!].map(listing);
   load(fx.master);
