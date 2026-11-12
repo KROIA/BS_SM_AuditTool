@@ -1,0 +1,10 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+# real saves, reports and workspaces: never committed
+local/
+*.audit/
+# agent files (Claude Code): never committed
+.claude/
+CLAUDE.md

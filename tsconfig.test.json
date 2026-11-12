@@ -1,0 +1,10 @@
+{
+  "//": "Type check of the Node side together with its tests. Tests run straight from the .ts files (node --test).",
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "types": ["node", "@playwright/test"]
+  },
+  "include": ["src/shared", "src/engine", "src/main", "test", "playwright.config.ts"]
+}

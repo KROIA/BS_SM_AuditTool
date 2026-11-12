@@ -1,0 +1,50 @@
+/* Colours, type and the few shared shapes, taken from the design canvas. Dark is the default theme. */
+@import '@fontsource-variable/inter/index.css';
+@import '@fontsource-variable/space-grotesk/index.css';
+@import '@fontsource-variable/jetbrains-mono/index.css';
+
+.app {
+  --bg: #0e1013; --rail: #0a0c0f; --card: #15181d; --raised: #1d2128; --line: #272c35; --line2: #39404c;
+  --text: #eceef1; --text2: #aab1bc; --text3: #8a929e; --accent: #8fa2ff; --onaccent: #0e1013;
+  --up: #4fd1b5; --down: #f2686f; --crit: #ff6b6b; --high: #ffa94d; --med: #ffd43b; --low: #74a8ff;
+  --buy: #6ea8ff; --sell: #ffa94d;
+  --font: 'Inter Variable', system-ui, sans-serif;
+  --font-head: 'Space Grotesk Variable', 'Inter Variable', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+  color-scheme: dark;
+}
+.app[data-theme='light'] {
+  --bg: #f5f6f8; --rail: #eceef1; --card: #ffffff; --raised: #eff1f4; --line: #e1e4e9; --line2: #c8cdd5;
+  --text: #14171c; --text2: #48505b; --text3: #5d6570; --accent: #3b5bdb; --onaccent: #ffffff;
+  --up: #0b7a64; --down: #c92a3a; --crit: #c92a2a; --high: #b85c00; --med: #8a6d00; --low: #2b5fc7;
+  --buy: #2b5fc7; --sell: #b85c00;
+  color-scheme: light;
+}
+
+body { margin: 0; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:disabled { cursor: default; opacity: 0.55; }
+input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The window never scrolls as a whole: the left menu stays put and only the screen on the right scrolls. */
+.app {
+  height: 100vh; display: flex; overflow: hidden;
+  background: var(--bg); color: var(--text);
+  font-family: var(--font); font-size: 14px; line-height: 20px;
+}
+
+/* Left menu entry */
+.nav { display: flex; align-items: center; gap: 12px; height: 40px; padding: 0 12px; border-radius: 8px; color: var(--text2); font-weight: 500; }
+.nav:hover, .nav[aria-current='page'] { background: var(--raised); color: var(--text); }
+
+/* Shared shapes */
+.h1 { margin: 0; font-family: var(--font-head); font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em; }
+.h2 { margin: 0; font-family: var(--font-head); font-size: 18px; line-height: 26px; font-weight: 600; }
+.sub { margin: 4px 0 0; color: var(--text2); }
+.small { font-size: 13px; color: var(--text3); }
+.card { padding: 24px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
+.btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; box-sizing: border-box; border-radius: 10px; border: 1px solid var(--line); background: var(--card); }
+.btn:hover:not(:disabled), .row:hover { background: var(--raised); }
+.icon { flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }

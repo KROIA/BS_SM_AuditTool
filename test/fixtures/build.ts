@@ -1,0 +1,344 @@
+// Builds invented saves for the tests: a current network (one master, two slaves) and one old 2.1.2 save.
+// Names, ids and amounts are made up (DESIGN_SPEC rule 12); the shape follows the scenario of the design canvas:
+// two players push a market price up with rapid orders and sell into it.
+//
+// The table definitions are copied from the mods (BankSystem 3835d933, StockMarket 898aac66):
+// common/src/main/resources/sql/*.sql, BankSystem data/DiagnosticsDatabase.java, StockMarket data/OrderOriginLog.java.
+// NBT files (accounts, item names, player files) are not written yet; they follow in M1 together with their reader.
+import fs from 'node:fs';
+import path from 'node:path';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+
+const MIN = 60_000;
+/** The first minute of the scenario: 4 Nov 2026, 10:00 UTC. */
+export const T0 = Date.UTC(2026, 10, 4, 10, 0, 0);
+const MINUTES = 160;
+
+// ponytail: item ids are picked freely. The real ids come from ItemIDs.nbt, which the fixtures get in M1.
+export const ITEM = { money: 1, diamond: 2, emerald: 3, iron: 4, gold: 5, coal: 6, redstone: 7, wheat: 8, oak: 9 } as const;
+const BASE_PRICE: Record<number, number> = { 2: 5000, 3: 3000, 4: 400, 5: 900, 6: 120, 7: 150, 8: 60, 9: 80 }; // raw money per item
+
+export const PLAYERS = {
+  Tavrik: { n: 1, account: 11 },
+  Quenby: { n: 2, account: 7 },
+  Ombrelune: { n: 3, account: 24 },
+  Mikko_82: { n: 4, account: 27 },
+  AdmiralNoor: { n: 5, account: 10 },
+  Brindle: { n: 6, account: 3 },
+} as const;
+type Name = keyof typeof PLAYERS;
+
+/** Invented UUIDs whose halves do not fit into a floating-point number, like real ones. */
+const uuidText = (n: number) => `a1b2c3d4-e5f6-4a7b-8c9d-${n.toString(16).padStart(12, '0')}`;
+const uuidHalves = (n: number): [bigint, bigint] => [BigInt.asIntN(64, 0xa1b2c3d4e5f64a7bn), BigInt.asIntN(64, 0x8c9d000000000000n + BigInt(n))];
+const MASTER_UID = 'f0000000-0000-4000-8000-000000000001';
+const SLAVES = [
+  { name: 'mining-1', uid: 'f0000000-0000-4000-8000-000000000002' },
+  { name: 'nether-hub', uid: 'f0000000-0000-4000-8000-000000000003' },
+];
+
+const SQL = {
+  orderHistory: `CREATE TABLE OrderHistory (id INTEGER PRIMARY KEY AUTOINCREMENT, itemid INTEGER NOT NULL, accountid INTEGER NOT NULL,
+    userid_one INTEGER NOT NULL, userid_two INTEGER NOT NULL, type INTEGER NOT NULL, amount INTEGER NOT NULL, price INTEGER NOT NULL,
+    time DATETIME NOT NULL, intermarket_group_one INTEGER NOT NULL DEFAULT 0, intermarket_group_two INTEGER NOT NULL DEFAULT 0, order_id INTEGER);
+    CREATE INDEX idx_itemid_userid_time ON OrderHistory (itemid, accountid)`,
+  orderHistoryLegacy: `CREATE TABLE OrderHistory (id INTEGER PRIMARY KEY AUTOINCREMENT, itemid INTEGER NOT NULL, accountid INTEGER NOT NULL,
+    userid_one INTEGER NOT NULL, userid_two INTEGER NOT NULL, type INTEGER NOT NULL, amount INTEGER NOT NULL, price INTEGER NOT NULL,
+    time DATETIME NOT NULL, intermarket_group_one INTEGER NOT NULL DEFAULT 0, intermarket_group_two INTEGER NOT NULL DEFAULT 0);
+    CREATE INDEX idx_itemid_userid_time ON OrderHistory (itemid, accountid)`,
+  marketPrice: `CREATE TABLE MarketPrice (id INTEGER PRIMARY KEY AUTOINCREMENT, marketid INTEGER NOT NULL, open INTEGER NOT NULL,
+    low INTEGER NOT NULL, high INTEGER NOT NULL, time INTEGER NOT NULL, traded_volume REAL NOT NULL DEFAULT 0, game_time INTEGER NOT NULL DEFAULT -1);
+    CREATE INDEX idx_marketprice_marketid_time ON MarketPrice (marketid, time)`,
+  marketPriceLegacy: `CREATE TABLE MarketPrice (id INTEGER PRIMARY KEY AUTOINCREMENT, marketid INTEGER NOT NULL, open INTEGER NOT NULL,
+    low INTEGER NOT NULL, high INTEGER NOT NULL, time INTEGER NOT NULL, traded_volume REAL NOT NULL DEFAULT 0);
+    CREATE INDEX idx_marketprice_marketid_time ON MarketPrice (marketid, time)`,
+  transactionLog: `CREATE TABLE TransactionLog (id INTEGER PRIMARY KEY AUTOINCREMENT, account_number INTEGER NOT NULL, actor_uuid TEXT,
+    kind TEXT NOT NULL, item_id INTEGER NOT NULL, amount INTEGER NOT NULL, other_account INTEGER, company_id INTEGER, ts INTEGER NOT NULL,
+    note TEXT, source_kind TEXT NOT NULL DEFAULT 'UNKNOWN', tag TEXT, type_code INTEGER NOT NULL DEFAULT 0, ref TEXT, money_amount INTEGER,
+    price INTEGER, currency_item INTEGER, actor_name TEXT, balance_after INTEGER, virtual_qty INTEGER);
+    CREATE INDEX idx_tx_log_account_ts ON TransactionLog (account_number, ts DESC);
+    CREATE INDEX idx_tx_log_company_ts ON TransactionLog (company_id, ts DESC)`,
+  // 2.1.2, read from the table definitions of a real save of that version. Its log only held DEPOSIT, WITHDRAW and share rows.
+  transactionLogLegacy: `CREATE TABLE TransactionLog (id INTEGER PRIMARY KEY AUTOINCREMENT, account_number INTEGER NOT NULL, actor_uuid TEXT,
+    kind TEXT NOT NULL, item_id INTEGER NOT NULL, amount INTEGER NOT NULL, other_account INTEGER, company_id INTEGER, ts INTEGER NOT NULL, note TEXT,
+    source_kind TEXT NOT NULL DEFAULT 'UNKNOWN', tag TEXT)`,
+  balanceHistory: `CREATE TABLE BalanceHistory (id INTEGER PRIMARY KEY AUTOINCREMENT, account_number INTEGER NOT NULL, item_id INTEGER NOT NULL,
+    balance INTEGER NOT NULL, locked_balance INTEGER NOT NULL, time INTEGER NOT NULL);
+    CREATE INDEX idx_balance_history ON BalanceHistory (account_number, item_id, time)`,
+  suspicionFlag: `CREATE TABLE SuspicionFlag (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, account_number INTEGER NOT NULL,
+    flag_type INTEGER NOT NULL, severity INTEGER NOT NULL DEFAULT 0, amount INTEGER NOT NULL DEFAULT 0, ref TEXT, details TEXT,
+    acknowledged INTEGER NOT NULL DEFAULT 0);
+    CREATE INDEX idx_flag_ts ON SuspicionFlag (ts DESC)`,
+  payoutHistory: `CREATE TABLE PayoutHistory (id INTEGER PRIMARY KEY AUTOINCREMENT, company_id INTEGER NOT NULL, schedule_id INTEGER NOT NULL,
+    source_account INTEGER NOT NULL, target_uuid TEXT NOT NULL, amount INTEGER NOT NULL, ts INTEGER NOT NULL, status TEXT NOT NULL,
+    target_player_name TEXT NOT NULL DEFAULT '', target_account_name TEXT NOT NULL DEFAULT '', currency_item INTEGER NOT NULL DEFAULT 0,
+    type TEXT NOT NULL DEFAULT 'NORMAL')`,
+  meta: `CREATE TABLE Meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
+  transferJournal: `CREATE TABLE TransferJournal (id INTEGER PRIMARY KEY AUTOINCREMENT, transfer_id TEXT NOT NULL, ts INTEGER NOT NULL,
+    direction TEXT, path TEXT, step TEXT NOT NULL, account_number INTEGER, player_uuid TEXT, items_json TEXT, ledger_type INTEGER,
+    context TEXT, detail TEXT);
+    CREATE INDEX TransferJournal_tid ON TransferJournal(transfer_id)`,
+  noteFlow: `CREATE TABLE NoteFlow (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, source TEXT NOT NULL, player_uuid TEXT,
+    item_id INTEGER NOT NULL, amount INTEGER NOT NULL, context TEXT, villager_uuid TEXT, dimension TEXT, x INTEGER, y INTEGER, z INTEGER)`,
+  orderOrigin: `CREATE TABLE OrderOrigin (ref TEXT PRIMARY KEY, origin_server_uid TEXT, origin_name TEXT NOT NULL)`,
+};
+
+/** Creates a database file, runs the definitions, and hands out one function that inserts a row. */
+function database(file: string, definitions: string[], wal = false) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const db = new DatabaseSync(file);
+  if (wal) db.exec('PRAGMA journal_mode = WAL'); // the mods' diagnostics files are in this mode
+  for (const d of definitions) db.exec(d);
+  db.exec('BEGIN');
+  const counts: Record<string, number> = {};
+  return {
+    insert(table: string, row: Record<string, SQLInputValue>) {
+      const cols = Object.keys(row);
+      db.prepare(`INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`).run(...Object.values(row));
+      counts[table] = (counts[table] ?? 0) + 1;
+    },
+    close() {
+      db.exec('COMMIT');
+      db.close();
+      return counts;
+    },
+  };
+}
+
+/** Small repeatable random numbers, so every build gives the same saves. */
+function random(seed: number) {
+  let s = seed >>> 0;
+  return () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 2 ** 32;
+}
+
+/** One price per market and minute. Diamond is pushed to 40 times its price and falls back; emerald to 12 times. */
+function prices(): Map<number, number[]> {
+  const out = new Map<number, number[]>();
+  for (const [id, base] of Object.entries(BASE_PRICE)) {
+    const rnd = random(Number(id));
+    const list: number[] = [];
+    let p = base;
+    for (let m = 0; m <= MINUTES; m++) {
+      p = Math.max(1, Math.round(p * (1 + (rnd() - 0.5) * 0.02)));
+      const push = Number(id) === ITEM.diamond ? bump(m, 20, 40, 60, 40) : Number(id) === ITEM.emerald ? bump(m, 45, 60, 80, 12) : 1;
+      list.push(Math.round(p * push));
+    }
+    out.set(Number(id), list);
+  }
+  return out;
+}
+/** 1 outside [start, end], rising to `top` at `peak` and falling back. */
+function bump(m: number, start: number, peak: number, end: number, top: number): number {
+  if (m <= start || m >= end) return 1;
+  const t = m <= peak ? (m - start) / (peak - start) : (end - m) / (end - peak);
+  return 1 + (top - 1) * t;
+}
+
+interface Order { id: number; item: number; player: Name; type: number; amount: bigint; price: bigint; time: number }
+
+function orders(price: Map<number, number[]>): Order[] {
+  const list: Order[] = [];
+  const add = (player: Name, item: number, minute: number, offsetMs: number, amount: bigint, type = 0) =>
+    list.push({ id: 0, item, player, type, amount, price: BigInt(price.get(item)![minute]!), time: T0 + minute * MIN + offsetMs });
+  // Ordinary trading
+  add('Brindle', ITEM.coal, 5, 1200, 6400n);
+  add('Brindle', ITEM.coal, 62, 400, 3200n);
+  add('Brindle', ITEM.iron, 90, 9000, -1600n, 1);
+  add('Mikko_82', ITEM.wheat, 12, 300, -12800n);
+  add('Mikko_82', ITEM.wheat, 130, 5300, -6400n);
+  add('Ombrelune', ITEM.gold, 100, 700, 800n, 1);
+  // The pump: 30 buys 20 ms apart while the price is low, 30 sells 20 ms apart at the top
+  for (let i = 0; i < 30; i++) add('Tavrik', ITEM.diamond, 21, i * 20, 10000n);
+  for (let i = 0; i < 30; i++) add('Tavrik', ITEM.diamond, 40, i * 20, -10000n);
+  for (let i = 0; i < 10; i++) add('Quenby', ITEM.emerald, 46, i * 20, 5000n);
+  for (let i = 0; i < 10; i++) add('Quenby', ITEM.emerald, 60, i * 20, -5000n);
+  list.sort((a, b) => a.time - b.time);
+  list.forEach((o, i) => (o.id = i + 1));
+  return list;
+}
+
+function identity(dataDir: string, json: Record<string, unknown>) {
+  fs.mkdirSync(path.join(dataDir, 'ModUtilities'), { recursive: true });
+  fs.writeFileSync(path.join(dataDir, 'ModUtilities', 'server_identity.json'), JSON.stringify(json, null, 2));
+}
+
+function marketDatabase(dataDir: string, legacy: boolean, price: Map<number, number[]>, list: Order[]) {
+  const db = database(path.join(dataDir, 'StockMarket/Database/stockdata.db'), legacy ? [SQL.orderHistoryLegacy, SQL.marketPriceLegacy] : [SQL.orderHistory, SQL.marketPrice]);
+  for (const [market, p] of price) {
+    const rnd = random(market * 7919);
+    for (let m = 0; m < MINUTES; m++) {
+      const open = p[m]!, close = p[m + 1]!; // the mods store no close: it is the next candle's open
+      db.insert('MarketPrice', {
+        marketid: market, open, low: Math.round(Math.min(open, close) * (1 - rnd() * 0.01)), high: Math.round(Math.max(open, close) * (1 + rnd() * 0.01)),
+        time: T0 + m * MIN, traded_volume: Math.round(rnd() * 5000), ...(legacy ? {} : { game_time: 24000 + m * 1200 }),
+      });
+    }
+  }
+  for (const o of list) {
+    const [one, two] = uuidHalves(PLAYERS[o.player].n);
+    db.insert('OrderHistory', {
+      itemid: o.item, accountid: PLAYERS[o.player].account, userid_one: one, userid_two: two, type: o.type, amount: o.amount, price: o.price, time: o.time,
+      ...(legacy ? {} : { order_id: o.id }),
+    });
+  }
+  return db.close();
+}
+
+/** Bank log and balance snapshots that agree with each other and with the orders. */
+function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers: { id: string; account: number; amount: bigint; ts: number; player: Name }[]) {
+  const db = database(path.join(dataDir, 'BankSystem/Database/banksystem.db'),
+    legacy ? [SQL.transactionLogLegacy, SQL.balanceHistory, SQL.payoutHistory] : [SQL.transactionLog, SQL.balanceHistory, SQL.suspicionFlag, SQL.payoutHistory]);
+  const balance = new Map<string, bigint>(); // "account:item" -> raw
+  const touched = new Map<string, number>(); // "account:item" -> last change
+  const change = (account: number, item: number, delta: bigint, ts: number) => {
+    const key = `${account}:${item}`;
+    balance.set(key, (balance.get(key) ?? 0n) + delta);
+    touched.set(key, ts);
+    return balance.get(key)!;
+  };
+  const actor = (player: Name) => ({ actor_uuid: uuidText(PLAYERS[player].n), ...(legacy ? {} : { actor_name: player }) });
+  // The current mods fill the type code, who acted and the balance afterwards; 2.1.2 only has the text kind.
+  const row = (r: Record<string, SQLInputValue>, extra: Record<string, SQLInputValue>) => db.insert('TransactionLog', legacy ? r : { ...r, ...extra });
+
+  const start = T0 - 24 * 60 * MIN;
+  for (const [name, p] of Object.entries(PLAYERS)) {
+    const after = change(p.account, ITEM.money, 10_000_000n, start);
+    row({ account_number: p.account, ...actor(name as Name), kind: legacy ? 'DEPOSIT' : 'STARTING_BALANCE', item_id: ITEM.money, amount: 10_000_000n, ts: start },
+      { type_code: 19, source_kind: 'SYSTEM', balance_after: after });
+  }
+
+  type Event = { ts: number; run: () => void };
+  const events: Event[] = [];
+  for (const o of list) {
+    events.push({ ts: o.time, run: () => {
+      const account = PLAYERS[o.player].account, buy = o.amount > 0n;
+      const volume = buy ? o.amount : -o.amount, cost = volume * o.price / 100n;
+      change(account, ITEM.money, buy ? -cost : cost, o.time);
+      change(account, o.item, buy ? volume : -volume, o.time);
+      // 2.1.2 wrote no trade rows at all. The current mods write one row per finished order, without a balance.
+      if (!legacy) db.insert('TransactionLog', { account_number: account, ...actor(o.player), kind: buy ? 'TRADE_BUY' : 'TRADE_SELL', type_code: buy ? 4 : 5,
+        item_id: o.item, amount: volume, ts: o.time, source_kind: 'STOCKMARKET', tag: 'CLOSE', ref: `sm:order:${o.id}`, money_amount: cost, price: o.price, currency_item: ITEM.money });
+    } });
+  }
+  const simple = (player: Name, by: Name, minute: number, kind: string, code: number, delta: bigint, source: string, more: Record<string, SQLInputValue> = {}) =>
+    events.push({ ts: T0 + minute * MIN + 500, run: () => {
+      const account = PLAYERS[player].account, ts = T0 + minute * MIN + 500;
+      const after = change(account, ITEM.money, delta, ts);
+      if (legacy && kind.startsWith('ADMIN')) return; // 2.1.2 did not log admin actions: the balance moves and the log is silent
+      row({ account_number: account, ...actor(by), kind, item_id: ITEM.money, amount: delta < 0n ? -delta : delta, ts, ...more },
+        { type_code: code, source_kind: source, balance_after: after });
+    } });
+  // Banknotes out at the top of the pump, in again through another player, and an admin taking money back.
+  simple('Tavrik', 'Tavrik', 50, 'WITHDRAW', 2, -400_000_000n, 'PLAYER');
+  simple('Tavrik', 'Tavrik', 51, 'WITHDRAW', 2, -400_000_000n, 'PLAYER');
+  simple('Ombrelune', 'Ombrelune', 70, 'DEPOSIT', 1, 300_000_000n, 'PLAYER');
+  simple('Quenby', 'AdmiralNoor', 120, 'ADMIN_REMOVE', 9, -50_000_000n, 'ADMIN', { note: 'exploit profit removed' });
+  // A transfer between two accounts: one signed row on each side. Left out of the old save: how 2.1.2 logged transfers is not verified.
+  if (!legacy) events.push({ ts: T0 + 55 * MIN, run: () => {
+    const ts = T0 + 55 * MIN, from = PLAYERS.Tavrik.account, to = PLAYERS.Ombrelune.account, amount = 100_000_000n;
+    const a = change(from, ITEM.money, -amount, ts), b = change(to, ITEM.money, amount, ts);
+    row({ account_number: from, ...actor('Tavrik'), kind: 'TRANSFER', item_id: ITEM.money, amount: -amount, other_account: to, ts },
+      { type_code: 3, source_kind: 'PLAYER', balance_after: a });
+    row({ account_number: to, ...actor('Tavrik'), kind: 'TRANSFER', item_id: ITEM.money, amount, other_account: from, ts },
+      { type_code: 3, source_kind: 'PLAYER', balance_after: b });
+  } });
+  // Deposits that arrived from a slave carry the transfer id as their reference (current mods only).
+  if (!legacy) for (const t of transfers) events.push({ ts: t.ts, run: () => {
+    const after = change(t.account, ITEM.money, t.amount, t.ts);
+    db.insert('TransactionLog', { account_number: t.account, ...actor(t.player), kind: 'DEPOSIT', type_code: 1, item_id: ITEM.money, amount: t.amount, ts: t.ts,
+      source_kind: 'PLAYER', ref: t.id, balance_after: after });
+  } });
+
+  // One snapshot per account and item at the start, then one at the end of every minute in which it changed.
+  const snapshot = (key: string, time: number) => {
+    const [account, item] = key.split(':').map(Number);
+    db.insert('BalanceHistory', { account_number: account!, item_id: item!, balance: balance.get(key)!, locked_balance: 0, time });
+  };
+  for (const key of balance.keys()) snapshot(key, start);
+  touched.clear();
+  events.sort((a, b) => a.ts - b.ts);
+  let minute = Math.floor(events[0]!.ts / MIN);
+  const flush = (upTo: number) => {
+    for (const key of touched.keys()) snapshot(key, (upTo + 1) * MIN);
+    touched.clear();
+  };
+  for (const e of events) {
+    const m = Math.floor(e.ts / MIN);
+    if (m !== minute) flush(minute);
+    minute = m;
+    e.run();
+  }
+  flush(minute);
+
+  if (!legacy) {
+    db.insert('SuspicionFlag', { ts: T0 + 45 * MIN, account_number: PLAYERS.Tavrik.account, flag_type: 3, severity: 1, amount: 3_900_000_000n, details: 'wealth more than doubled within one hour' });
+    db.insert('SuspicionFlag', { ts: T0 + 70 * MIN + 600, account_number: PLAYERS.Ombrelune.account, flag_type: 1, severity: 2, amount: 300_000_000n,
+      details: 'banknote deposit 3000000.00\nown withdrawals in 24 h: 0.00' });
+  }
+  return db.close();
+}
+
+export interface Fixtures {
+  root: string;
+  master: string;
+  slaves: string[];
+  legacy: string;
+  /** Rows written per save and table, for tests to compare against. */
+  rows: Record<string, Record<string, number>>;
+}
+
+export function buildFixtures(root: string): Fixtures {
+  fs.rmSync(root, { recursive: true, force: true });
+  const price = prices(), list = orders(price);
+  const rows: Fixtures['rows'] = {};
+
+  // Deposits made on a slave. Each has journal rows on the slave and a ledger row on the master with the same id.
+  const transfers = [
+    { id: 'c0000000-0000-4000-8000-000000000001', slave: 0, account: PLAYERS.Brindle.account, amount: 1_200_000n, ts: T0 + 30 * MIN, player: 'Brindle' as Name },
+    { id: 'c0000000-0000-4000-8000-000000000002', slave: 0, account: PLAYERS.Mikko_82.account, amount: 640_000n, ts: T0 + 95 * MIN, player: 'Mikko_82' as Name },
+    { id: 'c0000000-0000-4000-8000-000000000003', slave: 1, account: PLAYERS.Brindle.account, amount: 80_000n, ts: T0 + 110 * MIN, player: 'Brindle' as Name },
+  ];
+
+  // The master: bank and market data, both diagnostics files, identity.
+  const master = path.join(root, 'survival-main'), data = path.join(master, 'data');
+  rows.master = { ...marketDatabase(data, false, price, list), ...bankDatabase(data, false, list, transfers) };
+  identity(data, { server_uid: MASTER_UID, role: 'MASTER', slave_id: '', master_uid: '', first_start_ms: T0 - 100 * 24 * 60 * MIN,
+    known_slaves: Object.fromEntries(SLAVES.map((s) => [s.name, { uid: s.uid, last_seen_ms: T0 + MINUTES * MIN }])) });
+  let db = database(path.join(data, 'BankSystem/Database/banksystem_diagnostics.db'), [SQL.meta, SQL.transferJournal, SQL.noteFlow], true);
+  db.insert('Meta', { key: 'created_ms', value: String(T0 - 15 * 24 * 60 * MIN) });
+  db.insert('Meta', { key: 'schema_version', value: '1' });
+  db.insert('Meta', { key: 'bank_last_save_ms', value: String(T0 + (MINUTES - 1) * MIN) });
+  db.insert('NoteFlow', { ts: T0 + 52 * MIN, source: 'banksystem:converter_out', player_uuid: uuidText(PLAYERS.Tavrik.n), item_id: ITEM.money, amount: 40, context: 'converter' });
+  db.insert('NoteFlow', { ts: T0 + 69 * MIN, source: 'stockmarket:villager_pay', player_uuid: uuidText(PLAYERS.Ombrelune.n), item_id: ITEM.money, amount: -3, context: 'trade',
+    villager_uuid: uuidText(900), dimension: 'minecraft:overworld', x: 120, y: 64, z: -340 });
+  Object.assign(rows.master, db.close());
+  db = database(path.join(data, 'StockMarket/Database/stockmarket_diagnostics.db'), [SQL.meta, SQL.orderOrigin], true);
+  db.insert('Meta', { key: 'created_ms', value: String(T0 - 15 * 24 * 60 * MIN) });
+  db.insert('Meta', { key: 'schema_version', value: '1' });
+  for (const o of list) db.insert('OrderOrigin', { ref: `sm:order:${o.id}`, origin_server_uid: o.player === 'Brindle' ? SLAVES[0]!.uid : MASTER_UID, origin_name: o.player === 'Brindle' ? SLAVES[0]!.name : '' });
+  const marketDiag = db.close();
+  rows.master.OrderOrigin = marketDiag.OrderOrigin!; // Meta exists in both diagnostics files; the bank's count stays
+
+  // The slaves: only the bank's diagnostics file and the identity.
+  const slaves = SLAVES.map((s, i) => {
+    const dir = path.join(root, s.name), slaveData = path.join(dir, 'data');
+    identity(slaveData, { server_uid: s.uid, role: 'SLAVE', slave_id: s.name, master_uid: MASTER_UID, first_start_ms: T0 - 30 * 24 * 60 * MIN });
+    const d = database(path.join(slaveData, 'BankSystem/Database/banksystem_diagnostics.db'), [SQL.meta, SQL.transferJournal, SQL.noteFlow], true);
+    d.insert('Meta', { key: 'created_ms', value: String(T0 - 10 * 24 * 60 * MIN) });
+    d.insert('Meta', { key: 'schema_version', value: '1' });
+    for (const t of transfers.filter((x) => x.slave === i)) {
+      d.insert('TransferJournal', { transfer_id: t.id, ts: t.ts - 40, direction: 'TO_MASTER', path: 'ASYNC_BANK', step: 'REQUESTED', account_number: t.account,
+        player_uuid: uuidText(PLAYERS[t.player].n), items_json: JSON.stringify({ [ITEM.money]: Number(t.amount) }), ledger_type: 1, context: 'terminal' });
+      d.insert('TransferJournal', { transfer_id: t.id, ts: t.ts + 15, step: 'CONFIRMED' });
+    }
+    d.insert('NoteFlow', { ts: T0 + 20 * MIN, source: 'banksystem:converter_in', player_uuid: uuidText(PLAYERS.Brindle.n), item_id: ITEM.money, amount: -12, context: 'converter' });
+    rows[s.name] = d.close();
+    return dir;
+  });
+
+  // The old save: thin bank log, no trade rows, no flags, no diagnostics, no identity file.
+  const legacy = path.join(root, 'old-world'), legacyData = path.join(legacy, 'data');
+  rows.legacy = { ...marketDatabase(legacyData, true, price, list), ...bankDatabase(legacyData, true, list, []) };
+
+  return { root, master, slaves, legacy, rows };
+}

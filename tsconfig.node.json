@@ -1,0 +1,18 @@
+{
+  "//": "Window process and engine (run by Electron's Node). Emitted to dist/node.",
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "rewriteRelativeImportExtensions": true,
+    "rootDir": "src",
+    "outDir": "dist/node",
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["src/shared", "src/engine", "src/main"]
+}
