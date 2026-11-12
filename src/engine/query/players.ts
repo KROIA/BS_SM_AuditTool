@@ -138,7 +138,7 @@ const IN = new Set(['DEPOSIT', 'WITHDRAW_REFUND', 'ADMIN_ADD', 'CONVERTER_DEPOSI
 const NONE = new Set(['ADMIN_UNLOCK', 'ADMIN_ACCOUNT_EDIT', 'ACCOUNT_FREEZE', 'SHARE_STAMP', 'SHARE_REDEEM']);
 
 /** What a row did to its balance; null when the save does not say. TRANSFER_IN and _OUT are the kinds of 2.1.2. */
-function change(kind: string, amount: bigint, note: string | null, balanceAfter: bigint | null): bigint | null {
+export function change(kind: string, amount: bigint, note: string | null, balanceAfter: bigint | null): bigint | null {
   const abs = amount < 0n ? -amount : amount;
   if (kind === 'TRADE_BUY') return abs;
   if (kind === 'TRADE_SELL') return -abs;

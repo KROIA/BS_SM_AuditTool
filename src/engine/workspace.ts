@@ -19,7 +19,7 @@ const hasBankOrMarket = (s: SaveSummary) => s.sources.some((x) => (x.id === 'ban
 /** The same folder, however it was spelled. Compared through the cache file, which is what two spellings would share. */
 const isSame = (s: SaveSummary, picked: string) => cacheFile(s.path) === cacheFile(picked);
 /** The save that holds the bank and market data: the master, or a single server. */
-const mainSave = () => saves.find(hasBankOrMarket);
+export const mainSave = () => saves.find(hasBankOrMarket);
 
 function remember() {
   fs.writeFileSync(caseFile(), JSON.stringify({ version: 1, saves: saves.map((s) => s.path) }, null, 2));

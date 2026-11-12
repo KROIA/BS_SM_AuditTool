@@ -253,6 +253,42 @@ export interface Session {
   medianGapMs: number | null;
 }
 
+/** How much a gap says (DESIGN_SPEC 8.4): low on a legacy save, high after the first BS-254 row, else medium. */
+export type Rating = 'low' | 'medium' | 'high';
+
+/** A time between two snapshots in which the balance moved by more or less than the log explains. */
+export interface Gap {
+  from: number;
+  to: number;
+  /** Actual change minus explained change, raw: + the balance gained more than the log says. */
+  difference: bigint;
+  /** Kinds of the rows in the gap whose sign the save does not give (ADMIN_SET without a readable note, older payouts). */
+  labels: string[];
+  rating: Rating;
+}
+
+/**
+ * The check of one item on one account (DESIGN_SPEC 8.4), from the first to the last snapshot in the scope:
+ * start + trades + paidIn - paidOut = shouldBe, next to is. Amounts raw. start, shouldBe and is are null without a snapshot.
+ */
+export interface ItemCheck {
+  item: number;
+  start: bigint | null;
+  /** Signed: + goods or money received from trades, - given. */
+  trades: bigint;
+  paidIn: bigint;
+  paidOut: bigint;
+  shouldBe: bigint | null;
+  is: bigint | null;
+  unexplained: bigint;
+  gaps: Gap[];
+  /**
+   * unchecked: fewer than two snapshots in the scope. explained: no gap with a difference. unexplained: at least one gap
+   * no row can explain. unknown-rows: every gap holds a row whose sign the save does not give.
+   */
+  verdict: 'unchecked' | 'explained' | 'unexplained' | 'unknown-rows';
+}
+
 export interface SearchResult {
   players: { uuid: string; name: string }[];
   accounts: { number: number; name: string }[];
@@ -291,9 +327,11 @@ export interface QueryApi {
   search(text: string): SearchResult;
   /** The sessions that overlap the time range, whole, oldest first. Only orders of the filtered server form sessions. */
   sessions(uuid: string, scope: Scope): Session[];
+  /** Per item of the account, lowest item id first. Works on accounts gone from the bank's files too. */
+  check(account: number, scope: Scope): ItemCheck[];
 }
 
-export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions'> {
+export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
   addSave(path: string): Workspace;

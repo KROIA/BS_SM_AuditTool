@@ -49,6 +49,8 @@ const SPARE = [
 ];
 /** Every account in the order the bank files list them, one per chunk file: chunk_0 to chunk_10. */
 export const ACCOUNT_ORDER = [...Object.values(PLAYERS).map((p) => p.account), SHARED.account, COMPANY.account, ...SPARE.map((s) => s.account)];
+/** Accounts of the master with only the rows and snapshots of one case of the check per account; none is in the bank files. */
+export const CHECK = { gain: 12, pair: 13, set: 14, stamp: 15, raw: 16, gone: 17 } as const;
 export const MINECRAFT = '1.21.1';
 
 /** Invented UUIDs whose halves do not fit into a floating-point number, like real ones. */
@@ -303,6 +305,39 @@ function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers
   flush(minute);
 
   if (!legacy) {
+    // Cases for the check per account (DESIGN_SPEC 8.4), on account numbers that are in no bank file, like deleted accounts:
+    // that keeps every value of the accounts above. Rows without an actor, so no player's activity moves.
+    const snap = (account: number, minute: number, v: bigint, item: number = ITEM.money) =>
+      db.insert('BalanceHistory', { account_number: account, item_id: item, balance: v, locked_balance: 0, time: T0 + minute * MIN });
+    const log = (account: number, minute: number, kind: string, code: number, item: number, amount: bigint, more: Record<string, SQLInputValue>) =>
+      db.insert('TransactionLog', { account_number: account, kind, type_code: code, item_id: item, amount, ts: T0 + minute * MIN + 500, ...more });
+    // 12: money that appears without a row.
+    snap(CHECK.gain, 10, 1_000_000n);
+    snap(CHECK.gain, 11, 1_500_000n);
+    // 13: a difference and its reverse within 15 minutes (joined to nothing), then a pair 38 minutes apart (left as two).
+    for (const [m, v] of [[20, 2_000_000n], [21, 2_300_000n], [22, 2_000_000n], [40, 2_100_000n], [60, 2_000_000n]] as const) snap(CHECK.pair, m, v);
+    // 14: an admin set whose note gives no direction.
+    snap(CHECK.set, 30, 5_000_000n);
+    log(CHECK.set, 30, 'ADMIN_SET', 7, ITEM.money, 1_000_000n, { source_kind: 'ADMIN', note: 'balance corrected', balance_after: 4_000_000n });
+    snap(CHECK.set, 31, 4_000_000n);
+    // 15: a share stamped on a company account (item 0, one share): no balance moves.
+    snap(CHECK.stamp, 35, 700_000n);
+    log(CHECK.stamp, 35, 'SHARE_STAMP', 22, 0, 1n, { source_kind: 'PLAYER' });
+    snap(CHECK.stamp, 36, 700_000n);
+    // 16: BS-254 with a StockMarket before SM-318: one fill as RAW_CHANGE rows and as a trade row. The first type 29 row
+    // makes later gaps rate high; the one after it is a gain without a row.
+    snap(CHECK.raw, 101, 1_000_000n);
+    snap(CHECK.raw, 101, 10_000n, ITEM.diamond);
+    log(CHECK.raw, 101, 'RAW_CHANGE', 29, ITEM.money, 200_000n, { source_kind: 'UNKNOWN', balance_after: 1_200_000n });
+    log(CHECK.raw, 101, 'RAW_CHANGE', 29, ITEM.diamond, -4_000n, { source_kind: 'UNKNOWN', balance_after: 6_000n });
+    log(CHECK.raw, 101, 'TRADE_SELL', 5, ITEM.diamond, 4_000n, { source_kind: 'STOCKMARKET', tag: 'PERIODIC', money_amount: 200_000n, price: 5_000n, currency_item: ITEM.money });
+    snap(CHECK.raw, 102, 1_200_000n);
+    snap(CHECK.raw, 102, 6_000n, ITEM.diamond);
+    snap(CHECK.raw, 110, 1_300_000n);
+    // 17: a deleted account with two snapshots and no rows.
+    snap(CHECK.gone, 5, 250_000n);
+    snap(CHECK.gone, 6, 250_000n);
+
     db.insert('SuspicionFlag', { ts: T0 + 45 * MIN, account_number: PLAYERS.Tavrik.account, flag_type: 3, severity: 1, amount: 3_900_000_000n, details: 'wealth more than doubled within one hour' });
     db.insert('SuspicionFlag', { ts: T0 + 70 * MIN + 600, account_number: PLAYERS.Ombrelune.account, flag_type: 1, severity: 2, amount: 300_000_000n,
       details: 'banknote deposit 3000000.00\nown withdrawals in 24 h: 0.00' });
