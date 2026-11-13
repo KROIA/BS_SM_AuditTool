@@ -5,6 +5,7 @@ interface Bridge {
   call(method: string, ...args: unknown[]): Promise<unknown>;
   pickFolder(): Promise<string | null>;
   exportReport(incidentId: string, options: ReportOptions, settings: RuleSettings): Promise<{ path: string } | { error: string } | null>;
+  saveText(defaultName: string, text: string, kind: 'csv'): Promise<{ path: string } | { error: string } | null>;
   startupPaths(): Promise<string[]>;
   onProgress(listener: (p: Progress) => void): void;
   pathOf(file: File): string;
@@ -64,6 +65,8 @@ export const setChoices = async (c: CaseChoices) => useCase(await engine.setChoi
 export const setRules = async (r: RuleSettings) => useCase(await engine.setRules($state.snapshot(r)));
 /** Builds the report with the case's rules, asks where to save it and saves it (main.ts). null: the user cancelled. */
 export const exportReport = (incidentId: string, options: ReportOptions) => bridge.exportReport(incidentId, options, $state.snapshot(app.rules));
+/** Asks where to save a table made as CSV text and saves it (main.ts). null: the user cancelled. */
+export const saveText = (defaultName: string, text: string) => bridge.saveText(defaultName, text, 'csv');
 /** The number of pins, for the case counter. */
 export const pins = () => Object.values(app.marks).filter((m) => m.pinned).length;
 

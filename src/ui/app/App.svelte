@@ -57,7 +57,7 @@
     <main>
       <div class="page" class:flush={screen.id === 'players' || screen.id === 'accounts' || screen.id === 'markets'}>
         {#if screen.id === 'saves'}
-          <Saves tab={route[1] ?? null} />
+          <Saves tab={route[1] ?? null} mark={route[2] ? decodeURIComponent(route[2]) : null} />
         {:else if screen.id === 'overview'}
           <Overview />
         {:else if screen.id === 'players'}

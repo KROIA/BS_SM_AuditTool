@@ -55,6 +55,7 @@ input { font: inherit; color: inherit; }
 .split .listhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 12px; }
 .split .listhead h2 { margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text3); }
 .split .pad { margin: 12px; }
+.split .listcsv { margin: 10px 12px 0; }
 .split .roster { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
 .split .pick { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 12px; border-radius: 8px; }
 .split .pick[aria-current] { background: var(--raised); }
@@ -81,3 +82,4 @@ input { font: inherit; color: inherit; }
 .split .r { text-align: right; }
 .split .dim { color: var(--text2); }
 .split .mono { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+.reccsv { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }

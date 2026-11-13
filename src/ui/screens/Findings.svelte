@@ -2,9 +2,11 @@
   // Findings: what exactly was flagged, and why? The list grouped into incidents on the left, the picked finding on the
   // right, or the detection rules at #/findings/rules. Pins, dismissals and notes are kept in case.json.
   import { DEFAULT_RULES, type Candle, type Finding, type FindingsResult, type IncidentsResult, type ItemRow, type Level, type LedgerRow, type Mark, type OrderRow, type RuleId, type RuleSettings } from '../../shared/api.ts';
-  import { about, alertRule, basis, describe, flagRule, ruleText, RULE_NAME, SOURCE, span, times } from '../../shared/finding.ts';
+  import { about, alertRule, basis, describe, flagRule, headline, ruleText, RULE_NAME, SOURCE, span, times } from '../../shared/finding.ts';
   import { amount as fmtAmount, count, countShort, items as quantity, money, time } from '../../shared/fmt.ts';
   import { incidentSentence, incidentTitle } from '../../shared/incident.ts';
+  import type { Cell } from '../../shared/csv.ts';
+  import CsvButton from '../app/CsvButton.svelte';
   import Icon from '../app/Icon.svelte';
   import { ICON } from '../app/nav.ts';
   import { app, engine, setMark, setRules } from '../app/state.svelte.ts';
@@ -103,6 +105,31 @@
   const clock = (ms: number, millis = false) => (picked && day(picked.start) === day(picked.end) && day(ms) === day(picked.start) ? time(ms, false, millis).split(', ')[1]! : time(ms, false, millis));
   const recordCount =$derived(rec ? rec.orders.length + rec.ledger.length + rec.candles.length : 0);
 
+  // ---- CSV (AT-44): the list as filtered on screen, every finding of each group, and the records behind the picked one ----
+  const UNIT: Record<Finding['measured']['unit'], (v: number | bigint) => string> = {
+    money: (v) => fmtAmount(BigInt(v)), items: (v) => quantity(BigInt(v)), shares: (v) => quantity(BigInt(v)), times: (v) => times(Number(v)),
+    orders: (v) => count(v), rows: (v) => count(v), percent: (v) => times(Number(v)) + '%',
+  };
+  const ids = (l: (number | string)[]) => l.join(' ');
+  function listTable() {
+    const columns = [['Group', 'text'], ['Finding id', 'id'], ['Title', 'text'], ['Rule', 'text'], ['Level', 'text'], ['Basis', 'text'], ['Source', 'text'], ['Start', 'time'], ['End', 'time'],
+      ['Measured', 'text'], ['Unit', 'text'], ['Threshold', 'text'], ['Players', 'text'], ['Player uuids', 'id'], ['Markets', 'text'], ['Item ids', 'id'], ['Accounts', 'id'], ['Servers', 'text'],
+      ['Order ids', 'id'], ['Entry ids', 'id'], ['Flag ids', 'id'], ['Pinned', 'text'], ['Not a problem', 'text'], ['Reason', 'text'], ['Note', 'text']] as const;
+    const mark = (id: string) => { const m = markOf(id); return [m?.pinned ?? false, m?.dismissed ?? false, m?.reason, m?.note]; };
+    const rows: Cell[][] = groups.flatMap((g) => g.list.map((f) => {
+      const u = UNIT[f.measured.unit];
+      return [g.title, f.id, headline(f, w, 'en', money).title, RULE_NAME[f.rule], f.level, f.basis, SOURCE[f.source], f.start, f.end, u(f.measured.value), f.measured.unit,
+        f.measured.threshold === null ? null : u(f.measured.threshold), f.players.map((p) => p.name).join('; '), ids(f.players.map((p) => p.uuid)),
+        f.markets.map(w.itemName).join('; '), ids(f.markets), ids(f.accounts), f.servers.join('; '), ids(f.records.orders), ids(f.records.ledger), ids(f.records.flags), ...mark(f.id)];
+    }));
+    for (const o of orphans) rows.push(['Not raised with the current settings', o.id, o.mark.title, null, null, null, null, o.mark.start || null, null, null, null, null, null, null, null, null, null, null, null, null, null, ...mark(o.id)]);
+    return { columns, rows };
+  }
+  const candleTable = (list: Candle[], market: number) => ({
+    columns: [['Minute', 'time'], ['Market', 'text'], ['Item id', 'id'], ['Open ($)', 'money'], ['High ($)', 'money'], ['Low ($)', 'money'], ['Close ($)', 'money'], ['Volume', 'number']] as const,
+    rows: list.map((c) => [c.time, w.itemName(market), market, c.open, c.high, c.low, c.close, c.volume]),
+  });
+
   // ---- Actions ----
   let form = $state<'dismiss' | 'note' | null>(null);
   let draft = $state('');
@@ -179,6 +206,7 @@
 {:else}
   <div class="cols">
     <section aria-label="List of findings" class="card list">
+      {#if groups.length || orphans.length}<div style="margin: 0 12px 8px"><CsvButton screen="findings" table="list" what="the findings" make={listTable} /></div>{/if}
       {#if hidden}
         <label class="switch small"><input type="checkbox" bind:checked={showDismissed} /> Show the {count(hidden)} marked as not a problem</label>
       {/if}
@@ -299,6 +327,13 @@
             <p class="small" style="margin: 0">{picked.rule === 'hour-profit' || picked.rule === 'balance' ? 'This finding is worked out from the orders and balances of the time shown; open the player or the account for them.'
               : picked.rule === 'market-alert' ? "The market mod sums all of the player's orders in its time window and does not record which they were; open the player for them." : 'No single rows behind it.'}</p>
           {:else}
+            {#if recordCount}
+              <div class="reccsv">
+                {#if rec.orders.length}<CsvButton screen="findings" table="orders" what="the orders behind this finding" text="Orders as CSV" make={() => w.orderTable(rec.orders, (u) => nameOf.get(u) ?? '')} />{/if}
+                {#if rec.ledger.length}<CsvButton screen="findings" table="entries" what="the log entries behind this finding" text="Log entries as CSV" make={() => w.ledgerTable(rec.ledger.map((row) => ({ time: row.time, row })), main?.name)} />{/if}
+                {#if rec.candles.length}<CsvButton screen="findings" table="candles" what="the candles behind this finding" text="Candles as CSV" make={() => candleTable(rec.candles, picked.markets[0]!)} />{/if}
+              </div>
+            {/if}
             <div class="scroll">
               {#if rec.orders.length}
                 <table>

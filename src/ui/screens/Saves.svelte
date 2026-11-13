@@ -4,13 +4,14 @@
   // (#/saves/transfers) and the world scan (#/saves/scan).
   import type { SaveSource, SaveSummary, SaveTable } from '../../shared/api.ts';
   import { bytes, count, time } from '../../shared/fmt.ts';
+  import CsvButton from '../app/CsvButton.svelte';
   import Icon from '../app/Icon.svelte';
   import { ICON } from '../app/nav.ts';
   import { app, browse, drop, folderName, removeSave } from '../app/state.svelte.ts';
   import Transfers from './Transfers.svelte';
   import WorldScan from './WorldScan.svelte';
 
-  let { tab }: { tab: string | null } = $props();
+  let { tab, mark = null }: { tab: string | null; mark?: string | null } = $props();
 
   const LABEL: Record<SaveSource['id'], string> = {
     bank: 'Bank accounts and log',
@@ -152,6 +153,14 @@
     return out;
   });
 
+  // CSV (AT-44): every table of every source, not only the rows the bars show. No folder paths: only the save's name.
+  const coverTable = () => ({
+    columns: [['Save', 'text'], ['Role', 'text'], ['Source', 'text'], ['Status', 'text'], ['Table', 'text'], ['Rows', 'count'], ['Rows that could not be read', 'count'],
+      ['Newest rows lost', 'text'], ['First row', 'time'], ['Last row', 'time']] as const,
+    rows: app.saves.flatMap((s) => s.sources.filter((x) => x.status !== 'none').flatMap((x) => (x.tables.length ? x.tables : [null]).map((t) =>
+      [s.name, ROLE[s.role], LABEL[x.id], x.status, t ? (TABLE[t.name] ?? t.name) : null, t?.rows, t?.lostIds, t?.newestLost, t?.from, t?.to]))),
+  });
+
   // ---- Drag and drop ----
   let over = $state(false);
   function onDrop(e: DragEvent) {
@@ -203,7 +212,7 @@
 {/each}
 
 {#if !empty && tab === 'transfers'}
-  <Transfers />
+  <Transfers {mark} />
 {:else if !empty && tab === 'scan'}
   <WorldScan />
 {:else if !empty}
@@ -252,7 +261,10 @@
 
   {#if cover.length}
     <section class="card">
-      <h2 class="h2" style="font-size: 17px; line-height: 24px">What each source covers</h2>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+        <h2 class="h2" style="flex: 1 1 auto; font-size: 17px; line-height: 24px">What each source covers</h2>
+        <CsvButton screen="saves" table="coverage" what="what each source covers" make={coverTable} />
+      </div>
       <p class="small" style="margin: 2px 0 0">A finding can only be as good as the data behind it. Lighter bars mean coarser data: the bank thins out old balance snapshots. A gap in snapshots or prices means the server was off or data is lost.</p>
       <div class="cover">
         {#each cover as c (c.label)}

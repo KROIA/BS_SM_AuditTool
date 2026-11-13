@@ -34,6 +34,13 @@
           sub: `${o.amount > 0n ? 'buy' : 'sell'} by ${o.name}, placed ${time(o.time)}`,
         })),
       },
+      {
+        label: 'Transfers',
+        hits: result.transfers.map((t) => ({
+          href: '#/saves/transfers/' + encodeURIComponent(t.id), title: 'Transfer ' + t.id.slice(0, 8),
+          sub: `${t.player?.name ?? 'player not known'}, started ${time(t.start)}`,
+        })),
+      },
     ].filter((g) => g.hits.length > 0);
   });
 
@@ -55,7 +62,7 @@
 <div class="wrap" onfocusout={leave}>
   <label class="search">
     <Icon d={ICON.search} />
-    <input type="search" aria-label="Search everything" placeholder="Search players, accounts, items or order ids" autocomplete="off"
+    <input type="search" aria-label="Search everything" placeholder="Search players, accounts, items, order or transfer ids" autocomplete="off"
       bind:value={text} onfocus={() => (open = true)} oninput={() => (open = true)} onkeydown={keys} />
   </label>
   {#if open && text.trim() !== '' && result}
@@ -66,9 +73,9 @@
           <a class="hit" href={h.href} onclick={() => (open = false)}><span class="title">{h.title}</span><span class="small sub">{h.sub}</span></a>
         {/each}
       {:else}
-        <p class="small none">Nothing found. Search looks at player names and the start of UUIDs, account numbers and names, item names and ids, and order ids.</p>
+        <p class="small none">Nothing found. Search looks at player names and the start of UUIDs, account numbers and names, item names and ids, order ids, and transfer ids (whole or their first 8 characters).</p>
       {/each}
-      {#if groups.length}<p class="small hint">Enter opens the first result. Transfer ids are not searched until they have a screen.</p>{/if}
+      {#if groups.length}<p class="small hint">Enter opens the first result.</p>{/if}
     </div>
   {/if}
 </div>

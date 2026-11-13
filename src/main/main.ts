@@ -115,30 +115,45 @@ async function pdf(html: string): Promise<Buffer> {
   }
 }
 
-/** Builds the report in the engine, asks where to save it and writes it. The extension picks the format: .pdf, else HTML. */
-async function exportReport(incidentId: unknown, options: unknown, settings: unknown): Promise<{ path: string } | { error: string } | null> {
+type Saved = { path: string } | { error: string } | null;
+/** Asks where to save, refuses a folder of a loaded save, then writes what content() makes for the chosen path. what: "report", "table". */
+async function saveAs(what: string, defaultPath: string, filters: Electron.FileFilter[], content: (target: string) => Promise<string | Buffer>): Promise<Saved> {
   if (!win) return null;
+  const r = await dialog.showSaveDialog(win, { title: `Export the ${what}`, defaultPath, filters });
+  if (r.canceled || !r.filePath) return null;
+  const target = path.resolve(r.filePath);
+  // The tool never writes into a save, not even a report.
+  const saves = ((await callEngine('workspace', [])) as Workspace).saves;
+  if (saves.some((s) => within(s.path, target))) return { error: `The ${what} was not saved: that folder belongs to a loaded save, and the tool never writes into a save. Pick another folder.` };
+  try {
+    await fs.writeFile(target, await content(target));
+  } catch (e) {
+    return { error: `The ${what} could not be saved there: ${(e as NodeJS.ErrnoException).code === 'EBUSY' ? 'the file is open in another program.' : (e as Error).message}` };
+  }
+  return { path: target };
+}
+
+/** Builds the report in the engine, asks where to save it and writes it. The extension picks the format: .pdf, else HTML. */
+async function exportReport(incidentId: unknown, options: unknown, settings: unknown): Promise<Saved> {
   let html: string;
   try {
     html = (await callEngine('report', [incidentId, options, settings])) as string;
   } catch (e) {
     return { error: `The report could not be built: ${(e as Error).message}` };
   }
-  const r = await dialog.showSaveDialog(win, { title: 'Export the report', defaultPath: 'report.html',
-    filters: [{ name: 'Web page (*.html)', extensions: ['html'] }, { name: 'PDF (*.pdf)', extensions: ['pdf'] }] });
-  if (r.canceled || !r.filePath) return null;
-  const target = path.resolve(r.filePath);
-  // The tool never writes into a save, not even a report.
-  const saves = ((await callEngine('workspace', [])) as Workspace).saves;
-  if (saves.some((s) => within(s.path, target))) return { error: 'The report was not saved: that folder belongs to a loaded save, and the tool never writes into a save. Pick another folder.' };
-  try {
-    await fs.writeFile(target, path.extname(target).toLowerCase() === '.pdf' ? await pdf(html) : html);
-  } catch (e) {
-    return { error: `The report could not be saved there: ${(e as NodeJS.ErrnoException).code === 'EBUSY' ? 'the file is open in another program.' : (e as Error).message}` };
-  }
-  return { path: target };
+  return saveAs('report', 'report.html', [{ name: 'Web page (*.html)', extensions: ['html'] }, { name: 'PDF (*.pdf)', extensions: ['pdf'] }],
+    async (target) => (path.extname(target).toLowerCase() === '.pdf' ? await pdf(html) : html));
 }
 ipcMain.handle('exportReport', (_e, incidentId, options, settings) => exportReport(incidentId, options, settings));
+
+/** A table the page made as CSV text (shared/csv.ts). Only the file name is the page's: no folder, nothing but plain characters. */
+const KINDS: Record<string, Electron.FileFilter> = { csv: { name: 'CSV table (*.csv)', extensions: ['csv'] } };
+ipcMain.handle('saveText', (_e, defaultName: unknown, text: unknown, kind: unknown) => {
+  const filter = typeof kind === 'string' ? KINDS[kind] : undefined;
+  if (!filter || typeof text !== 'string' || typeof defaultName !== 'string') return { error: 'The table could not be exported: the page sent something the tool does not save.' };
+  const name = path.basename(defaultName).replace(/[^\w.-]/g, '_').slice(0, 120) || `table.${kind}`;
+  return saveAs('table', name, [filter], async () => text);
+});
 
 app.on('window-all-closed', () => app.quit());
 void app.whenReady().then(() => {

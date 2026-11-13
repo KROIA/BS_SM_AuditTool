@@ -6,7 +6,8 @@
   import { count, items as quantity, money, moneyShort, time } from '../../shared/fmt.ts';
   import StepChart from '../app/StepChart.svelte';
   import { app, engine } from '../app/state.svelte.ts';
-  import { entries, gapRows, LEVEL_COLOR, whereMade, words, type Entry } from '../app/words.ts';
+  import CsvButton from '../app/CsvButton.svelte';
+  import { entries, gapRows, LEVEL_COLOR, words, type Entry } from '../app/words.ts';
 
   let { selected }: { selected: number | null } = $props();
 
@@ -27,7 +28,7 @@
   const number = $derived(selected ?? list?.[0]?.number ?? null);
   const ready = $derived(loadedFor !== null && loadedFor === number);
   const shown = $derived(ready ? detail : null);
-  const { itemName, isMoney, value, change, what, amount, amountTone, gapWhat, gapSub, gapWhen } = $derived(words(itemRows));
+  const { itemName, isMoney, value, change, what, by, detail: rowDetail, amount, amountTone, gapWhat, gapSub, gapWhen, ledgerTable } = $derived(words(itemRows));
 
   $effect(() => {
     const scope = $state.snapshot(app.scope), rules = $state.snapshot(app.rules);
@@ -136,23 +137,12 @@
   const rows = $derived(everything.filter(FILTERS[filter].keep));
   const hasTrades = $derived(rows.some((e) => e.row?.kind === 'TRADE_BUY' || e.row?.kind === 'TRADE_SELL'));
 
-  /** The rest of the row's sub line, after the other account (a link). */
-  function sub(r: LedgerRow): string {
-    const parts: string[] = [];
-    if (r.kind === 'ADMIN_SET' && r.change !== null && r.balanceAfter !== null) parts.push(`from ${value(r.item, r.balanceAfter - r.change)} to ${value(r.item, r.balanceAfter)}`);
-    else if (r.note) parts.push(r.note);
-    if (r.change === null) parts.push('the log does not say in which direction');
-    const where = whereMade(r, main?.name);
-    if (where) parts.push(where);
-    return parts.join(' · ');
-  }
-  function by(r: LedgerRow): string {
-    const who = r.actorName ?? 'not recorded';
-    if (r.sourceKind === 'STOCKMARKET') return `StockMarket, for ${who}`;
-    if (r.sourceKind === 'ADMIN') return `${who}, as admin`;
-    if (r.sourceKind === 'SYSTEM') return `The bank, for ${who}`;
-    return who;
-  }
+  const sub = (r: LedgerRow) => rowDetail(r, main?.name);
+  const listTable = () => ({
+    columns: [['Account', 'id'], ['Name', 'text'], ['Kind', 'text'], ['Owner', 'text'], ['Owner uuid', 'id'], ['Company', 'text'], ['Money ($)', 'money'],
+      ['Unexplained ($)', 'money'], ['Gaps', 'count'], ['How much the gaps say', 'text'], ['Log entries', 'count'], ['Frozen', 'text'], ['Deleted', 'text']] as const,
+    rows: (list ?? []).map((a) => [a.number, a.name, kind(a), a.ownerName, a.owner, a.company, a.money, a.unexplained, a.gaps, a.rating ? GAP_SAYS[a.rating].short : null, a.rows, a.frozen, a.deleted]),
+  });
 
   // ---- Header ----
   /** Permission bits DEPOSIT=1 WITHDRAW=2 MANAGE=4 in words. */
@@ -183,6 +173,7 @@
       <h2>Accounts</h2>
       <span class="small">largest gap first</span>
     </div>
+    {#if list?.length}<div class="listcsv"><CsvButton screen="accounts" table="list" what="the account list" make={listTable} /></div>{/if}
     {#if !main}
       <p class="small pad">No save with bank data is loaded.</p>
     {:else if list && list.length === 0}
@@ -316,6 +307,7 @@
       <section class="card" bind:this={historyCard}>
         <div class="cardhead" style="align-items: center">
           <h2 class="h2 h3" style="flex: 1 1 auto">History</h2>
+          {#if rows.length}<CsvButton screen="accounts" table="history-{shown.number}" what="the history" make={() => ledgerTable(rows, main?.name)} />{/if}
           <div role="group" aria-label="Filter the history" class="pills">
             {#each Object.entries(FILTERS) as [id, f] (id)}
               <button type="button" aria-pressed={filter === id} onclick={() => ((filter = id as keyof typeof FILTERS), (showAll = false))}>{f.label}</button>

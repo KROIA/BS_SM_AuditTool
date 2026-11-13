@@ -1,16 +1,17 @@
-// The search field of the top bar: players, accounts, items and orders that match a few typed characters.
-// Transfer ids are not searched yet: they have no screen before M4.
+// The search field of the top bar: players, accounts, items and orders that match a few typed characters,
+// and transfers by their id (whole, or its first 8 characters or more).
 import type { SearchResult } from '../../shared/api.ts';
 import { mainData } from '../workspace.ts';
 import { all, names, num } from './db.ts';
 import { readOrders } from './players.ts';
+import { allTransfers } from './transfers.ts';
 
 const MAX = 5;
 
 export function search(text: string): SearchResult {
   const db = mainData();
   const q = text.trim().toLowerCase().slice(0, 100);
-  const none: SearchResult = { players: [], accounts: [], items: [], orders: [] };
+  const none: SearchResult = { players: [], accounts: [], items: [], orders: [], transfers: [] };
   if (!db || q.replace(/[%_\\ ]/g, '') === '') return none;
   // In LIKE, "_" stands for any one character: a space in "iron ingot" then also finds "iron_ingot".
   const like = '%' + q.replace(/[%\\]/g, '').replace(/ /g, '_') + '%', start = q.replace(/[%_\\]/g, '') + '%';
@@ -26,5 +27,6 @@ export function search(text: string): SearchResult {
     ORDER BY id = :n DESC, length(name), id LIMIT ${MAX}`, { n, like }).map((r) => ({ id: num(r.id)!, name: String(r.name), money: r.money === 1n }));
   const id = /^(?:sm:order:)?(\d{1,15})$/.exec(q)?.[1];
   const orders = id === undefined ? [] : readOrders(db, { orderId: Number(id) }, null).slice(0, MAX).map((o) => ({ ...o, name: nameOf(o.player) }));
-  return { players, accounts, items, orders };
+  const transfers = /^[0-9a-f-]{8,36}$/.test(q) ? allTransfers().filter((t) => t.id.startsWith(q)).slice(0, MAX) : [];
+  return { players, accounts, items, orders, transfers };
 }

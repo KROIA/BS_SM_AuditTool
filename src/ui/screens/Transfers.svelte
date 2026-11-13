@@ -2,9 +2,14 @@
   // The Transfers tab of Saves and servers: do the master and its slaves agree on what moved between them? The classes of
   // DESIGN_SPEC 8.6 as tiles that filter the table below; pairs are made by the engine (query/transfers.ts).
   import type { ItemRow, TransferClass, TransferItem, TransferRow, TransfersResult } from '../../shared/api.ts';
-  import { count, money, time } from '../../shared/fmt.ts';
+  import { tick } from 'svelte';
+  import { count, items as quantity, money, time } from '../../shared/fmt.ts';
+  import CsvButton from '../app/CsvButton.svelte';
   import { app, engine } from '../app/state.svelte.ts';
   import { LEVEL_COLOR, words } from '../app/words.ts';
+
+  /** mark: a transfer id from the search (#/saves/transfers/<id>), marked and scrolled into view. */
+  let { mark = null }: { mark?: string | null } = $props();
 
   const PAGE = 10; // rows shown, then "Show more" adds as many again (DESIGN_SPEC rule 3)
   /** The classes in tile order: value went wrong first (these raise a finding, level high), then the rest. */
@@ -40,11 +45,20 @@
     return () => (stale = true);
   });
 
-  const { value } = $derived(words(itemRows));
+  const { value, itemName } = $derived(words(itemRows));
   const all = $derived(result?.transfers ?? []);
   const rows = $derived(picked === null ? all : all.filter((t) => t.class === picked));
   const wrong = $derived(CLASS.filter(([c, , w]) => w && result && result.counts[c] > 0).map(([c]) => [c, result!.counts[c]] as const));
   const master = $derived(app.saves.find((s) => s.role === 'MASTER' || s.role === 'STANDALONE')?.name ?? 'the master');
+
+  // A transfer opened from the search: no tile filter hides it, the list shows down to it, and it is scrolled into view.
+  const marked = $derived(mark === null ? -1 : all.findIndex((t) => t.id === mark));
+  $effect(() => {
+    if (marked < 0) return;
+    picked = null;
+    shown = Math.max(PAGE, marked + 1);
+    void tick().then(() => document.getElementById('transfer-' + mark)?.scrollIntoView({ block: 'center' }));
+  });
 
   function pick(c: TransferClass) {
     picked = picked === c ? null : c;
@@ -81,6 +95,17 @@
   }
   const short = (id: string) => (id.length > 13 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id);
   const color = (c: TransferClass) => (WRONG.has(c) ? LEVEL_COLOR.high : 'var(--text2)');
+
+  // CSV (AT-44): the rows of the tile picked, all of them, money and items in their own columns.
+  const cash = (t: TransferRow, side: 'sent' | 'received') => t.items.find((i) => i.item === null)?.[side] ?? null;
+  const goods = (t: TransferRow, side: 'sent' | 'received') => t.items.filter((i) => i.item !== null && i[side] !== 0n).map((i) => `${quantity(i[side])} ${itemName(i.item!)}`).join('; ');
+  const table = () => ({
+    columns: [['Transfer id', 'id'], ['Start', 'time'], ['End', 'time'], ['Between', 'text'], ['Direction', 'text'], ['Path', 'text'], ['Slave', 'text'], ['Player', 'text'], ['Player uuid', 'id'],
+      ['Account', 'id'], ['Money sent ($)', 'money'], ['Money received ($)', 'money'], ['Items sent', 'text'], ['Items received', 'text'], ['Result', 'text'], ['What each side did', 'text'],
+      ['Why', 'text'], ['Journal steps', 'text'], ['Entry ids', 'id'], ['Flag ids', 'id'], ['Finding id', 'id']] as const,
+    rows: rows.map((t) => [t.id, t.start, t.end, route(t), t.direction, t.path, t.server, t.player?.name, t.player?.uuid, t.account, cash(t, 'sent'), cash(t, 'received'),
+      goods(t, 'sent'), goods(t, 'received'), LABEL[t.class], sides(t), t.why, t.steps.join(' '), t.ledger.join(' '), t.flags.join(' '), raised.has('transfer:' + t.id) ? 'transfer:' + t.id : null]),
+  });
 </script>
 
 <p class="intro">Every time value moves between the master bank and a slave server, the slave writes it down in its journal and the master writes the same transfer id on its log entries. The tool pairs them by that id, never by time, and checks that what left one side arrived on the other.</p>
@@ -101,7 +126,11 @@
     {/each}
   </div>
 
+  {#if mark !== null && marked < 0}
+    <p class="small" style="margin: 0">Transfer {mark} is not in this time range or server filter. Set the time range to All to see it.</p>
+  {/if}
   <section class="card">
+    {#if rows.length}<div class="csvrow"><CsvButton screen="saves" table="transfers" what="the transfers" make={table} /></div>{/if}
     {#if rows.length === 0}
       <p style="margin: 0; color: var(--text2)">{picked === null ? 'No transfers between servers in this time range.' : `No transfers ${LABEL[picked].toLowerCase()} in this time range.`}</p>
     {:else}
@@ -112,7 +141,7 @@
           </thead>
           <tbody>
             {#each rows.slice(0, shown) as t (t.id)}
-              <tr>
+              <tr id="transfer-{t.id}" class:marked={t.id === mark} aria-current={t.id === mark ? 'true' : undefined}>
                 <td style="white-space: nowrap">
                   <span style="display: block; font-size: 13px; color: var(--text2)">{time(t.start)}</span>
                   <span class="mono" title={t.id}>{short(t.id)}</span>
@@ -167,6 +196,9 @@
   .mono { font-family: var(--font-mono); font-size: 12px; color: var(--text3); }
   .ref { color: var(--accent); }
   .chip { display: inline-block; height: 24px; padding: 0 8px; border-radius: 6px; font-size: 12px; line-height: 24px; font-weight: 600; color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); }
+  .csvrow { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+  tr.marked td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  tr.marked td:first-child { box-shadow: inset 3px 0 0 var(--accent); padding-left: 12px; }
   .foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin-top: 16px; }
   .link { padding: 0; border: 0; background: none; font-size: 13px; font-weight: 500; color: var(--accent); }
 </style>

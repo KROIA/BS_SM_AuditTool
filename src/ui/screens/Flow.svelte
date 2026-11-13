@@ -4,6 +4,7 @@
   import type { Finding, FlowPart, Incident, ItemRow, LedgerRow, MoneyFlow, OrderRow, Scope } from '../../shared/api.ts';
   import { count, items as quantity, money, moneyShort, time } from '../../shared/fmt.ts';
   import { incidentTitle } from '../../shared/incident.ts';
+  import CsvButton from '../app/CsvButton.svelte';
   import FindingLinks from '../app/FindingLinks.svelte';
   import { app, engine } from '../app/state.svelte.ts';
   import { words } from '../app/words.ts';
@@ -247,6 +248,16 @@
   const cut = <T,>(l: T[]) => (allRows ? l : l.slice(0, ROWS));
   const recordCount = (n: Node) => n.parts.reduce((s, p) => s + p.records.ledger.length + p.records.orders.length, 0);
   const late = $derived(flow?.incident ? flow.accounts.filter((a) => a.from !== null && a.from > flow!.incident!.start) : []);
+
+  // ---- CSV (AT-44): every part of the flow for the players chosen, with the records behind it ----
+  const partTable = () => ({
+    columns: [['Column', 'text'], ['Part', 'text'], ['Kind', 'text'], ['Player', 'text'], ['Player uuid', 'id'], ['Accounts', 'id'], ['Market', 'text'], ['Item id', 'id'],
+      ['Other account', 'id'], ['Amount ($)', 'money'], ['Basis', 'text'], ['On an incident market', 'text'], ['Items still held', 'quantity'], ['Worth at the usual price ($)', 'money'],
+      ['Notes taken out ($)', 'money'], ['Notes paid back in ($)', 'money'], ['Gap from', 'time'], ['Gap to', 'time'], ['Entry ids', 'id'], ['Order ids', 'id'], ['Finding ids', 'id']] as const,
+    rows: parts.map((p) => [p.side === 'in' ? 'Came from' : 'Is now', nodeOf(p)[1], p.kind, nameOf.get(p.player), p.player, p.accounts.join(' '), p.market === null ? null : w.itemName(p.market),
+      p.market, p.other, p.amount, p.basis, p.market === null ? null : p.incident, p.items?.qty, p.items?.worth, p.notes?.out, p.notes?.back, p.gap?.from, p.gap?.to,
+      p.records.ledger.join(' '), p.records.orders.join(' '), p.records.findings.join(' ')]),
+  });
 </script>
 
 <div class="top">
@@ -299,7 +310,10 @@
           {/each}
         </div>
       </div>
-      <p class="small" style="margin: 12px 0 0">Band height shows the amount. Select a name to see what it is made of.</p>
+      <div class="under">
+        <p class="small" style="flex: 1 1 auto; margin: 0">Band height shows the amount. Select a name to see what it is made of.</p>
+        <CsvButton screen="flow" table="parts" what="every part of the money flow" make={partTable} />
+      </div>
     </section>
 
     {#if pick}
@@ -344,6 +358,10 @@
           {#if !rec}
             <p class="small" aria-busy="true" style="margin: 0">Loading the records…</p>
           {:else}
+            <div class="reccsv">
+              {#if rec.orders.length}<CsvButton screen="flow" table="orders" what="the orders behind this part" text="Orders as CSV" make={() => w.orderTable(rec.orders, (u) => nameOf.get(u) ?? '')} />{/if}
+              {#if rec.ledger.length}<CsvButton screen="flow" table="entries" what="the log entries behind this part" text="Log entries as CSV" make={() => w.ledgerTable(rec.ledger.map((row) => ({ time: row.time, row })), app.saves.find((s) => s.role !== 'SLAVE')?.name)} />{/if}
+            </div>
             <div class="scroll">
               {#if rec.orders.length}
                 <table>
@@ -385,6 +403,7 @@
 
 <style>
   .top { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; }
+  .under { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 12px; }
   .seg { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); }
   .seg button { height: 32px; padding: 0 14px; border: 0; border-radius: 7px; font-weight: 500; background: transparent; color: var(--text2); }
   .seg button[aria-pressed='true'] { background: var(--raised); color: var(--text); }

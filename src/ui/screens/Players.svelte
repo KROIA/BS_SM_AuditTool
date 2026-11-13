@@ -5,6 +5,7 @@
   import { span } from '../../shared/finding.ts';
   import { count, items as quantity, money, moneyShort, time } from '../../shared/fmt.ts';
   import { blamed, suspicion } from '../../shared/incident.ts';
+  import CsvButton from '../app/CsvButton.svelte';
   import FindingLinks from '../app/FindingLinks.svelte';
   import StepChart from '../app/StepChart.svelte';
   import { app, engine } from '../app/state.svelte.ts';
@@ -127,7 +128,7 @@
   const cut = <T,>(l: T[]) => (allRecords ? l : l.slice(0, ROWS));
 
   // ---- Words ----
-  const { itemName, isMoney, what, amount: bankAmount, amountTone: bankTone, change, gapWhat, gapSub, gapWhen } = $derived(words(itemRows));
+  const { itemName, isMoney, what, amount: bankAmount, amountTone: bankTone, change, gapWhat, gapSub, gapWhen, orderTable, ledgerTable } = $derived(words(itemRows));
   const initials = (name: string) => (name.replace(/[^A-Za-z0-9]/g, '').slice(0, 2) || '?').toUpperCase();
   const signed = (raw: bigint) => (raw > 0n ? '+' : '') + moneyShort(raw);
   const when = (ms: number | null) => (ms === null ? 'none in this time range' : time(ms));
@@ -246,11 +247,11 @@
     return m < 1 ? 'under a minute' : m < 60 ? unit(m, 'minute') : unit(Math.floor(m / 60), 'hour') + (m % 60 ? ` and ${unit(m % 60, 'minute')}` : '');
   };
   /** One plain sentence per way two players are linked; the times are in the records. */
-  function sentence(w: LinkWay, me: string, them: string): string {
+  function sentence(w: LinkWay, me: string, them: string, short = moneyShort): string {
     if (w.kind === 'account') return `Both use account ${w.account}, ${w.name}.`;
     if (w.kind === 'transfer') {
-      if (w.sent && w.received) return `${me} sent ${them} ${moneyShort(w.sent)} and got ${moneyShort(w.received)} back, in ${unit(w.transfers, 'transfer')}.`;
-      return w.sent ? `${me} sent ${them} ${moneyShort(w.sent)} in ${unit(w.transfers, 'transfer')}.` : `${them} sent ${me} ${moneyShort(w.received)} in ${unit(w.transfers, 'transfer')}.`;
+      if (w.sent && w.received) return `${me} sent ${them} ${short(w.sent)} and got ${short(w.received)} back, in ${unit(w.transfers, 'transfer')}.`;
+      return w.sent ? `${me} sent ${them} ${short(w.sent)} in ${unit(w.transfers, 'transfer')}.` : `${them} sent ${me} ${short(w.received)} in ${unit(w.transfers, 'transfer')}.`;
     }
     if (w.kind === 'notes') {
       const [payer, taker] = w.tookOut ? [them, me] : [me, them], last = w.withdrawn.at(-1)!.ts;
@@ -265,6 +266,29 @@
     return list.length > 2 ? [...list.slice(0, 2), `And ${count(list.length - 2)} more.`] : list;
   };
 
+  // ---- CSV (AT-44): every row behind each table, with the ids behind the links ----
+  const T = { player: ['Player', 'text'], uuid: ['Player uuid', 'id'], market: ['Market', 'text'], item: ['Item id', 'id'] } as const;
+  const listTable = () => ({
+    columns: [T.player, T.uuid, ['Orders', 'count'], ['Trading profit ($)', 'money'], ['Open findings', 'count'], ['Highest level', 'text'], ['First activity', 'time'], ['Last activity', 'time']] as const,
+    rows: (ordered ?? []).map((p) => [p.name, p.uuid, p.orders, p.profit, flags.get(p.uuid)?.n ?? 0, flags.get(p.uuid)?.level, p.firstMs, p.lastMs]),
+  });
+  const marketTable = (s: PlayerDetail) => ({
+    columns: [T.uuid, T.market, T.item, ['Orders', 'count'], ['Bought ($)', 'money'], ['Sold ($)', 'money'], ['Sold without a purchase ($)', 'money'], ['Profit ($)', 'money']] as const,
+    rows: s.markets.map((m) => [s.uuid, itemName(m.item), m.item, m.orders, m.bought, m.sold, m.soldWithoutPurchase, m.profit]),
+  });
+  const sessionTable = (s: PlayerDetail) => ({
+    columns: [T.uuid, ['Start', 'time'], ['End', 'time'], ['Markets', 'text'], ['Item ids', 'id'], ['Orders', 'count'], ['Typical time between orders (ms)', 'count'],
+      ['Profit ($)', 'money'], ['Sold without a purchase ($)', 'money'], ['Strongest finding', 'id']] as const,
+    rows: [...sessions].reverse().map((x) => [s.uuid, x.start, x.end, x.markets.map(itemName).join('; '), x.markets.join(' '), x.orders, x.medianGapMs === null ? null : Math.round(x.medianGapMs),
+      x.profit, x.soldWithoutPurchase, flagged.find((f) => f.start <= x.end && f.end >= x.start)?.id]),
+  });
+  const amountTable = (rows: { label: string; raw: bigint }[]) => ({ columns: [['What', 'text'], ['Amount ($)', 'money']] as const, rows: rows.map((r) => [r.label, r.raw]) });
+  const carriedTable = () => ({ columns: [['Where', 'text'], ['What', 'text'], ['Banknotes ($)', 'money']] as const, rows: carried.map((c) => [c.label, c.sub, c.raw]) });
+  const linkTable = (l: PlayerLink[], me: string) => ({
+    columns: [T.player, T.uuid, ['How sure', 'text'], ['How they are linked', 'text'], ['Order ids', 'id'], ['Entry ids', 'id']] as const,
+    rows: l.map((x) => [x.player.name, x.player.uuid, STRENGTH[x.strength], x.ways.map((w) => sentence(w, me, x.player.name, money)).join(' '), x.records.orders.join(' '), x.records.ledger.join(' ')]),
+  });
+
   const ownAccounts = $derived(shown?.accounts.filter((a) => a.owner) ?? []);
   const sharedAccounts = $derived(shown?.accounts.filter((a) => !a.owner) ?? []);
 </script>
@@ -275,6 +299,7 @@
       <h2>Players</h2>
       <span class="small">most suspicious first</span>
     </div>
+    {#if ordered?.length}<div class="listcsv"><CsvButton screen="players" table="list" what="the player list" make={listTable} /></div>{/if}
     {#if !main}
       <p class="small pad">No save with bank and market data is loaded.</p>
     {:else if list && list.length === 0}
@@ -376,7 +401,10 @@
         {:else}
           <div class="pair">
             <section class="card">
-              <h2 class="h2 h3">Profit by market</h2>
+              <div class="cardhead">
+                <h2 class="h2 h3" style="flex: 1 1 auto">Profit by market</h2>
+                <CsvButton screen="players" table="markets" what="the profit by market" make={() => marketTable(shown)} />
+              </div>
               <div class="markets">
                 {#each shown.markets as m (m.item)}
                   <div class="market">
@@ -392,6 +420,7 @@
             <section class="card" aria-label="Trading sessions">
               <div class="cardhead">
                 <h2 class="h2 h3" style="flex: 1 1 auto">Trading sessions</h2>
+                {#if sessionRows.length}<CsvButton screen="players" table="sessions" what="the trading sessions" make={() => sessionTable(shown)} />{/if}
                 {#if sessionRows.length > ROWS}<button type="button" class="link" onclick={() => (allSessions = !allSessions)}>{allSessions ? 'Show fewer' : `Show all ${count(sessionRows.length)}`}</button>{/if}
               </div>
               <p class="small" style="margin: 2px 0 0">Orders less than 5 minutes apart, newest first, with the typical time between them.</p>
@@ -416,6 +445,7 @@
           <section class="card">
             <div class="cardhead">
               <h2 class="h2 h3" style="flex: 1 1 auto">Orders</h2>
+              <CsvButton screen="players" table="orders" what="the orders" make={() => orderTable(orders, () => shown.name)} />
               <span class="small">{orders.length > ROWS && !allOrders ? `the latest ${count(ROWS)} of ${count(orders.length)}` : `${count(orders.length)}, newest first`}</span>
               {#if orders.length > ROWS}<button type="button" class="link" onclick={() => (allOrders = !allOrders)}>{allOrders ? 'Show fewer' : 'Show all'}</button>{/if}
             </div>
@@ -449,6 +479,10 @@
           <p class="empty">No other player shares an account, a transfer, banknotes or a trading session with {shown.name} in this time range.</p>
         {:else}
           <section class="card" aria-label="Connected players">
+            <div class="cardhead" style="margin-bottom: 8px">
+              <h2 class="h2 h3" style="flex: 1 1 auto">Connected players</h2>
+              <CsvButton screen="players" table="connected" what="the connected players" make={() => linkTable(links, shown.name)} />
+            </div>
             <div class="links">
               {#each links as l (l.player.uuid)}
                 <div class="link-item">
@@ -468,6 +502,10 @@
                     {#if !rec}
                       <p class="small" aria-busy="true" style="margin: 0">Loading the records…</p>
                     {:else}
+                      <div class="reccsv">
+                        {#if rec.orders.length}<CsvButton screen="players" table="link-orders" what="the orders behind this link" text="Orders as CSV" make={() => orderTable(rec.orders, (u) => (u === uuid ? shown.name : l.player.name))} />{/if}
+                        {#if rec.ledger.length}<CsvButton screen="players" table="link-entries" what="the log entries behind this link" text="Log entries as CSV" make={() => ledgerTable(rec.ledger.map((row) => ({ time: row.time, row })), main.name)} />{/if}
+                      </div>
                       <div class="scroll">
                         {#if rec.orders.length}
                           <table>
@@ -508,7 +546,10 @@
         {:else}
           <div class="pair">
             <section class="card" aria-label="Banknotes">
-              <h2 class="h2 h3">Banknotes</h2>
+              <div class="cardhead">
+                <h2 class="h2 h3" style="flex: 1 1 auto">Banknotes</h2>
+                {#if noteRows.length}<CsvButton screen="players" table="banknotes" what="the banknotes" make={() => amountTable(noteRows)} />{/if}
+              </div>
               {#if notes.reason !== null}
                 <p style="margin: 12px 0 0; color: var(--text2)">{notes.reason}</p>
               {:else}
@@ -521,7 +562,10 @@
               {/if}
             </section>
             <section class="card" aria-label="Found on the player">
-              <h2 class="h2 h3">Found on the player</h2>
+              <div class="cardhead">
+                <h2 class="h2 h3" style="flex: 1 1 auto">Found on the player</h2>
+                {#if carried.length}<CsvButton screen="players" table="found" what="what was found on the player" make={carriedTable} />{/if}
+              </div>
               {#if carriedNote}<p class="where">{carriedNote}</p>{/if}
               {#if carried.length}
                 <div class="notes">
@@ -547,6 +591,7 @@
           <section class="card">
             <div class="cardhead">
               <h2 class="h2 h3" style="flex: 1 1 auto">Bank history</h2>
+              <CsvButton screen="players" table="bank-history" what="the bank history" make={() => ledgerTable(bankEntries, main.name)} />
               <span class="small">{bankEntries.length > ROWS && !allBank ? `the latest ${count(ROWS)} of ${count(bankEntries.length)}` : `${count(bankEntries.length)}, newest first`}, all accounts of the player</span>
               {#if bankEntries.length > ROWS}<button type="button" class="link" onclick={() => (allBank = !allBank)}>{allBank ? 'Show fewer' : 'Show all'}</button>{/if}
             </div>

@@ -4,6 +4,7 @@
   import type { Candle, Finding, ItemRow, Level, MarketFacts, MarketRow, OrderRow, Scope, Trader } from '../../shared/api.ts';
   import { amount, count, countShort, items as quantity, money, moneyShort } from '../../shared/fmt.ts';
   import CandleChart from '../app/CandleChart.svelte';
+  import CsvButton from '../app/CsvButton.svelte';
   import FindingLinks from '../app/FindingLinks.svelte';
   import { app, engine, setRange } from '../app/state.svelte.ts';
   import { LEVEL_COLOR, tone, words } from '../app/words.ts';
@@ -149,6 +150,17 @@
     return `${traderName} ${[side(true), side(false)].filter(Boolean).join(' and ')}, orders ${WHEN[basis(inside)][0]} in this candle`;
   }
 
+  // ---- CSV (AT-44) ----
+  const listTable = () => ({
+    columns: [['Market', 'text'], ['Item', 'id'], ['Item id', 'id'], ['Orders', 'count'], ['Price when the save was taken ($)', 'money'], ['Lowest ($)', 'money'], ['Highest ($)', 'money'],
+      ['Swing (highest / lowest)', 'number'], ['Open findings', 'count'], ['Highest level', 'text']] as const,
+    rows: (ordered ?? []).map((m) => [itemName(m.item), itemRows.get(m.item)?.name, m.item, m.orders, m.price, m.low, m.high, m.swing, flags.get(m.item)?.n ?? 0, flags.get(m.item)?.level]),
+  });
+  const traderTable = (i: number) => ({
+    columns: [['Player', 'text'], ['Player uuid', 'id'], ['Market', 'text'], ['Item id', 'id'], ['Bought ($)', 'money'], ['Sold ($)', 'money'], ['Realised profit ($)', 'money']] as const,
+    rows: traders.map((t) => [t.name, t.uuid, itemName(i), i, t.bought, t.sold, t.profit]),
+  });
+
   const figures = $derived.by(() => {
     if (!facts) return [];
     const f = facts;
@@ -169,6 +181,7 @@
       <h2>Markets</h2>
       <span class="small">most findings first</span>
     </div>
+    {#if ordered?.length}<div class="listcsv"><CsvButton screen="markets" table="list" what="the market list" make={listTable} /></div>{/if}
     {#if !main}
       <p class="small pad">No save with market data is loaded.</p>
     {:else if list && list.length === 0}
@@ -260,7 +273,10 @@
 
       <div class="pair">
         <section class="card">
-          <h2 class="h2 h3">Who traded here</h2>
+          <div class="cardhead">
+            <h2 class="h2 h3" style="flex: 1 1 auto">Who traded here</h2>
+            {#if traders.length}<CsvButton screen="markets" table="traders-{item}" what="who traded here" make={() => traderTable(item)} />{/if}
+          </div>
           <p class="small" style="margin: 2px 0 0">In this time range. Pick a player to put their orders on the chart.</p>
           {#if traders.length === 0}
             <p style="margin: 16px 0 0; color: var(--text2)">No player traded on this market in this time range.</p>

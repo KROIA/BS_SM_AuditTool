@@ -552,8 +552,10 @@ export interface SearchResult {
   players: { uuid: string; name: string }[];
   accounts: { number: number; name: string }[];
   items: ItemRow[];
-  /** With the name of the player who placed it. Transfer ids are not searched until they have a screen (M4). */
+  /** With the name of the player who placed it. */
   orders: (OrderRow & { name: string })[];
+  /** By the whole id or its first 8 characters or more, over all loaded data (time range and server filter do not apply). */
+  transfers: TransferRow[];
 }
 
 /**

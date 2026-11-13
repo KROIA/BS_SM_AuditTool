@@ -5,6 +5,7 @@
   import type { BanknotesResult, WorldItemsResult, WorldPlace } from '../../shared/api.ts';
   import { bytes, count, money, moneyShort } from '../../shared/fmt.ts';
   import { app, engine, startScan, stopScan } from '../app/state.svelte.ts';
+  import CsvButton from '../app/CsvButton.svelte';
   import { heldText } from '../app/words.ts';
 
   const TOP = 5; // places shown until "Show all" (DESIGN_SPEC rule 3)
@@ -73,7 +74,7 @@
   });
 
   // ---- Where notes and valuables were found ----
-  interface Row { key: string; label: string; href: string | null; sub: string; notes: bigint; pieces: number }
+  interface Row { key: string; label: string; href: string | null; sub: string; notes: bigint; pieces: number; server: string; uuid: string | null; account: number | null; at: WorldPlace | null }
   const pieces = (l: { count: number }[]) => l.reduce((a, s) => a + s.count, 0);
   const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const byNotes = (a: Row, b: Row) => (b.notes > a.notes ? 1 : b.notes < a.notes ? -1 : b.pieces - a.pieces);
@@ -84,6 +85,7 @@
       key: `${p.server}|${p.where}|${p.player?.uuid ?? ''}|${p.account ?? ''}`, label: capital(p.where),
       href: p.player ? `#/players/${encodeURIComponent(p.player.uuid)}` : p.account !== null ? `#/accounts/${p.account}` : null,
       sub: [p.server, whose, heldText([...p.stacks, ...p.valuables])].filter(Boolean).join(', '), notes: p.notes, pieces: pieces(p.valuables),
+      server: p.server, uuid: p.player?.uuid ?? null, account: p.account, at: p,
     };
   }
   /** Players' inventories and ender chests, one row per server and place, and the places of the region scan. */
@@ -96,7 +98,8 @@
       for (const [k, list] of held) {
         const [srv, place] = k.split('|') as [string, string];
         out.push({ key: `${p.player.uuid}|${k}`, label: `${place === 'ender chest' ? 'Ender chest' : 'Inventory'} of ${p.player.name}`, href: `#/players/${encodeURIComponent(p.player.uuid)}`,
-          sub: `${srv}, ${heldText(list)}`, notes: sum(list.map((s) => s.value ?? 0n)), pieces: pieces(list.filter((s) => s.value === null)) });
+          sub: `${srv}, ${heldText(list)}`, notes: sum(list.map((s) => s.value ?? 0n)), pieces: pieces(list.filter((s) => s.value === null)),
+          server: srv, uuid: p.player.uuid, account: null, at: null });
       }
     }
     for (const p of world.places) if (p.source !== 'offer' && here(p.server)) out.push(placeRow(p));
@@ -106,6 +109,14 @@
   const noteRows = $derived(rows.filter((r) => r.notes > 0n));
   const onlyValuables = $derived(rows.filter((r) => r.notes === 0n));
   const offers = $derived(world && world.reason === null ? world.places.filter((p) => p.source === 'offer' && p.notes > 0n && here(p.server)).map(placeRow).sort(byNotes) : []);
+
+  // CSV (AT-44): every place, also those with valuables only, and the places' coordinates.
+  const placeTable = (list: Row[]) => () => ({
+    columns: [['Where', 'text'], ['Server', 'text'], ['What', 'text'], ['Banknotes ($)', 'money'], ['Valuables (pieces)', 'count'], ['Player uuid', 'id'], ['Account', 'id'],
+      ['Block or entity', 'id'], ['Dimension', 'id'], ['X', 'count'], ['Y', 'count'], ['Z', 'count']] as const,
+    rows: list.map((r) => [r.label, r.server, r.sub, r.notes, r.pieces, r.uuid, r.account, r.at?.place, r.at?.dimension, r.at?.x, r.at?.y, r.at?.z]),
+  });
+  const blindTable = () => ({ columns: [['What', 'text'], ['Why', 'text']] as const, rows: blind.map((b) => [b.label, b.sub]) });
 
   // ---- Where the tool could not look ----
   const listed = (l: string[]) => (l.length <= 5 ? l.join(', ') : `${l.slice(0, 5).join(', ')} and ${count(l.length - 5)} more`);
@@ -222,6 +233,7 @@
     <section class="card wide" aria-label="Where banknotes were found">
       <div class="cardhead">
         <h2 class="h2 h3" style="flex: 1 1 auto">Where banknotes were found</h2>
+        {#if rows.length}<CsvButton screen="saves" table="world-found" what="every place notes or valuables were found" make={placeTable(rows)} />{/if}
         {#if noteRows.length > TOP}<button type="button" class="link" onclick={() => (allFound = !allFound)}>{allFound ? 'Show fewer' : `Show all ${count(noteRows.length)}`}</button>{/if}
       </div>
       {#if world.reason !== null}
@@ -259,7 +271,10 @@
     </section>
 
     <section class="card" aria-label="Where the tool could not look">
-      <h2 class="h2 h3">Where the tool could not look</h2>
+      <div class="cardhead">
+        <h2 class="h2 h3" style="flex: 1 1 auto">Where the tool could not look</h2>
+        {#if blind.length}<CsvButton screen="saves" table="world-not-checked" what="where the tool could not look" make={blindTable} />{/if}
+      </div>
       {#if blind.length === 0}
         <p class="none">Nowhere: every player file and every region file was read.</p>
       {:else}
@@ -276,6 +291,7 @@
     <section class="card" aria-label="Prices in villagers' offers">
       <div class="cardhead">
         <h2 class="h2 h3" style="flex: 1 1 auto">Prices in villagers' offers</h2>
+        <CsvButton screen="saves" table="world-offers" what="the villagers' offers" make={placeTable(offers)} />
         {#if offers.length > TOP}<button type="button" class="link" onclick={() => (allOffers = !allOffers)}>{allOffers ? 'Show fewer' : `Show all ${count(offers.length)}`}</button>{/if}
       </div>
       <p class="small" style="margin: 2px 0 0">Villagers trade in notes on these servers. A note in an offer is a price, not a note that exists, so the {money(world.offers)} named here are not counted.</p>
