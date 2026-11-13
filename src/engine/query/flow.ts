@@ -19,12 +19,18 @@ const ZERO = { outside: 0n, inFiles: 0n, elsewhere: 0n, notFound: 0n, others: []
 type Draft = Omit<FlowPart, 'side'>;
 type Part = FlowPart;
 const draft = (kind: FlowPart['kind'], player: string, account: number, more: Partial<Draft> = {}): Draft => ({
-  kind, player, amount: 0n, basis: 'proven', market: null, other: null, incident: false, items: null, notes: null, accounts: [account],
+  kind, player, amount: 0n, basis: 'proven', market: null, other: null, incident: false, items: null, notes: null, accounts: [account], gap: null,
   records: { ledger: [], orders: [], findings: [] }, ...more,
 });
 const note = (d: Draft, m: Move) => (m.order ? d.records.orders : d.records.ledger).push(m.id);
 
-export function moneyFlow(scope: Scope, incidentId: string, player: string | null, settings: RuleSettings): MoneyFlow {
+/**
+ * For the take-back (takeback.ts): start replaces the incident's start, players are followed besides the incident's, and
+ * split keeps the parts per account and gap instead of merging them per player.
+ */
+export interface FlowOptions { start?: number; players?: string[]; split?: boolean }
+
+export function moneyFlow(scope: Scope, incidentId: string, player: string | null, settings: RuleSettings, opts: FlowOptions = {}): MoneyFlow {
   const db = mainData(), main = mainSave();
   const legacy = main?.generation === 'legacy';
   const empty = (reason: string): MoneyFlow =>
@@ -32,9 +38,11 @@ export function moneyFlow(scope: Scope, incidentId: string, player: string | nul
   if (!db || !main) return empty('No save with bank data is loaded, so no money can be followed.');
   const inc = incidents(ALL, settings).incidents.find((i) => i.id === incidentId);
   if (!inc) return empty('This incident is not raised with the current rule settings.');
+  const t0 = opts.start ?? inc.start, nameOf = names(db);
+  const extra = (opts.players ?? []).filter((u) => !inc.players.some((p) => p.uuid === u)).map((uuid) => ({ uuid, name: nameOf(uuid) }));
   const owned = all(db, `SELECT number, owner FROM account WHERE owner IN (SELECT value FROM json_each(:p)) ORDER BY number`,
-    { p: JSON.stringify(inc.players.map((p) => p.uuid)) }).map((r) => ({ account: num(r.number)!, player: String(r.owner) }));
-  const players = inc.players.filter((p) => owned.some((o) => o.player === p.uuid));
+    { p: JSON.stringify([...inc.players, ...extra].map((p) => p.uuid)) }).map((r) => ({ account: num(r.number)!, player: String(r.owner) }));
+  const players = [...inc.players, ...extra].filter((p) => owned.some((o) => o.player === p.uuid));
   if (!players.length) return { ...empty('None of the players of this incident has a personal account, so there is no balance to follow.'), incident: inc };
 
   const money = [...moneyItems(db)];
@@ -48,7 +56,7 @@ export function moneyFlow(scope: Scope, incidentId: string, player: string | nul
   const accounts: MoneyFlow['accounts'] = [];
   const parts: Part[] = [];
   for (const { account, player: uuid } of owned) {
-    const checks = checkAll(account, { from: inc.start, to: null, server: null }, settings).get(account) ?? [];
+    const checks = checkAll(account, { from: t0, to: null, server: null }, settings).get(account) ?? [];
     const { snaps, moves } = read(db, account);
     const mine: Part[] = [];
     const push = (side: 'in' | 'out', d: Draft) => { if (d.amount !== 0n) mine.push({ ...d, side }); };
@@ -112,14 +120,14 @@ export function moneyFlow(scope: Scope, incidentId: string, player: string | nul
         if (mk.cash >= 0n) { push('in', { ...mk.d, amount: mk.cash }); continue; }
         // A losing market: what the goods still held cost (average buying price), at most the loss; the rest was lost.
         const keptCost = mk.qty > 0n && mk.bought > 0n ? min(-mk.cash, (mk.qty * mk.paid) / mk.bought) : 0n;
-        const usual = usualAt(market, inc.start); // the usual price before the incident (AT-45)
+        const usual = usualAt(market, t0); // the usual price before the incident (AT-45)
         push('out', { ...mk.d, kind: 'items', amount: keptCost, items: { qty: mk.qty, worth: usual === null ? null : (mk.qty * usual) / 100n } });
         push('out', { ...mk.d, kind: 'lost', amount: -mk.cash - keptCost, records: { ...mk.d.records } });
       }
 
       // 2.1.2 logged no admin action: money that went without a row (a negative gap above the threshold) was removed (an estimate).
       if (legacy) for (const g of c?.gaps ?? []) {
-        if (g.difference < 0n) push('out', draft('removed', uuid, account, { amount: -g.difference, basis: 'estimate', records: { ledger: [], orders: [], findings: [`balance:${account}:${item}@${g.from}`] } }));
+        if (g.difference < 0n) push('out', draft('removed', uuid, account, { amount: -g.difference, basis: 'estimate', gap: { from: g.from, to: g.to }, records: { ledger: [], orders: [], findings: [`balance:${account}:${item}@${g.from}`] } }));
       }
     }
 
@@ -194,9 +202,9 @@ export function moneyFlow(scope: Scope, incidentId: string, player: string | nul
   for (const p of merged.values()) if (chosen.includes(p.player)) outside += p.kind === 'notes' ? (p.side === 'out' ? p.amount : -p.amount) : p.kind === 'appeared' ? -p.amount : 0n;
   if (outside < 0n) outside = 0n;
   // Notes they took out after the start that another player likely paid in (a Likely note link, DESIGN_SPEC 8.9).
-  const others: MoneyFlow['notes']['others'] = [], nameOf = names(db);
+  const others: MoneyFlow['notes']['others'] = [];
   for (const m of noteMatches(ALL)) {
-    if (!chosen.includes(m.out) || chosen.includes(m.in) || m.withdrawn[0]!.ts <= inc.start || outside === 0n) continue;
+    if (!chosen.includes(m.out) || chosen.includes(m.in) || m.withdrawn[0]!.ts <= t0 || outside === 0n) continue;
     const amount = min(m.amount, outside);
     outside -= amount;
     const o = others.find((x) => x.player.uuid === m.in) ?? (others.push({ player: { uuid: m.in, name: nameOf(m.in) }, amount: 0n }), others.at(-1)!);
@@ -213,6 +221,6 @@ export function moneyFlow(scope: Scope, incidentId: string, player: string | nul
   if (world.reason) missing.push(`Where the notes are now is not known: ${world.reason}`);
   return {
     reason: null, incident: inc, players, player, accounts: accounts.filter((a) => chosen.includes(a.player)),
-    parts: [...merged.values()].filter((p) => chosen.includes(p.player)), notes, to: main.lastPlayedMs, legacy, missing,
+    parts: (opts.split ? parts : [...merged.values()]).filter((p) => chosen.includes(p.player)), notes, to: main.lastPlayedMs, legacy, missing,
   };
 }

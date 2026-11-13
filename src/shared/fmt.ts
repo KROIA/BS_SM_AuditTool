@@ -46,6 +46,12 @@ export function items(raw: bigint): string {
 /** A percentage with up to two decimals: 25 -> 25%, 12.345 -> 12.35% */
 export const percent = (v: number) => items(BigInt(Math.round(v * 100))) + '%';
 
+/** A raw amount as a command takes it: no separators, decimals only when there are any: 1153205n -> 11532.05, 100n -> 1 */
+export function plain(raw: bigint): string {
+  const text = amount(raw).replaceAll("'", '');
+  return text.endsWith('.00') ? text.slice(0, -3) : text;
+}
+
 /** Raw money in full:153205n -> $1'532.05, -153205n -> -$1'532.05 */
 export function money(raw: bigint): string {
   return (raw < 0n ? '-$' : '$') + amount(abs(raw));

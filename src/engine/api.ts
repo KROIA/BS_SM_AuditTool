@@ -14,10 +14,11 @@ import { keyEvents, overview } from './query/overview.ts';
 import { items, ledger, orders, player, players } from './query/players.ts';
 import { search } from './query/search.ts';
 import { sessions } from './query/sessions.ts';
+import { takeBack } from './query/takeback.ts';
 import { transfers } from './query/transfers.ts';
 import { worldItems } from './query/world.ts';
 import { scanStatus, startScan, stopScan } from './scan.ts';
-import { addSave, caseData, mark, removeSave, setRules, workspace } from './workspace.ts';
+import { addSave, caseData, mark, removeSave, setChoices, setRules, workspace } from './workspace.ts';
 
 export const api: EngineApi = {
   workspace,
@@ -26,6 +27,7 @@ export const api: EngineApi = {
   caseData,
   mark,
   setRules,
+  setChoices,
   items,
   players,
   player,
@@ -50,6 +52,7 @@ export const api: EngineApi = {
   banknotes,
   links,
   moneyFlow,
+  takeBack,
   worldItems,
   startScan,
   stopScan,

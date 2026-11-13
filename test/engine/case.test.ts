@@ -15,6 +15,7 @@ let fx: Fixtures;
 let dir: string;
 const file = () => path.join(dir, 'case.json');
 const restart = () => (init(dir), api.workspace());
+const NO_CHOICES = { cutoff: { kind: 'day', at: null }, answers: {}, order: [] };
 
 before(() => {
   fx = buildFixtures(fs.mkdtempSync(path.join(os.tmpdir(), 'audittool-case-')));
@@ -66,13 +67,24 @@ test('case.json: a broken or oversized file is kept as case.json.broken and the 
     fs.rmSync(file() + '.broken', { force: true });
     fs.writeFileSync(file(), content);
     restart();
-    assert.deepEqual(api.caseData(), { rules: DEFAULT_RULES, marks: {} });
+    assert.deepEqual(api.caseData(), { rules: DEFAULT_RULES, marks: {}, choices: NO_CHOICES });
     assert.equal(fs.readFileSync(file() + '.broken', 'utf8'), content);
     api.mark('a', mark({ pinned: true })); // the next write replaces the broken file
     assert.equal(JSON.parse(fs.readFileSync(file(), 'utf8')).marks.a.pinned, true);
     api.mark('a', mark({}));
   }
   addSave(fx.master); // the empty case forgot it
+});
+
+test('case.json: the take-back choices survive a restart, bad ones fall back', () => {
+  const choices = { cutoff: { kind: 'custom' as const, at: T0 + 60_000 }, answers: { '7@123': 'yes' as const }, order: ['b', 'a'] };
+  api.setChoices(choices);
+  restart();
+  assert.deepEqual(api.caseData().choices, choices);
+  fs.writeFileSync(file(), JSON.stringify({ saves: [fx.master], choices: { cutoff: { kind: 'later', at: 'soon' }, answers: { a: 'maybe', b: 'no', ['k'.repeat(201)]: 'yes' }, order: ['a', 7] } }));
+  restart();
+  assert.deepEqual(api.caseData().choices, { cutoff: { kind: 'day', at: null }, answers: { b: 'no' }, order: ['a'] });
+  api.setChoices(NO_CHOICES as never);
 });
 
 test('orphans: a pinned finding the rules no longer raise is reported with its stored mark', () => {

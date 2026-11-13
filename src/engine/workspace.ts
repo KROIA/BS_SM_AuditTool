@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { DEFAULT_RULES, type CaseData, type Mark, type Progress, type RuleSettings, type SaveSummary, type Workspace } from '../shared/api.ts';
+import { DEFAULT_RULES, type Answer, type CaseChoices, type CaseData, type Cutoff, type Mark, type Progress, type RuleSettings, type SaveSummary, type Workspace } from '../shared/api.ts';
 import { cachedSummary, importSave } from './save/import.ts';
 import { findDataDir } from './save/locate.ts';
 import { dropScan, resetScan } from './scan.ts';
@@ -31,7 +31,7 @@ export const mainSave = () => saves.find(hasBankOrMarket);
 /** case.json is small; anything above this was not written by the tool. */
 export const CASE_LIMIT = 8 * 1024 * 1024;
 const MARKS = 10_000, TEXT = 10_000;
-interface Case { saves: string[]; rules: RuleSettings; marks: Record<string, Mark> }
+interface Case { saves: string[]; rules: RuleSettings; marks: Record<string, Mark>; choices: CaseChoices }
 let kase: Case | null = null;
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -59,6 +59,20 @@ function readMarks(v: unknown): Record<string, Mark> {
   }
   return out;
 }
+const CUTS: Cutoff['kind'][] = ['day', 'first', 'custom'], ANSWERS: Answer[] = ['yes', 'unsure', 'no'];
+/** The Case screen's choices; anything unknown falls back to the recommended cutoff, no answers and the pins' own order. */
+function readChoices(v: unknown): CaseChoices {
+  const c = isObject(v) ? v : {}, cut = isObject(c.cutoff) ? c.cutoff : {};
+  const answers: Record<string, Answer> = {};
+  for (const [k, a] of Object.entries(isObject(c.answers) ? c.answers : {}).slice(0, MARKS)) {
+    if (k.length <= 200 && k !== '__proto__' && ANSWERS.includes(a as Answer)) answers[k] = a as Answer;
+  }
+  return {
+    cutoff: { kind: CUTS.includes(cut.kind as Cutoff['kind']) ? cut.kind as Cutoff['kind'] : 'day', at: typeof cut.at === 'number' && Number.isFinite(cut.at) ? cut.at : null },
+    answers,
+    order: Array.isArray(c.order) ? c.order.filter((id): id is string => typeof id === 'string' && id.length <= 500).slice(0, MARKS) : [],
+  };
+}
 const kept = (m: Mark) => m.pinned || m.dismissed || m.note.trim() !== '';
 
 /** Read once per workspace. A file that is too large or not JSON is kept as case.json.broken and the case starts empty. */
@@ -72,7 +86,7 @@ function theCase(): Case {
     if ((e as NodeJS.ErrnoException).code !== 'ENOENT') fs.copyFileSync(caseFile(), caseFile() + '.broken');
   }
   const c = isObject(raw) ? raw : {};
-  return (kase = { saves: Array.isArray(c.saves) ? c.saves.filter((p): p is string => typeof p === 'string').slice(0, 100) : [], rules: readRules(c.rules), marks: readMarks(c.marks) });
+  return (kase = { saves: Array.isArray(c.saves) ? c.saves.filter((p): p is string => typeof p === 'string').slice(0, 100) : [], rules: readRules(c.rules), marks: readMarks(c.marks), choices: readChoices(c.choices) });
 }
 
 /** Written to a temporary file first and then renamed, so a crash never leaves half a case.json. */
@@ -84,7 +98,7 @@ function remember() {
   fs.renameSync(caseFile() + '.tmp', caseFile());
 }
 
-export const caseData = (): CaseData => ({ rules: theCase().rules, marks: theCase().marks });
+export const caseData = (): CaseData => ({ rules: theCase().rules, marks: theCase().marks, choices: theCase().choices });
 export function mark(id: string, m: Mark): CaseData {
   const marks = theCase().marks;
   const clean = readMarks({ [String(id)]: m })[String(id)];
@@ -95,6 +109,11 @@ export function mark(id: string, m: Mark): CaseData {
 }
 export function setRules(rules: RuleSettings): CaseData {
   theCase().rules = readRules(JSON.parse(JSON.stringify(rules, (_k, v: unknown) => (typeof v === 'bigint' ? String(v) : v))));
+  remember();
+  return caseData();
+}
+export function setChoices(choices: CaseChoices): CaseData {
+  theCase().choices = readChoices(choices);
   remember();
   return caseData();
 }

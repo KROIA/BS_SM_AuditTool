@@ -1,5 +1,5 @@
 // What the whole program shares: the open screen, the theme, the loaded saves and what is being loaded.
-import { DEFAULT_RULES, type CaseData, type Incident, type Mark, type Progress, type RemoteEngine, type RuleSettings, type SaveSummary, type ScanStatus, type Scope, type Workspace } from '../../shared/api.ts';
+import { DEFAULT_RULES, type CaseChoices, type CaseData, type Incident, type Mark, type Progress, type RemoteEngine, type RuleSettings, type SaveSummary, type ScanStatus, type Scope, type Workspace } from '../../shared/api.ts';
 
 interface Bridge {
   call(method: string, ...args: unknown[]): Promise<unknown>;
@@ -42,6 +42,8 @@ export const app = $state({
   /** The rule settings and the marks on findings, from case.json. Pass rules on with $state.snapshot. */
   rules: DEFAULT_RULES as RuleSettings,
   marks: {} as Record<string, Mark>,
+  /** The Case screen's cutoff, answers and evidence order, from case.json. */
+  choices: { cutoff: { kind: 'day', at: null }, answers: {}, order: [] } as CaseChoices,
   /** "The incident" of the range menu and the Overview (ScopeMenus works it out); undefined while the rules run. */
   incident: undefined as Incident | null | undefined,
   /** How far the region scan got (DESIGN_SPEC 6.7); kept here so the bar lives on while other screens are open. */
@@ -53,9 +55,11 @@ export const app = $state({
 function useCase(c: CaseData) {
   app.rules = c.rules;
   app.marks = c.marks;
+  app.choices = c.choices;
 }
 /** Stores what the user marked on a finding; a mark with nothing left in it is removed. */
 export const setMark = async (id: string, m: Mark) => useCase(await engine.mark(id, $state.snapshot(m)));
+export const setChoices = async (c: CaseChoices) => useCase(await engine.setChoices($state.snapshot(c)));
 export const setRules = async (r: RuleSettings) => useCase(await engine.setRules($state.snapshot(r)));
 /** The number of pins, for the case counter. */
 export const pins = () => Object.values(app.marks).filter((m) => m.pinned).length;

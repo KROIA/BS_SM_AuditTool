@@ -2,13 +2,13 @@
   // The frame around every screen: left menu, top bar, and the screen itself.
   import { count } from '../../shared/fmt.ts';
   import Accounts from '../screens/Accounts.svelte';
+  import Case from '../screens/Case.svelte';
   import Findings from '../screens/Findings.svelte';
   import Flow from '../screens/Flow.svelte';
   import Markets from '../screens/Markets.svelte';
   import Overview from '../screens/Overview.svelte';
   import Players from '../screens/Players.svelte';
   import Saves from '../screens/Saves.svelte';
-  import Soon from '../screens/Soon.svelte';
   import Icon from './Icon.svelte';
   import { ICON, SCREENS } from './nav.ts';
   import ScopeMenus from './ScopeMenus.svelte';
@@ -70,8 +70,8 @@
           <Findings selected={route[1] ? decodeURIComponent(route[1]) : null} />
         {:else if screen.id === 'flow'}
           <Flow selected={route[1] ? decodeURIComponent(route[1]) : null} />
-        {:else}
-          <Soon {screen} />
+        {:else if screen.id === 'case'}
+          <Case selected={route[1] ? decodeURIComponent(route[1]) : null} />
         {/if}
       </div>
     </main>

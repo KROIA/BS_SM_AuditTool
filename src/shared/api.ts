@@ -488,11 +488,62 @@ export interface Mark {
   note: string;
 }
 
+/** The cutoff of the take-back (DESIGN_SPEC 8.10): the end of the day before the incident, right before its first finding, or a time picked (at). */
+export interface Cutoff { kind: 'day' | 'first' | 'custom'; at: number | null }
+/** Did an admin remove money that left a 2.1.2 account without a log row? */
+export type Answer = 'yes' | 'unsure' | 'no';
+/** What the Case screen remembers. answers: by removal key (TakeBackRow.removed); order: pinned finding ids, the evidence order. */
+export interface CaseChoices { cutoff: Cutoff; answers: Record<string, Answer>; order: string[] }
+
 /** The parts of case.json the screens use. */
 export interface CaseData {
   rules: RuleSettings;
   /** By finding id. */
   marks: Record<string, Mark>;
+  choices: CaseChoices;
+}
+
+/** One item to take back from an account (DESIGN_SPEC 8.10), raw counts: remove = max(0, min(bought, now - before)). */
+export interface TakeBackItem { item: number; before: bigint; bought: bigint; spent: bigint; now: bigint; remove: bigint }
+/**
+ * One personal account of the take-back. start: the balance at the cutoff (the newest snapshot at or before it, else the
+ * first one after it, from); other: net trading since then on markets outside the incident; keep = min(now, start +
+ * max(0, other)); take = now - keep. removed: 2.1.2 money that left without a log row since the cutoff, one per gap.
+ * via: for a player outside the incident, the incident player whose notes this one likely paid in after the cutoff
+ * (DESIGN_SPEC 8.9) and the sum of those notes; their take = min(now, notes + max(0, net on the incident's markets)).
+ * null for the incident's own players.
+ */
+export interface TakeBackRow {
+  account: number;
+  player: { uuid: string; name: string };
+  via: { uuid: string; name: string; notes: bigint } | null;
+  from: number | null;
+  start: bigint;
+  now: bigint;
+  other: bigint;
+  keep: bigint;
+  take: bigint;
+  removed: { key: string; amount: bigint; from: number; to: number }[];
+  /** Largest money spent first. */
+  items: TakeBackItem[];
+}
+/** What to take back for one incident (DESIGN_SPEC 6.8, 8.10). */
+export interface TakeBack {
+  /** Why nothing can be shown; null when it ran. */
+  reason: string | null;
+  incident: Incident | null;
+  /** The moment used, and the moments of the first two cutoff cards. */
+  at: number;
+  day: number;
+  first: number;
+  rows: TakeBackRow[];
+  /** Money kept as goods (the money flow's "spent on items" since the cutoff). */
+  items: bigint;
+  /** The notes still outside since the cutoff, and where they are (the money flow's split, all players as one). */
+  notes: MoneyFlow['notes'];
+  to: number | null;
+  legacy: boolean;
+  missing: string[];
 }
 
 export interface SearchResult {
@@ -582,6 +633,8 @@ export interface QueryApi {
    * settings: the incidents are made from the findings, and the threshold of gaps on 2.1.2 is the balance rule's.
    */
   moneyFlow(scope: Scope, incidentId: string, player: string | null, settings: RuleSettings): MoneyFlow;
+  /** What to take back from the incident's players (DESIGN_SPEC 8.10), from the cutoff to the copy. No scope applies. */
+  takeBack(incidentId: string, cutoff: Cutoff, settings: RuleSettings): TakeBack;
   /**
    * What the players carry in their inventories and ender chests (DESIGN_SPEC 8.7), from the player files of the main
    * save and its loaded slaves: the state when each copy was taken, so no scope applies.
@@ -815,6 +868,8 @@ export interface FlowPart {
   /** notes: handed out and paid back in, before netting. */
   notes: { out: bigint; back: bigint } | null;
   accounts: number[];
+  /** removed: the two balance snapshots between which the money left (the first one's when merged). */
+  gap: { from: number; to: number } | null;
   /** orders: order ids, as orders({ ids }) takes them. findings: the incident's findings about this part. */
   records: { ledger: number[]; orders: number[]; findings: string[] };
 }
@@ -918,7 +973,7 @@ export interface AdminEvent {
   ledgerId: number | null;
 }
 
-export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers' | 'banknotes' | 'links' | 'moneyFlow' | 'worldItems' | 'startScan' | 'stopScan' | 'scanStatus'> {
+export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers' | 'banknotes' | 'links' | 'moneyFlow' | 'takeBack' | 'worldItems' | 'startScan' | 'stopScan' | 'scanStatus'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
   addSave(path: string): Workspace;
@@ -929,6 +984,7 @@ export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player'
   /** Sets the marks of one finding; a mark with nothing pinned, dismissed or noted is removed. */
   mark(id: string, mark: Mark): CaseData;
   setRules(rules: RuleSettings): CaseData;
+  setChoices(choices: CaseChoices): CaseData;
 }
 
 /** The same calls as the screens see them: every answer arrives later. */
