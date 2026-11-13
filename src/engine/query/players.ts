@@ -10,6 +10,8 @@ import { profit } from './profit.ts';
 const inTime = (ms: number, s: Scope) => (s.from === null || ms >= s.from) && (s.to === null || ms <= s.to);
 
 const TYPE = ['market', 'limit', 'intermarket'] as const;
+/** SM-317 final_status. */
+const STATUS = ['filled', 'cancelled by the player', 'cancelled by the server'] as const;
 
 /** Orders up to `to`, oldest first; the time range's start and the server filter are left to the caller. */
 export function readOrders(db: DatabaseSync, filter: { player?: string; item?: number; orderId?: number; ids?: number[] }, to: number | null): OrderRow[] {
@@ -33,6 +35,7 @@ export function readOrders(db: DatabaseSync, filter: { player?: string; item?: n
       money: (amount * price) / 100n,
       time: num(r.time)!, finishMs: num(r.finish_time),
       server: origin === null ? null : origin === '' ? master : origin, // an empty origin name is the master
+      limitPrice: big(r.limit_price), wanted: big(r.target_volume), status: r.final_status === null ? null : (STATUS[num(r.final_status)!] ?? null),
     };
   });
 }
@@ -52,7 +55,7 @@ function activity(db: DatabaseSync, list: OrderRow[], s: Scope, player?: string)
   if (player !== undefined) (where.push('actor = :player'), (params.player = player));
   if (s.from !== null) (where.push('ts >= :from'), (params.from = s.from));
   if (s.to !== null) (where.push('ts <= :to'), (params.to = s.to));
-  for (const r of all(db, `SELECT actor, min(ts) AS a, max(ts) AS b FROM ledger WHERE ${where.join(' AND ')} GROUP BY actor`, params)) {
+  for (const r of all(db, `SELECT actor, min(ts) AS a, max(ts) AS b FROM ledger WHERE ${where.join(' AND ')} ${onServer(s, params)} GROUP BY actor`, params)) {
     see(String(r.actor), num(r.a)!);
     see(String(r.actor), num(r.b)!);
   }
@@ -155,16 +158,27 @@ export function change(kind: string, amount: bigint, note: string | null, balanc
   return null; // UNKNOWN_LEGACY and kinds this version of the tool does not know
 }
 
+/**
+ * The SQL condition of the server filter on ledger rows (BS-256): a row made on the filtered server, and every row of a log
+ * without an origin column (server NULL). '' is the master. Sets :server in params.
+ */
+export function onServer(scope: Scope, params: Record<string, SQLInputValue>, column = 'server'): string {
+  if (scope.server === null) return '';
+  params.server = scope.server === mainName() ? '' : scope.server;
+  return `AND (${column} IS NULL OR ${column} = :server)`;
+}
+
 export function ledger(filter: { accounts?: number[]; ids?: number[] }, scope: Scope): LedgerRow[] {
   const db = mainData();
   const [column, list] = filter.ids ? ['id', filter.ids] : ['account', filter.accounts ?? []];
   if (!db || list.length === 0) return [];
-  const nameOf = names(db);
+  const nameOf = names(db), master = mainName();
   const params: Record<string, SQLInputValue> = { list: JSON.stringify(list) };
   if (scope.from !== null) params.from = scope.from;
   if (scope.to !== null) params.to = scope.to;
   return all(db, `SELECT * FROM ledger WHERE ${column} IN (SELECT value FROM json_each(:list))
-    ${scope.from !== null ? 'AND ts >= :from' : ''} ${scope.to !== null ? 'AND ts <= :to' : ''} ORDER BY ts DESC, id DESC`, params).map((r) => {
+    ${scope.from !== null ? 'AND ts >= :from' : ''} ${scope.to !== null ? 'AND ts <= :to' : ''} ${onServer(scope, params)} ORDER BY ts DESC, id DESC`, params).map((r) => {
+    const server = text(r.server), dimension = text(r.dimension);
     const kind = String(r.kind), amount = big(r.amount)!, note = text(r.note), balanceAfter = big(r.balance_after);
     const actor = text(r.actor);
     // Trade rows (OrderLedger.logDelta): amount is the goods, money_amount the money, both stored without a sign. A buy pays money.
@@ -176,6 +190,8 @@ export function ledger(filter: { accounts?: number[]; ids?: number[] }, scope: S
       money: trade ? { item: num(r.currency_item)!, change: kind === 'TRADE_BUY' ? -paid : paid } : null,
       actor, actorName: actor ? nameOf(actor, text(r.actor_name)) : text(r.actor_name), sourceKind: text(r.source_kind), otherAccount: num(r.other_account),
       balanceAfter, ref: text(r.ref), note,
+      server: server === '' ? master : server,
+      place: dimension === null || r.x === null || r.y === null || r.z === null ? null : { dimension, x: num(r.x)!, y: num(r.y)!, z: num(r.z)! },
     };
   });
 }

@@ -6,7 +6,7 @@
   import { count, items as quantity, money, moneyShort, time } from '../../shared/fmt.ts';
   import StepChart from '../app/StepChart.svelte';
   import { app, engine } from '../app/state.svelte.ts';
-  import { entries, gapRows, LEVEL_COLOR, words, type Entry } from '../app/words.ts';
+  import { entries, gapRows, LEVEL_COLOR, whereMade, words, type Entry } from '../app/words.ts';
 
   let { selected }: { selected: number | null } = $props();
 
@@ -142,6 +142,8 @@
     if (r.kind === 'ADMIN_SET' && r.change !== null && r.balanceAfter !== null) parts.push(`from ${value(r.item, r.balanceAfter - r.change)} to ${value(r.item, r.balanceAfter)}`);
     else if (r.note) parts.push(r.note);
     if (r.change === null) parts.push('the log does not say in which direction');
+    const where = whereMade(r, main?.name);
+    if (where) parts.push(where);
     return parts.join(' · ');
   }
   function by(r: LedgerRow): string {

@@ -1,7 +1,7 @@
 // Items, bank log rows and gaps in plain words, for every screen that shows them.
 import type { Gap, ItemCheck, ItemRow, LedgerRow, Level } from '../../shared/api.ts';
 import { KIND, span } from '../../shared/finding.ts';
-import { items as quantity, money } from '../../shared/fmt.ts';
+import { count, items as quantity, money } from '../../shared/fmt.ts';
 
 export const tone = (raw: bigint) => (raw > 0n ? 'var(--up)' : raw < 0n ? 'var(--down)' : 'var(--text)');
 /** A level's colour; a gap's rating (low, medium, high) uses the same. */
@@ -15,6 +15,14 @@ export const gapRows = (account: number, checks: ItemCheck[]): GapRow[] =>
 export type Entry = { time: number; row: LedgerRow; gap?: undefined } | { time: number; gap: GapRow; row?: undefined };
 export const entries = (rows: LedgerRow[], gaps: GapRow[]): Entry[] =>
   [...gaps.map((gap) => ({ time: gap.time, gap })), ...rows.map((row) => ({ time: row.time, row }))].sort((a, b) => b.time - a.time);
+
+const DIMENSION: Record<string, string> = { 'minecraft:overworld': 'the overworld', 'minecraft:the_nether': 'the Nether', 'minecraft:the_end': 'the End' };
+/** Where a bank log row was made: "on mining-1 · at the overworld, -230 70 -920". Empty when the log does not say (BS-256, BS-258). */
+export function whereMade(r: LedgerRow, master: string | undefined): string {
+  const p = r.place;
+  // Only a slave is named: most rows are the master's, and naming it on each one is noise.
+  return [r.server === null || r.server === master ? '' : `on ${r.server}`, p ?`at ${DIMENSION[p.dimension] ?? p.dimension}, ${count(p.x)} ${count(p.y)} ${count(p.z)}` : ''].filter(Boolean).join(' · ');
+}
 
 /** The words for the items of the loaded save. */
 export function words(itemRows: Map<number, ItemRow>) {

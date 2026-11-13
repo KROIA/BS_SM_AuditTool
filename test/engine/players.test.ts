@@ -5,8 +5,8 @@ import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { api } from '../../src/engine/api.ts';
 import { addSave, init, mainData } from '../../src/engine/workspace.ts';
-import type { Scope } from '../../src/shared/api.ts';
-import { buildFixtures, COMPANY, ITEM, PLAYERS, SHARED, T0, uuidText, type Fixtures } from '../fixtures/build.ts';
+import { DEFAULT_RULES, type Scope } from '../../src/shared/api.ts';
+import { buildFixtures, COMPANY, ITEM, ORDER_END, PLACES, PLAYERS, SHARED, T0, uuidText, type Fixtures } from '../fixtures/build.ts';
 
 const MIN = 60_000;
 const ALL: Scope = { from: null, to: null, server: null };
@@ -166,9 +166,40 @@ test('an old 2.1.2 save: the same profits, no server for any order, and a log wi
   assert.deepEqual(list.slice(0, 2).map((p) => [p.name, p.orders, p.profit]), [['Tavrik', 60, 544_083_000n], ['Quenby', 20, 15_227_000n]]);
   const orders = api.orders({}, ALL);
   assert.ok(orders.every((o) => o.orderId === null && o.server === null));
+  assert.ok(orders.every((o) => o.limitPrice === null && o.wanted === null && o.status === null)); // before SM-317
   assert.equal(api.orders({}, { ...ALL, server: 'old-world' }).length, 0); // nothing says where an order was placed
   const rows = api.ledger({ accounts: [PLAYERS.Tavrik.account] }, ALL);
+  assert.ok(rows.every((r) => r.server === null && r.place === null)); // before BS-256 and BS-258
+  assert.deepEqual(api.ledger({ accounts: [PLAYERS.Tavrik.account] }, { ...ALL, server: 'old-world' }), rows); // not known, so not filtered out
   assert.deepEqual(rows.map((r) => [r.kind, r.change, r.money, r.balanceAfter]), [
     ['WITHDRAW', -200_000_000n, null, null], ['WITHDRAW', -200_000_000n, null, null], ['DEPOSIT', 50_000_000n, null, null],
   ]);
+});
+
+test('orders (SM-317): limit price, the volume asked for and how an order ended', () => {
+  open(fx.master);
+  const all = api.orders({}, ALL);
+  const odd = all.filter((o) => o.wanted !== o.amount || o.status !== 'filled');
+  assert.deepEqual(odd.map((o) => [o.player, o.type, o.amount, o.wanted, o.limitPrice, o.status]), [
+    [uuid('Mikko_82'), 'market', ORDER_END.wheatWanted / 2n, ORDER_END.wheatWanted, 0n, 'cancelled by the server'],
+    [uuid('Ombrelune'), 'limit', ORDER_END.goldWanted / 2n, ORDER_END.goldWanted, ORDER_END.goldLimit, 'cancelled by the player'],
+  ]);
+  assert.ok(all.every((o) => (o.type === 'limit') === (o.limitPrice! > 0n))); // 0 is a market order
+});
+
+test('ledger rows (BS-256, BS-258): the server a row was made for and where the player stood', () => {
+  open(fx.master);
+  const accounts = api.accounts(ALL, DEFAULT_RULES).map((a) => a.number);
+  const rows = api.ledger({ accounts }, ALL);
+  const count = (server: string) => rows.filter((r) => r.server === server).length;
+  assert.deepEqual([count('survival-main'), count('mining-1'), count('nether-hub'), rows.length], [106, 10, 2, 118]); // no origin is the master
+  assert.deepEqual(rows.filter((r) => r.place).map((r) => [r.kind, r.account, r.place]), [
+    ['DEPOSIT', PLAYERS.Ombrelune.account, PLACES.deposit], ['WITHDRAW', PLAYERS.Tavrik.account, PLACES.withdraw],
+  ]);
+  // The filter keeps the rows of that server only; the master's name keeps those without an origin.
+  const mining = api.ledger({ accounts }, { ...ALL, server: 'mining-1' });
+  assert.ok(mining.length === 10 && mining.every((r) => r.server === 'mining-1'));
+  assert.equal(api.ledger({ accounts }, { ...ALL, server: 'survival-main' }).length, 106);
+  const tavrik = api.ledger({ accounts: [PLAYERS.Tavrik.account] }, { from: T0 + 50 * MIN, to: T0 + 55 * MIN, server: 'mining-1' });
+  assert.deepEqual(tavrik.map((r) => [r.kind, r.time]), [['WITHDRAW', T0 + 51 * MIN + 500]]);
 });

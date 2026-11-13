@@ -29,8 +29,8 @@ test.afterAll(() => program.close());
 
 test('the list: grouped into incidents, the severity chips filter it, dark and light', async () => {
   await page.evaluate("location.hash = '#/findings'");
-  // 15 plus the five transfer findings (fixtures, TRANSFER_CASES); none of them joins an incident.
-  await expect(page.locator('.sub').first()).toHaveText(/^20 findings in this time range\. 8 of them belong to 2 incidents\.$/);
+  // 15, the five transfer findings (fixtures, TRANSFER_CASES; none joins an incident) and four market alerts (three join).
+  await expect(page.locator('.sub').first()).toHaveText(/^24 findings in this time range\. 11 of them belong to 2 incidents\.$/);
   await expect(page.locator('.group h2')).toHaveText(['Incident: Tavrik on the diamond market', 'Incident: Quenby on the emerald market', 'Not part of an incident']);
   await expect(detail().locator('h2')).toHaveText(/trading profit within one hour/); // the first of the strongest incident
   await page.screenshot({ path: 'test-results/findings-dark.png' });
@@ -74,7 +74,7 @@ test('a pin, a dismissal with its reason and a note survive a restart', async ()
   await expect(detail()).toContainText('Marked as not a problem. An admin testing the bank.');
   await expect(item(FLAG)).toHaveCount(0); // hidden behind the switch, the detail stays
   await item(PROFIT).click();
-  await expect(page.locator('.sub').first()).toHaveText(/^19 findings in this time range\./);
+  await expect(page.locator('.sub').first()).toHaveText(/^23 findings in this time range\./);
 
   await program.close();
   await launch([]); // the saves come back from case.json too
@@ -115,4 +115,18 @@ test('after a threshold change in the rules, the pinned finding stays as "not ra
   await field.fill("1'000'000");
   await field.press('Enter');
   await expect(page.locator('.group h2').last()).toHaveText('Not part of an incident');
+});
+
+test('a market alert: raised by the server, the rule in its own words, the orders behind it', async () => {
+  await page.evaluate(`location.hash = '#/findings/${encodeURIComponent('market-alert:1')}'`);
+  await expect(detail()).toContainText('Raised by the market mod on the server');
+  await expect(detail()).toContainText("a rise of 24.99%, the server's limit is 20%");
+  await expect(detail()).toContainText('Tavrik pushed the diamond price up into own sell orders'); // the server log line
+  await expect(detail().getByRole('link', { name: 'Change this rule' })).toHaveCount(0); // the server's thresholds, not ours
+  await page.screenshot({ path: 'test-results/findings-alert-dark.png' });
+  await page.getByRole('button', { name: 'Switch to the light theme' }).click();
+  await page.screenshot({ path: 'test-results/findings-alert-light.png' });
+  await page.getByRole('button', { name: 'Switch to the dark theme' }).click();
+  await page.evaluate(`location.hash = '#/findings/${encodeURIComponent('market-alert:4')}'`);
+  await expect(detail()).toContainText('without a price for that minute the percent is unknown');
 });

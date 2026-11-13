@@ -92,8 +92,8 @@ test('suspicion leaves out the findings the case marks as not a problem', () => 
   const lost = list.find((x) => x.id.startsWith('bank-flag:log@'))!.id; // Quenby's critical flag
   const quenby = uuidText(PLAYERS.Quenby.n);
   const stored = (id: string) => api.caseData().marks[id]?.dismissed === true; // as the screens read them
-  assert.equal(suspicion(list, stored).get(quenby), 12);
+  assert.equal(suspicion(list, stored).get(quenby), 14); // 12 plus 2 for her medium market alert (SM-316)
   api.mark(lost, mark({ dismissed: true }));
-  assert.equal(suspicion(list, stored).get(quenby), 4);
+  assert.equal(suspicion(list, stored).get(quenby), 6);
   api.mark(lost, mark({}));
 });

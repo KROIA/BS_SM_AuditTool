@@ -39,7 +39,10 @@ export function items(raw: bigint): string {
   return text.endsWith('.00') ? text.slice(0, -3) : text.endsWith('0') ? text.slice(0, -1) : text;
 }
 
-/** Raw money in full: 153205n -> $1'532.05, -153205n -> -$1'532.05 */
+/** A percentage with up to two decimals: 25 -> 25%, 12.345 -> 12.35% */
+export const percent = (v: number) => items(BigInt(Math.round(v * 100))) + '%';
+
+/** Raw money in full:153205n -> $1'532.05, -153205n -> -$1'532.05 */
 export function money(raw: bigint): string {
   return (raw < 0n ? '-$' : '$') + amount(abs(raw));
 }

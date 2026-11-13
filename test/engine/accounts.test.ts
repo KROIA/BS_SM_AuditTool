@@ -116,3 +116,13 @@ test('an old 2.1.2 save: the same accounts, a log without trade or admin rows', 
     [41, 1, 0n, null], [24, 2, 0n, null], [11, 3, 0n, null], [27, 1, 0n, null], [3, 1, 0n, null], [30, 1, 0n, null]]);
   assert.deepEqual(api.balances(10, ITEM.money, ALL), [[T0 - 24 * 60 * MIN, 10_000_000n], [T0 + 126 * MIN, 7_500_000n]]);
 });
+
+test('the server filter counts the log entries made for that server (BS-256); an old log has no origin and keeps all', () => {
+  open(fx.master);
+  const rows = (server: string | null) => new Map(api.accounts({ ...ALL, server }, DEFAULT_RULES).map((a) => [a.number, a.rows]));
+  const all = rows(null), mining = rows('mining-1'), main = rows('survival-main'), hub = rows('nether-hub');
+  assert.equal(mining.get(PLAYERS.Tavrik.account), 1); // the second banknote withdrawal
+  for (const [account, n] of all) assert.equal(main.get(account)! + mining.get(account)! + hub.get(account)!, n, `account ${account}`);
+  open(fx.legacy);
+  assert.deepEqual(api.accounts({ ...ALL, server: 'old-world' }, DEFAULT_RULES).map((a) => a.rows), api.accounts(ALL, DEFAULT_RULES).map((a) => a.rows));
+});

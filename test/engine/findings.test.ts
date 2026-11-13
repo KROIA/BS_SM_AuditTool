@@ -4,10 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { api } from '../../src/engine/api.ts';
-import { group, level, roundTrips } from '../../src/engine/query/findings.ts';
+import { group, level, orderIds, roundTrips } from '../../src/engine/query/findings.ts';
 import { addSave, init } from '../../src/engine/workspace.ts';
 import { DEFAULT_RULES, type Finding, type OrderRow, type RuleId, type RuleSettings, type Scope } from '../../src/shared/api.ts';
-import { AUDIT_OFFSET, buildFixtures, CHECK, COMPANY, ITEM, LAST_SAVE, LOST_FLAG, PLAYERS, STRAY, T0, uuidText, type Fixtures } from '../fixtures/build.ts';
+import { describe } from '../../src/shared/finding.ts';
+import { ALERT, AUDIT_OFFSET, buildFixtures, CHECK, COMPANY, ITEM, LAST_SAVE, LOST_FLAG, PLAYERS, STRAY, T0, uuidText, type Fixtures } from '../fixtures/build.ts';
 
 const MIN = 60_000;
 const ALL: Scope = { from: null, to: null, server: null };
@@ -46,7 +47,7 @@ test('group: hits on one subject less than 15 minutes apart are one, other subje
 
 test('round trip: cheap buy and dear sale within the window, another player in between breaks it', () => {
   const o = (id: number, player: string, second: number, amount: bigint, price: bigint): OrderRow =>
-    ({ id, orderId: id, item: ITEM.diamond, account: 1, player, type: 'market', amount, price, money: (amount * price) / 100n, time: T0 + second * 1000, finishMs: null, server: null });
+    ({ id, orderId: id, item: ITEM.diamond, account: 1, player, type: 'market', amount, price, money: (amount * price) / 100n, time: T0 + second * 1000, finishMs: null, server: null, limitPrice: null, wanted: null, status: null });
   const [buy, sell] = [o(1, 'p', 0, 100n, 1_000n), o(2, 'p', 10, -100n, 3_000n)];
   assert.deepEqual(roundTrips([buy, sell], 2, 30).map((h) => [h.value, h.orders.map((x) => x.id)]), [[3, [1, 2]]]);
   assert.equal(roundTrips([buy, sell], 3, 30).length, 0); // not above the factor
@@ -186,16 +187,20 @@ test('fixed run: every finding on the current and the old save', () => {
     `critical ${LOG_FLAG}`,
     `high hour-profit:${tavrik}@${T0}`,
     `high balance:${CHECK.set}:${ITEM.money}@${at(30)}`,
+    'high market-alert:2', // SM-316: Tavrik's profit alert, more than ten times the server's threshold
     'high bank-flag:2',
     `medium order-ledger:${brindle}@${T0 + 301_200}`,
     `medium balance:${CHECK.gain}:${ITEM.money}@${at(10)}`,
     `medium order-rate:${tavrik}@${at(21)}`,
+    'medium market-alert:1', // SM-316: the pump on Tavrik's diamond buys
     `medium far-price:market ${ITEM.diamond}@${at(40)}`,
     `medium order-rate:${tavrik}@${at(40)}`,
     `medium price-spike:market ${ITEM.diamond}@${at(40)}`,
     'medium bank-flag:1',
     `medium order-rate:${quenby}@${at(46)}`,
     `medium far-price:market ${ITEM.emerald}@${at(60)}`,
+    'medium market-alert:3', // SM-316: Quenby's emerald cycle
+    'medium market-alert:4', // SM-316: the pump in a minute without a price
     'low last-save:after-save',
   ]);
   open(fx.legacy);
@@ -210,4 +215,45 @@ test('fixed run: every finding on the current and the old save', () => {
     `medium far-price:market ${ITEM.emerald}@${at(60)}`,
     `medium balance:${PLAYERS.Quenby.account}:${ITEM.money}@${at(61)}`,
   ]);
+});
+
+test('market alerts (SM-316): one finding per row, level from the threshold, orders and their ledger rows as records', () => {
+  open(fx.master);
+  const list = of('market-alert');
+  assert.deepEqual(list.map((f) => [f.id, f.level, f.basis, f.source, f.start, f.end, who(f), f.markets, f.accounts, f.servers, f.records.orders.length, f.records.ledger.length]), [
+    ['market-alert:2', 'high', 'as raised', 'market mod', ALERT.profit, ALERT.profit, ['Tavrik'], [], [], [], 0, 0], // 555'000 is more than ten times 50'000
+    ['market-alert:1', 'medium', 'as raised', 'market mod', ALERT.pump, ALERT.pump, ['Tavrik'], [ITEM.diamond], [PLAYERS.Tavrik.account], ['survival-main'], 2, 2],
+    ['market-alert:3', 'medium', 'as raised', 'market mod', ALERT.cycle, ALERT.cycle, ['Quenby'], [ITEM.emerald], [PLAYERS.Quenby.account], ['survival-main'], 1, 1],
+    ['market-alert:4', 'medium', 'as raised', 'market mod', ALERT.noPrice, ALERT.noPrice, ['Ombrelune'], [ITEM.coal], [PLAYERS.Ombrelune.account], [], 0, 0], // old coal id 40 merged; '12,abc' read as no orders
+  ]);
+  const [profit, pump, cycle, noPrice] = list;
+  // Money alerts: the raw amount against the server's threshold in whole money units, times 100.
+  assert.deepEqual([profit!.measured, cycle!.measured], [{ value: 555_000_000n, threshold: 5_000_000n, unit: 'money' }, { value: 15_000_000n, threshold: 10_000_000n, unit: 'money' }]);
+  // A pump: the rise against the open of that minute's candle. The builder made it a quarter of the open.
+  assert.equal(pump!.measured.unit, 'percent');
+  assert.ok(Math.abs((pump!.measured.value as number) - 25) < 0.01 && pump!.measured.threshold === 20);
+  assert.deepEqual([noPrice!.measured, noPrice!.facts.open, noPrice!.facts.percent], [{ value: 30n, threshold: null, unit: 'money' }, null, null]);
+  assert.ok(pump!.records.ledger.every((id) => typeof id === 'number'));
+  // The time range and the server filter treat them like any finding.
+  assert.deepEqual(of('market-alert', DEFAULT_RULES, { ...ALL, from: at(100) }).map((f) => f.id), ['market-alert:4']);
+  assert.deepEqual(of('market-alert', DEFAULT_RULES, { ...ALL, server: 'mining-1' }).map((f) => f.id), ['market-alert:2', 'market-alert:4']); // no orders, no server
+  assert.deepEqual(of('market-alert', set('market-alert', { on: false })), []);
+});
+
+test('market alerts: the sentences put every number through fmt', () => {
+  open(fx.master);
+  const w = { itemName: (id: number) => (id === ITEM.diamond ? 'Diamond' : id === ITEM.emerald ? 'Emerald' : 'Coal'), isMoney: () => false };
+  const words = of('market-alert').map((f) => describe(f, w));
+  assert.deepEqual(words.map((x) => x.measured), [
+    "$5'550'000.00, the server's limit is $50'000.00", "a rise of 24.99%, the server's limit is 20%",
+    "$150'000.00, the server's limit is $100'000.00", 'a rise of $0.30 per item; without a price for that minute the percent is unknown',
+  ]);
+  assert.ok(words.every((x) => x.facts.some(([k]) => k === 'Server log line')));
+});
+
+test('order ids of an alert: a bounded comma list, anything else is read as none', () => {
+  assert.deepEqual(orderIds('3, 5,3'), [3, 5]);
+  assert.deepEqual([orderIds(null), orderIds(''), orderIds('12,abc'), orderIds('-1'), orderIds('1'.repeat(16))], [[], [], [], [], []]);
+  assert.equal(orderIds(Array.from({ length: 1000 }, (_, i) => i).join(',')).length, 1000);
+  assert.deepEqual(orderIds(Array.from({ length: 1001 }, (_, i) => i).join(',')), []);
 });

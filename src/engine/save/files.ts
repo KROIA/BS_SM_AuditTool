@@ -84,7 +84,8 @@ export interface AccountFile {
 }
 export interface ItemFile { id: number; name: string; money: boolean }
 export interface MarketFile { item: number; price: bigint | null; defaultPrice: bigint | null; maintenance: boolean }
-export interface SaveFiles { players: PlayerFile[]; accounts: AccountFile[]; items: ItemFile[]; markets: MarketFile[]; bankVersion: string | null }
+/** aliases: every old item number with the number it ends at. */
+export interface SaveFiles { players: PlayerFile[]; accounts: AccountFile[]; items: ItemFile[]; markets: MarketFile[]; bankVersion: string | null; aliases: [number, number][] }
 
 export function readFiles(dataDir: string): SaveFiles {
   const bank = path.join(dataDir, 'BankSystem'), market = path.join(dataDir, 'StockMarket', 'MarketManager');
@@ -183,5 +184,5 @@ export function readFiles(dataDir: string): SaveFiles {
     return item === undefined ? [] : [{ item: resolve(item), price: big(m, 'currentMarketPrice') ?? null, defaultPrice: big(m, 'defaultPrice') ?? null, maintenance: flag(m, 'maintenance') }];
   });
 
-  return { players: [...players.values()], accounts, items: [...items.values()], markets, bankVersion };
+  return { players: [...players.values()], accounts, items: [...items.values()], markets, bankVersion, aliases: [...alias.keys()].map((from) => [from, resolve(from)]) };
 }

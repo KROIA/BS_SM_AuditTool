@@ -29,6 +29,7 @@
     TransferJournal: 'transfer journal',
     NoteFlow: 'banknote log',
     OrderOrigin: 'order origins',
+    TradeAlert: 'market alerts',
     Meta: 'diagnostics',
     AuditLog: 'audit log',
   };
@@ -47,13 +48,16 @@
   }
   /** The sources worth a line: everything except what this kind of save never has. */
   const shown = (save: SaveSummary) => save.sources.filter((s) => s.status !== 'none');
-  const taken = (save: SaveSummary) => (save.lastPlayedMs === null ? 'When the copy was taken is unknown' : 'Copy taken ' + time(save.lastPlayedMs));
+  // An audit export (BS-255) is a consistent copy the server made itself; its time comes from its manifest.
+  const taken = (save: SaveSummary) => save.exported
+    ? (save.lastPlayedMs === null ? 'Audit export, when it was made is unknown' : 'Audit export made ' + time(save.lastPlayedMs))
+    : save.lastPlayedMs === null ? 'When the copy was taken is unknown' : 'Copy taken ' + time(save.lastPlayedMs);
   const size = (save: SaveSummary) => bytes(save.sources.filter((s) => s.id !== 'audit').reduce((sum, s) => sum + s.bytes, 0)) + ' of databases';
   function versions(save: SaveSummary): string {
     const mc = save.minecraft ? `Minecraft ${save.minecraft}` : 'Minecraft version unknown';
     if (save.generation === 'legacy') return `Written by BankSystem 2.1.2, before the audit additions. ${mc}.`;
     if (save.role === 'SLAVE') return `${mc}. Slaves keep no bank or market data.`;
-    return `${save.bankVersion ? `BankSystem ${save.bankVersion}` : 'BankSystem version unknown'} · ${mc}`;
+    return `${save.bankVersion ? `BankSystem ${save.bankVersion}` : 'BankSystem version unknown'}${save.marketVersion ? ` · StockMarket ${save.marketVersion}` : ''} · ${mc}`;
   }
   const progressStep = (step: string) => (TABLE[step] ? 'Reading the ' + TABLE[step] : step);
 

@@ -99,7 +99,7 @@ test.describe('the invented network', () => {
     await expect(rows).toHaveCount(10);
     await expect(page.locator('main')).toContainText('The latest 10 of 64 entries, newest first. Trade entries carry no balance');
     await expect(rows.first().locator('td')).toHaveText([/^\d+ Nov 2026, \d\d:\d\d:\d\d$/, /^Transfer\s*to account 24$/, "-$1'000'000.00", "$940'830.00", 'Tavrik', '']);
-    await expect(rows.nth(3).locator('td').nth(1)).toHaveText('Sold 100 Diamond');
+    await expect(rows.nth(3).locator('td').nth(1)).toHaveText(/^Sold 100 Diamond\s*$/); // BS-256: no origin in a log with the column is the master, which is not named
     await expect(rows.nth(3).locator('td').nth(3)).toHaveText('not recorded');
     await expect(rows.nth(3).locator('td').nth(4)).toHaveText('StockMarket, for Tavrik');
     await expect(rows.nth(3).locator('td').nth(5)).toHaveText(/^sm:order:\d+$/);
@@ -109,6 +109,10 @@ test.describe('the invented network', () => {
     await page.getByRole('button', { name: 'Paid in and out' }).click();
     await expect(rows.locator('td:nth-child(2) > span:first-child')).toHaveText(['Transfer', 'Withdrawal', 'Withdrawal', 'Starting balance']);
     await expect(rows.last().locator('td').nth(4)).toHaveText('The bank, for Tavrik');
+    // BS-256 and BS-258: a slave's row names its server, and where the player stood for the first withdrawal.
+    await expect(rows.nth(1).locator('td').nth(1)).toHaveText(/^Withdrawal\s*on mining-1$/);
+    await expect(rows.nth(2).locator('td').nth(1)).toHaveText(/^Withdrawal\s*at the overworld, -230 70 -920$/);
+    await page.screenshot({ path: 'test-results/accounts-where-dark.png' });
     await expect(page.locator('main')).toContainText('4 entries of 64, newest first.');
     await page.getByRole('button', { name: 'Admin actions' }).click();
     await expect(page.locator('main')).toContainText('No entries of this kind in the selected time range.');

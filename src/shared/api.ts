@@ -52,6 +52,13 @@ export interface SaveSummary {
   minecraft: string | null;
   /** The BankSystem version that wrote the save, when its files say so. */
   bankVersion: string | null;
+  /** The StockMarket version: only an audit export's manifest records it. Read as `?? null` on older cached summaries. */
+  marketVersion?: string | null;
+  /**
+   * An audit export (BS-255, `/banksystem backup export`) rather than a copy of the world folder. Its lastPlayedMs is when
+   * it was made (manifest created_utc). Missing on older cached summaries.
+   */
+  exported?: boolean;
   /** How many players and bank accounts the save's files list. */
   players: number;
   accounts: number;
@@ -124,6 +131,12 @@ export interface OrderRow {
   finishMs: number | null;
   /** The save where it was placed (OrderOrigin); null when the save does not say. */
   server: string | null;
+  /** SM-317: the limit price, raw money per whole item; 0 for a market order. null on saves before it. */
+  limitPrice: bigint | null;
+  /** SM-317: the volume the player asked for, raw, signed like amount. null on saves before it. */
+  wanted: bigint | null;
+  /** SM-317: how the order ended. null on saves before it. */
+  status: 'filled' | 'cancelled by the player' | 'cancelled by the server' | null;
 }
 
 /** One row of the bank's log (TransactionLog). */
@@ -148,6 +161,13 @@ export interface LedgerRow {
   balanceAfter: bigint | null;
   ref: string | null;
   note: string | null;
+  /**
+   * BS-256: the save the change was made on (the master's name for rows the master made). null when the save's log has no
+   * origin column: such rows show under every server filter.
+   */
+  server: string | null;
+  /** BS-258: where the player stood, for rows the mod placed. null when it has no place. */
+  place: { dimension: string; x: number; y: number; z: number } | null;
 }
 
 /** Realised profit per item with the average cost method (DESIGN_SPEC 8.1). Sales within the scope; purchases before it count for the cost. */
@@ -336,6 +356,7 @@ export interface RuleSettings {
   'order-ledger': { on: boolean };
   'bank-flag': { on: boolean };
   'last-save': { on: boolean };
+  'market-alert': { on: boolean };
   'transfer': { on: boolean };
 }
 export const DEFAULT_RULES: RuleSettings = {
@@ -348,6 +369,7 @@ export const DEFAULT_RULES: RuleSettings = {
   'order-ledger': { on: true },
   'bank-flag': { on: true },
   'last-save': { on: true },
+  'market-alert': { on: true },
   'transfer': { on: true },
 };
 
@@ -369,7 +391,7 @@ export interface Finding {
   /** Where its orders were placed; empty for bank data, which shows under every server filter. */
   servers: string[];
   /** The most extreme value of the finding against the rule's threshold (null: the rule has none, or the server's setting is unknown). */
-  measured: { value: number | bigint; threshold: number | bigint | null; unit: 'times' | 'orders' | 'money' | 'items' | 'shares' | 'rows' };
+  measured: { value: number | bigint; threshold: number | bigint | null; unit: 'times' | 'orders' | 'money' | 'items' | 'shares' | 'rows' | 'percent' };
   facts: Record<string, Fact>;
   records: { orders: number[]; ledger: number[]; flags: number[]; candles: { market: number; time: number }[] };
   /** Bank mod flags only: acknowledged by an admin. null for every other rule. */

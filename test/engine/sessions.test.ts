@@ -25,7 +25,7 @@ const uuid = (name: keyof typeof PLAYERS) => uuidText(PLAYERS[name].n);
 let id = 0;
 /** An order of one invented player: + bought, - sold, money signed like the amount. */
 const order = (time: number, amount: bigint, money: bigint, server = 'survival-main', item: number = ITEM.diamond): OrderRow => ({
-  id: ++id, orderId: id, item, account: 1, player: 'p', type: 'market', amount, price: (money * 100n) / amount, money, time, finishMs: null, server,
+  id: ++id, orderId: id, item, account: 1, player: 'p', type: 'market', amount, price: (money * 100n) / amount, money, time, finishMs: null, server, limitPrice: null, wanted: null, status: null,
 });
 const total = (list: OrderRow[]) => profit(list.map((o) => ({ item: o.item, amount: o.amount, money: o.money, counts: true }))).reduce((s, m) => s + m.profit, 0n);
 

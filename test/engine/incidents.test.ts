@@ -58,12 +58,12 @@ test('incidents on the fixture: Tavrik on the diamond market and Quenby on the e
   const r = api.incidents(ALL, DEFAULT_RULES);
   const tavrik = uuidText(PLAYERS.Tavrik.n);
   assert.deepEqual(r.incidents.map((i) => [i.id, i.level, i.players.map((p) => p.name), i.markets, i.findings.length, i.start, i.end]), [
-    [`hour-profit:${tavrik}@${T0}`, 'high', ['Tavrik'], [ITEM.diamond], 6, T0, at(60) - 1],
-    [`order-rate:${uuidText(PLAYERS.Quenby.n)}@${at(46)}`, 'medium', ['Quenby'], [ITEM.emerald], 2, at(46), r.incidents[1]!.end],
+    [`hour-profit:${tavrik}@${T0}`, 'high', ['Tavrik'], [ITEM.diamond], 8, T0, at(60) - 1],
+    [`order-rate:${uuidText(PLAYERS.Quenby.n)}@${at(46)}`, 'medium', ['Quenby'], [ITEM.emerald], 3, at(46), r.incidents[1]!.end],
   ]);
   // The bank flag on Tavrik's account (45 minutes) is in; Quenby's lost flag (100 minutes) is 40 minutes after her incident.
   assert.ok(r.incidents[0]!.findings.includes('bank-flag:1'));
-  assert.deepEqual(r.others.map((x) => x.id), ['bank-flag:3', `bank-flag:log@${LOST_FLAG.ts + AUDIT_OFFSET}:${LOST_FLAG.account}:${LOST_FLAG.type}`, 'balance:14:1@' + at(30), 'bank-flag:2', `order-ledger:${uuidText(PLAYERS.Brindle.n)}@${T0 + 301_200}`, 'balance:12:1@' + at(10), 'last-save:after-save']);
+  assert.deepEqual(r.others.map((x) => x.id), ['bank-flag:3', `bank-flag:log@${LOST_FLAG.ts + AUDIT_OFFSET}:${LOST_FLAG.account}:${LOST_FLAG.type}`, 'balance:14:1@' + at(30), 'bank-flag:2', `order-ledger:${uuidText(PLAYERS.Brindle.n)}@${T0 + 301_200}`, 'balance:12:1@' + at(10), 'market-alert:4', 'last-save:after-save']);
 });
 
 test('incidents: the realised profit of its players on its markets within its span', () => {
@@ -86,7 +86,7 @@ test('title and sentence: plain English, every number through fmt', () => {
   const [tavrik] = api.incidents(ALL, DEFAULT_RULES).incidents;
   const day = time(T0).split(',')[0];
   assert.equal(incidentTitle(tavrik!, name), 'Tavrik on the diamond market');
-  assert.equal(incidentSentence(tavrik!, name), `Tavrik made $5.44M on the diamond market within 60 minutes on ${day}. The incident holds 6 findings, the strongest of them high.`);
+  assert.equal(incidentSentence(tavrik!, name), `Tavrik made $5.44M on the diamond market within 60 minutes on ${day}. The incident holds 8 findings, the strongest of them high.`);
 
   const base: Incident = { ...tavrik!, players: [], markets: [ITEM.diamond, ITEM.emerald], profit: 0n, level: 'medium', findings: ['a', 'b'], start: T0, end: T0 + 27 * MIN };
   assert.equal(incidentTitle(base, name), 'The diamond and emerald markets');
@@ -102,7 +102,7 @@ test('suspicion: 8, 4, 2, 1 per finding by level, dismissed findings left out', 
   const order = (s: Map<string, number>) => [...s].map(([uuid, n]) => [Object.entries(PLAYERS).find(([, p]) => uuidText(p.n) === uuid)![0], n] as const)
     .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
   // Tavrik also traded in the diamond spike's minute: named there, not counted.
-  assert.deepEqual(order(suspicion(list, () => false)), [['Quenby', 12], ['Tavrik', 12], ['Ombrelune', 4], ['Brindle', 2], ['Mikko_82', 1]]);
+  assert.deepEqual(order(suspicion(list, () => false)), [['Tavrik', 18], ['Quenby', 14], ['Ombrelune', 6], ['Brindle', 2], ['Mikko_82', 1]]);
   const lost = list.find((x) => x.id.startsWith('bank-flag:log@'))!.id; // Quenby's critical flag
-  assert.deepEqual(order(suspicion(list, (id) => id === lost)).slice(0, 3), [['Tavrik', 12], ['Ombrelune', 4], ['Quenby', 4]]);
+  assert.deepEqual(order(suspicion(list, (id) => id === lost)).slice(0, 3), [['Tavrik', 18], ['Ombrelune', 6], ['Quenby', 6]]);
 });

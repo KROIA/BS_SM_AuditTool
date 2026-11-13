@@ -11,6 +11,8 @@
 //   order-ledger volume, logged (of the order furthest off), orders
 //   bank-flag    flagType, severity, amount, ref, details; origin 'audit log' and approximateTime for a flag only the audit log has
 //   last-save    lastSave, rows
+//   market-alert kind (profit, pump_dump_pump, pump_dump_cycle, other), amount (raw), windowMs, threshold (as stored: real money
+//                or percent), text; for a pump open (the minute's candle open, null without one), percent (null without a candle)
 //   transfer     transferId, class (lost, twice, created, parked), direction, path, item (null: money), sent, received (of that
 //                item), itemsOff (items that differ), steps, why
 import type { DatabaseSync } from 'node:sqlite';
@@ -292,6 +294,34 @@ const RULES: { [K in keyof RuleSettings]: Rule<K> } = {
     },
   },
 
+  'market-alert': {
+    applies: () => (mainSave()?.sources.find((x) => x.id === 'marketDiag')?.tables.some((t) => t.name === 'TradeAlert') ? null
+      : 'This save has no alert table: the market mod stores its alerts from SM-316 on. Before that they were only in the server log.'),
+    run: (db, _s, st) => all(db, 'SELECT * FROM trade_alert ORDER BY ts, id').map((r): Finding => {
+      const id = num(r.id)!, ts = num(r.ts)!, kind = String(r.kind), player = text(r.player), account = num(r.account), item = num(r.item);
+      const amount = big(r.amount) ?? 0n, stored = r.threshold === null ? null : Number(r.threshold);
+      const ids = orderIds(text(r.order_ids));
+      const orders = ids.length ? readOrders(db, { ids }, null) : [];
+      const ledger = ids.length ? all(db, "SELECT id FROM ledger WHERE ref IN (SELECT 'sm:order:' || value FROM json_each(:ids)) ORDER BY ts, id", { ids: JSON.stringify(ids) }).map((x) => num(x.id)!) : [];
+      let measured: Finding['measured'] = { value: amount, threshold: stored === null ? null : BigInt(Math.round(stored * 100)), unit: 'money' };
+      const facts: Record<string, Fact> = { kind, amount, windowMs: num(r.window_ms), threshold: stored, text: text(r.text) };
+      if (kind === 'pump_dump_pump') {
+        // The mod compares the rise with the price at the start of the tick, which no save keeps: the minute's open stands in.
+        const open = item === null ? null : big(all(db, 'SELECT open FROM candle WHERE market = :m AND time <= :t AND time > :t - 60000 ORDER BY time DESC LIMIT 1', { m: item, t: ts })[0]?.open ?? null);
+        const pct = open !== null && open > 0n ? (Number(amount) / Number(open)) * 100 : null;
+        Object.assign(facts, { open, percent: pct });
+        measured = pct === null ? { value: amount, threshold: null, unit: 'money' } : { value: pct, threshold: stored, unit: 'percent' };
+      }
+      return {
+        ...blank('market-alert', String(id)), basis: 'as raised', source: 'market mod', start: ts, end: ts,
+        level: level('medium', measured.value, measured.threshold),
+        players: player ? [{ uuid: player, name: st.nameOf(player) }] : [], markets: item === null ? [] : [item], accounts: account === null ? [] : [account],
+        servers: sorted(orders.flatMap((o) => (o.server === null ? [] : [o.server]))),
+        measured, facts, records: { orders: ids, ledger, flags: [], candles: [] },
+      };
+    }),
+  },
+
   'last-save': {
     applies: (db) => (lastSave(db) === null ? 'The bank\'s diagnostics file of this save does not record when the bank last saved.' : null),
     run: (db, _s, st) => {
@@ -344,9 +374,14 @@ function bankSettings(db: DatabaseSync): Record<string, number | boolean> {
   }
 }
 
+/** An alert's order_ids: up to 1000 comma-separated order ids. Anything else gives none. */
+export function orderIds(v: string | null): number[] {
+  if (v === null || !/^\s*\d{1,15}(\s*,\s*\d{1,15}){0,999}\s*$/.test(v)) return [];
+  return [...new Set(v.split(',').map((x) => Number(x.trim())))];
+}
+
 /** Rules whose data no save holds yet or that come with M3. */
 const NOT_AVAILABLE: [RuleId, string][] = [
-  ['market-alert', 'The market mod keeps its alerts in memory and the server log only; no save holds them.'],
   ['banknotes', 'The banknote count comes with milestone M3.'],
 ];
 

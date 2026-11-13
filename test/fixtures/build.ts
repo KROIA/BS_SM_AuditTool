@@ -5,6 +5,7 @@
 // The table definitions are copied from the mods (BankSystem 3835d933, StockMarket 898aac66):
 // common/src/main/resources/sql/*.sql, BankSystem data/DiagnosticsDatabase.java, StockMarket data/OrderOriginLog.java.
 // The NBT files follow .claude/DATA_SOURCES.md, "Exact NBT layouts". Player files and region files are not written yet.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
@@ -95,7 +96,8 @@ const SQL = {
   transactionLog: `CREATE TABLE TransactionLog (id INTEGER PRIMARY KEY AUTOINCREMENT, account_number INTEGER NOT NULL, actor_uuid TEXT,
     kind TEXT NOT NULL, item_id INTEGER NOT NULL, amount INTEGER NOT NULL, other_account INTEGER, company_id INTEGER, ts INTEGER NOT NULL,
     note TEXT, source_kind TEXT NOT NULL DEFAULT 'UNKNOWN', tag TEXT, type_code INTEGER NOT NULL DEFAULT 0, ref TEXT, money_amount INTEGER,
-    price INTEGER, currency_item INTEGER, actor_name TEXT, balance_after INTEGER, virtual_qty INTEGER);
+    price INTEGER, currency_item INTEGER, actor_name TEXT, balance_after INTEGER, virtual_qty INTEGER,
+    origin_server TEXT, dimension TEXT, x INTEGER, y INTEGER, z INTEGER);
     CREATE INDEX idx_tx_log_account_ts ON TransactionLog (account_number, ts DESC);
     CREATE INDEX idx_tx_log_company_ts ON TransactionLog (company_id, ts DESC)`,
   // 2.1.2, read from the table definitions of a real save of that version. Its log only held DEPOSIT, WITHDRAW and share rows.
@@ -121,6 +123,9 @@ const SQL = {
   noteFlow: `CREATE TABLE NoteFlow (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, source TEXT NOT NULL, player_uuid TEXT,
     item_id INTEGER NOT NULL, amount INTEGER NOT NULL, context TEXT, villager_uuid TEXT, dimension TEXT, x INTEGER, y INTEGER, z INTEGER)`,
   orderOrigin: `CREATE TABLE OrderOrigin (ref TEXT PRIMARY KEY, origin_server_uid TEXT, origin_name TEXT NOT NULL)`,
+  // SM-316 (SM 21d29820, data/OrderOriginLog.java)
+  tradeAlert: `CREATE TABLE TradeAlert (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, kind TEXT NOT NULL, player_uuid TEXT, account_number INTEGER,
+    item_id INTEGER, amount INTEGER, window_ms INTEGER, threshold REAL, text TEXT NOT NULL, order_ids TEXT)`,
 };
 
 /** Creates a database file, runs the definitions, and hands out one function that inserts a row. */
@@ -174,13 +179,15 @@ function bump(m: number, start: number, peak: number, end: number, top: number):
   return 1 + (top - 1) * t;
 }
 
-interface Order { id: number; item: number; player: Name; type: number; amount: bigint; price: bigint; time: number; finish: number }
+/** limit: SM-317 limit price (0 = market order); wanted: the volume asked for; status: 0 filled, 1 cancelled by the player, 2 by the server. */
+interface Order { id: number; item: number; player: Name; type: number; amount: bigint; price: bigint; time: number; finish: number; limit: bigint; wanted: bigint; status: number }
 
 function orders(price: Map<number, number[]>): Order[] {
   const list: Order[] = [];
   const add = (player: Name, item: number, minute: number, offsetMs: number, amount: bigint, type = 0) =>
     list.push({ id: 0, item, player, type, amount, price: BigInt(price.get(item)![minute]!), time: T0 + minute * MIN + offsetMs,
-      finish: T0 + minute * MIN + offsetMs + (type === 1 ? 7 * MIN : 400) }); // SM-317: a limit order waits in the book, a market order fills at once
+      finish: T0 + minute * MIN + offsetMs + (type === 1 ? 7 * MIN : 400), // SM-317: a limit order waits in the book, a market order fills at once
+      limit: type === 1 ? BigInt(price.get(item)![minute]!) : 0n, wanted: amount, status: 0 });
   // Ordinary trading
   add('Brindle', ITEM.coal, 5, 1200, 6400n);
   add('Brindle', ITEM.coal, 62, 400, 3200n);
@@ -195,8 +202,14 @@ function orders(price: Map<number, number[]>): Order[] {
   for (let i = 0; i < 10; i++) add('Quenby', ITEM.emerald, 60, i * 20, -5000n);
   list.sort((a, b) => a.time - b.time);
   list.forEach((o, i) => (o.id = i + 1));
+  // SM-317: Ombrelune wanted twice the gold at a higher limit and cancelled the rest; the server cancelled half of Mikko's last sale.
+  Object.assign(list.find((o) => o.player === 'Ombrelune')!, { wanted: ORDER_END.goldWanted, limit: ORDER_END.goldLimit, status: 1 });
+  Object.assign(list.findLast((o) => o.player === 'Mikko_82')!, { wanted: ORDER_END.wheatWanted, status: 2 });
   return list;
 }
+
+/** SM-317 values of the two orders that did not simply fill. */
+export const ORDER_END = { goldWanted: 1600n, goldLimit: 1000n, wheatWanted: -12800n } as const;
 
 function identity(dataDir: string, json: Record<string, unknown>) {
   fs.mkdirSync(path.join(dataDir, 'ModUtilities'), { recursive: true });
@@ -224,15 +237,21 @@ function marketDatabase(dataDir: string, legacy: boolean, price: Map<number, num
     const [one, two] = uuidHalves(PLAYERS[o.player].n);
     db.insert('OrderHistory', {
       itemid: o.item, accountid: PLAYERS[o.player].account, userid_one: one, userid_two: two, type: o.type, amount: o.amount, price: o.price, time: o.time,
-      ...(legacy ? {} : { order_id: o.id, finish_time: o.finish }),
+      ...(legacy ? {} : { order_id: o.id, finish_time: o.finish, limit_price: o.limit, target_volume: o.wanted, final_status: o.status }),
     });
   }
   return db.close();
 }
 
+/** BS-258 places of two terminal rows on the master. */
+export const PLACES = {
+  withdraw: { dimension: 'minecraft:overworld', x: -230, y: 70, z: -920 },
+  deposit: { dimension: 'minecraft:the_nether', x: 12, y: 64, z: -40 },
+} as const;
+
 /** Bank log and balance snapshots that agree with each other and with the orders. */
 /** A master ledger row with a transfer id. amount: what it did to the balance (signed); a DEPOSIT unless kind says else. */
-type RefRow = { id: string; account: number; amount: bigint; ts: number; player: Name; kind?: string; code?: number; item?: number };
+type RefRow = { id: string; account: number; amount: bigint; ts: number; player: Name; kind?: string; code?: number; item?: number; server?: string };
 
 function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers: RefRow[]) {
   const db = database(path.join(dataDir, 'BankSystem/Database/banksystem.db'),
@@ -274,18 +293,20 @@ function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers
         item_id: o.item, amount: volume, ts: o.time, source_kind: 'STOCKMARKET', tag: 'CLOSE', ref: `sm:order:${o.id}`, money_amount: cost, price: o.price, currency_item: ITEM.money });
     } });
   }
-  const simple = (player: Name, by: Name, minute: number, kind: string, code: number, delta: bigint, source: string, more: Record<string, SQLInputValue> = {}) =>
+  const simple = (player: Name, by: Name, minute: number, kind: string, code: number, delta: bigint, source: string, more: Record<string, SQLInputValue> = {},
+    current: Record<string, SQLInputValue> = {}) =>
     events.push({ ts: T0 + minute * MIN + 500, run: () => {
       const account = PLAYERS[player].account, ts = T0 + minute * MIN + 500;
       const after = change(account, ITEM.money, delta, ts);
       if (legacy && kind.startsWith('ADMIN')) return; // 2.1.2 did not log admin actions: the balance moves and the log is silent
       row({ account_number: account, ...actor(by), kind, item_id: ITEM.money, amount: delta < 0n ? -delta : delta, ts, ...more },
-        { type_code: code, source_kind: source, balance_after: after });
+        { type_code: code, source_kind: source, balance_after: after, ...current });
     } });
   // Banknotes out at the top of the pump, in again through another player, and an admin taking money back.
-  simple('Tavrik', 'Tavrik', 50, 'WITHDRAW', 2, -200_000_000n, 'PLAYER');
-  simple('Tavrik', 'Tavrik', 51, 'WITHDRAW', 2, -200_000_000n, 'PLAYER');
-  simple('Ombrelune', 'Ombrelune', 70, 'DEPOSIT', 1, 300_000_000n, 'PLAYER');
+  // BS-258: two terminal rows carry where the player stood; BS-256: the second withdrawal was made on a slave.
+  simple('Tavrik', 'Tavrik', 50, 'WITHDRAW', 2, -200_000_000n, 'PLAYER', {}, PLACES.withdraw);
+  simple('Tavrik', 'Tavrik', 51, 'WITHDRAW', 2, -200_000_000n, 'PLAYER', {}, { origin_server: 'mining-1' });
+  simple('Ombrelune', 'Ombrelune', 70, 'DEPOSIT', 1, 300_000_000n, 'PLAYER', {}, PLACES.deposit);
   simple('Quenby', 'AdmiralNoor', 120, 'ADMIN_REMOVE', 9, -20_000_000n, 'ADMIN', { note: 'exploit profit removed' });
   // An admin sets a balance: the row stores |new - old|, the direction is only in the note.
   simple('AdmiralNoor', 'AdmiralNoor', 125, 'ADMIN_SET', 7, -2_500_000n, 'ADMIN', { note: 'money set AdmiralNoor: 10000000->7500000' });
@@ -302,7 +323,7 @@ function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers
   if (!legacy) for (const t of transfers) events.push({ ts: t.ts, run: () => {
     const after = change(t.account, t.item ?? ITEM.money, t.amount, t.ts);
     db.insert('TransactionLog', { account_number: t.account, ...actor(t.player), kind: t.kind ?? 'DEPOSIT', type_code: t.code ?? 1, item_id: t.item ?? ITEM.money,
-      amount: t.amount < 0n ? -t.amount : t.amount, ts: t.ts, source_kind: 'PLAYER', ref: t.id, balance_after: after });
+      amount: t.amount < 0n ? -t.amount : t.amount, ts: t.ts, source_kind: 'PLAYER', ref: t.id, balance_after: after, origin_server: t.server ?? null });
   } });
 
   // One snapshot per account and item at the start, then one at the end of every minute in which it changed.
@@ -535,11 +556,60 @@ export const TRANSFER_CASES: { id: string; class: string; slave: number | null; 
   { id: 'not-a-transfer-id', class: 'ignored', slave: 0, journal: [then(at(150), 'CONFIRMED', 10n)], master: [] },
 ];
 
+/** When each SM-316 alert of the master was raised. */
+export const ALERT = { pump: T0 + 21 * MIN + 700, profit: T0 + 40 * MIN + 700, cycle: T0 + 60 * MIN + 200, noPrice: T0 + 165 * MIN } as const;
+
+/**
+ * The master's alerts, in id order: a pump on Tavrik's diamond buys (a quarter of that minute's open), his profit over the
+ * hour (at more than ten times the server's threshold: one level up), Quenby's emerald cycle, and a pump in a minute without
+ * a price, on the old coal id, with order ids no mod writes.
+ */
+function tradeAlerts(price: Map<number, number[]>, list: Order[]): Record<string, SQLInputValue>[] {
+  const tav = uuidText(PLAYERS.Tavrik.n);
+  const firstBuy = list.find((o) => o.player === 'Tavrik' && o.amount > 0n)!, firstSell = list.find((o) => o.player === 'Tavrik' && o.amount < 0n)!;
+  const lastSell = list.findLast((o) => o.player === 'Quenby')!;
+  return [
+    { id: 1, ts: ALERT.pump, kind: 'pump_dump_pump', player_uuid: tav, account_number: PLAYERS.Tavrik.account, item_id: ITEM.diamond,
+      amount: BigInt(price.get(ITEM.diamond)![21]!) / 4n, window_ms: null, threshold: 20, text: 'Tavrik pushed the diamond price up into own sell orders',
+      order_ids: `${firstBuy.id},${firstSell.id}` },
+    { id: 2, ts: ALERT.profit, kind: 'profit', player_uuid: tav, account_number: null, item_id: null, amount: 555_000_000n, window_ms: 3_600_000, threshold: 50_000,
+      text: 'Tavrik made 5550000.00 profit within 60 min', order_ids: null },
+    { id: 3, ts: ALERT.cycle, kind: 'pump_dump_cycle', player_uuid: uuidText(PLAYERS.Quenby.n), account_number: PLAYERS.Quenby.account, item_id: ITEM.emerald,
+      amount: 15_000_000n, window_ms: 1_800_000, threshold: 100_000, text: 'Quenby bought and sold emerald within 30 min', order_ids: String(lastSell.id) },
+    { id: 4, ts: ALERT.noPrice, kind: 'pump_dump_pump', player_uuid: uuidText(PLAYERS.Ombrelune.n), account_number: PLAYERS.Ombrelune.account, item_id: ALIAS.from,
+      amount: 30n, window_ms: null, threshold: 20, text: 'Ombrelune pushed the coal price up', order_ids: '12,abc' },
+  ];
+}
+
+/** The audit export: folder name (server local time), when it was made, what its manifest records. */
+export const EXPORT = { folder: '20261104-134400-before-wipe', ms: T0 + (MINUTES + 4) * MIN, bank: '2.3.0', market: '1.9.0', missing: 'data/BankSystem/Database/dividend_history.db' } as const;
+
+/** manifest.json as BS AuditExporter.java writes it: every file of the package with its size and sha256, and one the server did not have. */
+function auditManifest(dir: string) {
+  const files = (fs.readdirSync(path.join(dir, 'data'), { recursive: true }) as string[]).map((f) => path.join('data', f).replaceAll('\\', '/'))
+    .filter((f) => fs.statSync(path.join(dir, f)).isFile()).sort();
+  const entry = (f: string) => {
+    const body = fs.readFileSync(path.join(dir, f));
+    return { path: f, method: f.endsWith('.db') ? 'vacuum_into' : 'file_copy', size: body.length, sha256: crypto.createHash('sha256').update(body).digest('hex') };
+  };
+  const part = (prefix: string) => files.filter((f) => f.startsWith(prefix)).map(entry);
+  fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({
+    format: 1, created_utc: new Date(EXPORT.ms).toISOString(), server_uid: MASTER_UID, role: 'master', minecraft_version: MINECRAFT, loader: 'neoforge',
+    mods: { banksystem: EXPORT.bank, modutilities: '1.4.0', stockmarket: EXPORT.market },
+    participants: {
+      banksystem: { files: [...part('data/BankSystem/'), ...part('data/ModUtilities/'), { path: EXPORT.missing, method: 'missing' }] },
+      stockmarket: { files: part('data/StockMarket/') },
+    },
+  }, null, 2));
+}
+
 export interface Fixtures {
   root: string;
   master: string;
   slaves: string[];
   legacy: string;
+  /** An audit export of the master (BS-255): its data folder and a manifest, no level.dat. */
+  exported: string;
   /** Rows written per save and table, for tests to compare against. */
   rows: Record<string, Record<string, number>>;
   /** Final balance per "account:item" (alias already resolved) of the master and the old save. */
@@ -562,7 +632,9 @@ export function buildFixtures(root: string): Fixtures {
 
   // The master: bank and market data, both diagnostics files, identity.
   const master = path.join(root, 'survival-main'), data = path.join(master, 'data');
-  const masterBank = bankDatabase(data, false, list, [...transfers, ...TRANSFER_CASES.flatMap((c) => c.master)]);
+  // BS-256: a row made for a slave's request names the slave. The one only on the master came from nether-hub.
+  const masterBank = bankDatabase(data, false, list, [...transfers.map((t) => ({ ...t, server: SLAVES[t.slave]!.name })),
+    ...TRANSFER_CASES.flatMap((c) => c.master.map((r) => ({ ...r, server: SLAVES[c.slave ?? 1]!.name })))]);
   rows.master = { ...marketDatabase(data, false, price, list), ...masterBank.counts };
   nbtFiles(data, '2.2.0', masterBank.balance, price);
   identity(data, { server_uid: MASTER_UID, role: 'MASTER', slave_id: '', master_uid: '', first_start_ms: T0 - 100 * 24 * 60 * MIN,
@@ -579,12 +651,14 @@ export function buildFixtures(root: string): Fixtures {
   db.insert('NoteFlow', { ts: T0 + 69 * MIN, source: 'stockmarket:villager_pay', player_uuid: uuidText(PLAYERS.Ombrelune.n), item_id: ITEM.money, amount: -3, context: 'trade',
     villager_uuid: uuidText(900), dimension: 'minecraft:overworld', x: 120, y: 64, z: -340 });
   Object.assign(rows.master, db.close());
-  db = database(path.join(data, 'StockMarket/Database/stockmarket_diagnostics.db'), [SQL.meta, SQL.orderOrigin], true);
+  db = database(path.join(data, 'StockMarket/Database/stockmarket_diagnostics.db'), [SQL.meta, SQL.orderOrigin, SQL.tradeAlert], true);
   db.insert('Meta', { key: 'created_ms', value: String(T0 - 15 * 24 * 60 * MIN) });
-  db.insert('Meta', { key: 'schema_version', value: '1' });
+  db.insert('Meta', { key: 'schema_version', value: '2' });
   for (const o of list) db.insert('OrderOrigin', { ref: `sm:order:${o.id}`, origin_server_uid: o.player === 'Brindle' ? SLAVES[0]!.uid : MASTER_UID, origin_name: o.player === 'Brindle' ? SLAVES[0]!.name : '' });
+  for (const a of tradeAlerts(price, list)) db.insert('TradeAlert', a);
   const marketDiag = db.close();
   rows.master.OrderOrigin = marketDiag.OrderOrigin!; // Meta exists in both diagnostics files; the bank's count stays
+  rows.master.TradeAlert = marketDiag.TradeAlert!;
 
   // The slaves: only the bank's diagnostics file and the identity.
   const slaves = SLAVES.map((s, i) => {
@@ -615,5 +689,9 @@ export function buildFixtures(root: string): Fixtures {
   const lastPlayed = { 'survival-main': end, 'mining-1': end - 5 * MIN, 'nether-hub': end - 9 * 60 * MIN, 'old-world': T0 - 20 * 24 * 60 * MIN };
   for (const dir of [master, ...slaves, legacy]) levelDat(dir, lastPlayed[path.basename(dir) as keyof typeof lastPlayed]);
 
-  return { root, master, slaves, legacy, rows, balances: { master: masterBank.balance, legacy: legacyBank.balance }, lastPlayed };
+  const exported = path.join(root, 'exports', EXPORT.folder);
+  fs.cpSync(data, path.join(exported, 'data'), { recursive: true });
+  auditManifest(exported);
+
+  return { root, master, slaves, legacy, exported, rows, balances: { master: masterBank.balance, legacy: legacyBank.balance }, lastPlayed };
 }

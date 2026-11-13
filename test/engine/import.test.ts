@@ -9,7 +9,7 @@ import { readChunks } from '../../src/engine/save/files.ts';
 import { importSave } from '../../src/engine/save/import.ts';
 import { isCompound, num } from '../../src/engine/save/nbt.ts';
 import type { SaveSummary } from '../../src/shared/api.ts';
-import { ACCOUNT_ORDER, ALIAS, buildFixtures, COMPANY, GONE, ITEM, MINECRAFT, PLAYERS, SHARED, T0, uuidText, VOUCHER, type Fixtures } from '../fixtures/build.ts';
+import { ACCOUNT_ORDER, ALERT, ALIAS, buildFixtures, EXPORT, COMPANY, GONE, ITEM, MINECRAFT, PLAYERS, SHARED, T0, uuidText, VOUCHER, type Fixtures } from '../fixtures/build.ts';
 
 const MIN = 60_000;
 let fx: Fixtures;
@@ -55,7 +55,7 @@ test('the master: role, format, every table with the rows the builder wrote, and
   assert.deepEqual(rowsOf(save, 'market'), { MarketPrice: w.MarketPrice, OrderHistory: w.OrderHistory });
   assert.deepEqual(rowsOf(save, 'bank'), { TransactionLog: w.TransactionLog, BalanceHistory: w.BalanceHistory, SuspicionFlag: w.SuspicionFlag });
   assert.deepEqual(rowsOf(save, 'bankDiag'), { TransferJournal: 0, NoteFlow: w.NoteFlow, Meta: 3 });
-  assert.deepEqual(rowsOf(save, 'marketDiag'), { OrderOrigin: w.OrderOrigin, Meta: 2 });
+  assert.deepEqual(rowsOf(save, 'marketDiag'), { OrderOrigin: w.OrderOrigin, TradeAlert: w.TradeAlert, Meta: 2 });
   assert.ok(save.sources.every((s) => s.tables.every((t) => t.lostIds === 0)));
   assert.deepEqual(spansOf(save), {
     MarketPrice: [T0, T0 + 159 * MIN],
@@ -67,6 +67,7 @@ test('the master: role, format, every table with the rows the builder wrote, and
     NoteFlow: [T0 + 52 * MIN, T0 + 69 * MIN],
     Meta: [null, null], // tables without a time column
     OrderOrigin: [null, null],
+    TradeAlert: [ALERT.pump, ALERT.noPrice],
     AuditLog: [T0 + 30 * MIN, T0 + 129 * MIN], // whole seconds: the log drops the milliseconds
   });
   const day = (ms: number) => ms - (ms % 86_400_000);
@@ -80,6 +81,7 @@ test('the master: role, format, every table with the rows the builder wrote, and
   assert.equal(save.bankVersion, '2.2.0');
   assert.equal(save.lastPlayedMs, fx.lastPlayed['survival-main']);
   assert.equal(save.minecraft, MINECRAFT);
+  assert.deepEqual([save.exported, save.marketVersion], [false, null]); // a plain copy: no manifest, and nothing else names the market version
   assert.deepEqual(save.warnings, []);
 });
 
@@ -264,4 +266,62 @@ test('the engine reads SQLite and keeps 64-bit numbers exact', () => {
   const check = api.selfCheck();
   assert.match(check.sqlite, /^3\./);
   assert.equal(check.largest, 2n ** 63n - 1n);
+});
+
+/** A copy of the fixture's audit export whose manifest (or other files) a test may change. */
+function exportCopy(name: string, change: (dir: string) => void) {
+  const dir = path.join(fx.root, 'export-copies', name);
+  fs.cpSync(fx.exported, dir, { recursive: true });
+  change(dir);
+  return dir;
+}
+const manifestOf = (dir: string) => JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8')) as Record<string, unknown>;
+const writeManifest = (dir: string, json: unknown) => fs.writeFileSync(path.join(dir, 'manifest.json'), typeof json === 'string' ? json : JSON.stringify(json));
+
+test('an audit export (BS-255) opens like a save: made when its manifest says, both mod versions, files the server lacked', () => {
+  const { save } = load(fx.exported);
+  assert.deepEqual([save.name, save.role, save.roleAssumed, save.serverUid, save.generation], [EXPORT.folder, 'MASTER', false, 'f0000000-0000-4000-8000-000000000001', 'current']);
+  assert.equal(save.exported, true);
+  assert.equal(save.lastPlayedMs, EXPORT.ms); // no level.dat in an export: the time it was made
+  assert.equal(save.minecraft, MINECRAFT);
+  assert.equal(save.bankVersion, '2.2.0'); // the bank's own files win over the manifest's 2.3.0
+  assert.equal(save.marketVersion, EXPORT.market);
+  assert.deepEqual(status(save), ['bank:read', 'market:read', 'bankDiag:read', 'marketDiag:read', 'audit:read']);
+  assert.deepEqual(save.warnings, [`The server had no ${EXPORT.missing} when it made this export.`]);
+  assert.equal(load(path.join(fx.exported, 'data')).save.exported, true); // its data folder picked directly
+});
+
+test('an export: the identity file wins over the manifest, and the manifest stands in when there is none', () => {
+  const slave = exportCopy('role-differs', (dir) => writeManifest(dir, { ...manifestOf(dir), role: 'slave', server_uid: 'f0000000-0000-4000-8000-000000000009' }));
+  assert.deepEqual([load(slave).save.role, load(slave).save.serverUid], ['MASTER', 'f0000000-0000-4000-8000-000000000001']);
+  const bare = exportCopy('no-identity', (dir) => fs.rmSync(path.join(dir, 'data', 'ModUtilities', 'server_identity.json')));
+  const { save } = load(bare);
+  assert.deepEqual([save.role, save.roleAssumed, save.serverUid], ['MASTER', false, 'f0000000-0000-4000-8000-000000000001']);
+});
+
+test('an export: a size the manifest does not match is a warning, paths outside the export are ignored', () => {
+  const dir = exportCopy('changed', (d) => {
+    const m = manifestOf(d) as { participants: { stockmarket: { files: { path: string; size: number }[] }; banksystem: { files: unknown[]; error?: string } } };
+    m.participants.stockmarket.files[0]!.size += 1;
+    m.participants.banksystem.files.push({ path: '../../outside.db', method: 'file_copy', size: 1 }, { path: 'C:/outside.db', method: 'file_copy', size: 1 });
+    m.participants.banksystem.error = 'disk full';
+    writeManifest(d, m);
+  });
+  const { save } = load(dir);
+  assert.equal(save.warnings.length, 3);
+  assert.match(save.warnings[0]!, /^The export of banksystem reported a problem: disk full$/);
+  assert.match(save.warnings[2]!, /^data\/StockMarket\/.+ is missing or not the size the export lists/);
+});
+
+test('an export with a broken, oversized or hostile manifest still opens, as a plain copy', () => {
+  const plain = (dir: string) => { const { save } = load(dir); return [save.exported, save.role, save.lastPlayedMs, save.marketVersion]; };
+  assert.deepEqual(plain(exportCopy('broken', (d) => writeManifest(d, '{"created_utc": '))), [false, 'MASTER', null, null]);
+  assert.deepEqual(plain(exportCopy('huge', (d) => writeManifest(d, { ...manifestOf(d), pad: 'x'.repeat(1024 * 1024) }))), [false, 'MASTER', null, null]);
+  assert.deepEqual(plain(exportCopy('array', (d) => writeManifest(d, [1, 2]))), [false, 'MASTER', null, null]);
+  // Wrong types and keys that would reach the prototype are read as missing.
+  const hostile = exportCopy('hostile', (d) => writeManifest(d, '{"created_utc": 5, "role": "__proto__", "mods": {"__proto__": {"stockmarket": "9"}, "banksystem": 3},'
+    + ' "participants": {"__proto__": {"error": "x"}, "stockmarket": {"files": "all"}}, "server_uid": {"a": 1}}'));
+  const { save } = load(hostile);
+  assert.deepEqual([save.exported, save.lastPlayedMs, save.marketVersion, save.role, save.warnings], [true, null, null, 'MASTER', []]);
+  assert.equal(({} as Record<string, unknown>).stockmarket, undefined);
 });

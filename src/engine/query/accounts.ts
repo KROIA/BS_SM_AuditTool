@@ -1,11 +1,13 @@
 // What the Bank accounts screen asks: the accounts, one account in detail, and one item's balance over time.
-// The history comes from ledger() in players.ts. Bank data exists only on the master, so the server filter does not apply.
+// The history comes from ledger() in players.ts. Bank data exists only on the master; the server filter applies to its log rows
+// where the log records the server (BS-256), not to balances and snapshots.
 // An account deleted from the bank's files is still one when its snapshots or log rows remain.
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
 import type { AccountDetail, AccountListRow, Point, Rating, RuleSettings, Scope } from '../../shared/api.ts';
 import { mainData } from '../workspace.ts';
 import { checkAll, moneyItems } from './check.ts';
 import { all, big, names, num, series, text } from './db.ts';
+import { onServer } from './players.ts';
 
 /** Accounts with their money now (from the bank's files) and their log entries in the scope, most money first. */
 function read(db: DatabaseSync, scope: Scope, number?: number) {
@@ -13,10 +15,10 @@ function read(db: DatabaseSync, scope: Scope, number?: number) {
   if (scope.from !== null) params.from = scope.from;
   if (scope.to !== null) params.to = scope.to;
   if (number !== undefined) params.number = number;
-  const nameOf = names(db);
+  const nameOf = names(db), server = onServer(scope, params, 'l.server');
   return all(db, `SELECT n.number, a.name, a.frozen, a.owner, a.company, a.created_ms, a.number IS NULL AS deleted,
       (SELECT coalesce(sum(b.balance + b.locked), 0) FROM balance b JOIN item i ON i.id = b.item AND i.money = 1 WHERE b.account = n.number) AS money,
-      (SELECT count(*) FROM ledger l WHERE l.account = n.number ${scope.from !== null ? 'AND l.ts >= :from' : ''} ${scope.to !== null ? 'AND l.ts <= :to' : ''}) AS entries
+      (SELECT count(*) FROM ledger l WHERE l.account = n.number ${scope.from !== null ? 'AND l.ts >= :from' : ''} ${scope.to !== null ? 'AND l.ts <= :to' : ''} ${server}) AS entries
     FROM (SELECT number FROM account UNION SELECT DISTINCT account FROM snapshot UNION SELECT DISTINCT account FROM ledger) n
     LEFT JOIN account a ON a.number = n.number ${number !== undefined ? 'WHERE n.number = :number' : ''} ORDER BY money DESC, n.number`, params).map((r) => {
     const owner = text(r.owner);

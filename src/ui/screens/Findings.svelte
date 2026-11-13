@@ -2,7 +2,7 @@
   // Findings: what exactly was flagged, and why? The list grouped into incidents on the left, the picked finding on the
   // right, or the detection rules at #/findings/rules. Pins, dismissals and notes are kept in case.json.
   import { DEFAULT_RULES, type Candle, type Finding, type FindingsResult, type IncidentsResult, type ItemRow, type Level, type LedgerRow, type Mark, type OrderRow, type RuleId, type RuleSettings } from '../../shared/api.ts';
-  import { about, basis, describe, flagRule, ruleText, RULE_NAME, SOURCE, span, times } from '../../shared/finding.ts';
+  import { about, alertRule, basis, describe, flagRule, ruleText, RULE_NAME, SOURCE, span, times } from '../../shared/finding.ts';
   import { amount as fmtAmount, count, countShort, items as quantity, money, time } from '../../shared/fmt.ts';
   import { incidentSentence, incidentTitle } from '../../shared/incident.ts';
   import Icon from '../app/Icon.svelte';
@@ -282,9 +282,9 @@
         <div class="rulebox">
           <div class="rulehead">
             <span style="flex: 1 1 auto; font-weight: 600">Rule: {text.rule}</span>
-            {#if picked.rule !== 'bank-flag'}<a href="#/findings/rules" class="ref small" style="font-weight: 500">Change this rule</a>{/if}
+            {#if picked.source === 'tool'}<a href="#/findings/rules" class="ref small" style="font-weight: 500">Change this rule</a>{/if}
           </div>
-          <p class="small" style="margin: 0; color: var(--text2)">{picked.rule === 'bank-flag' ? flagRule(Number(picked.facts.flagType), result.bankSettings) : ruleText(picked.rule, app.rules)}</p>
+          <p class="small" style="margin: 0; color: var(--text2)">{picked.rule === 'bank-flag' ? flagRule(Number(picked.facts.flagType), result.bankSettings) : picked.rule === 'market-alert' ? alertRule(picked) : ruleText(picked.rule, app.rules)}</p>
           <p class="small" style="margin: 0">Measured here: <span style="font-weight: 500; color: var(--text)">{text.measured}</span></p>
         </div>
 
@@ -295,7 +295,8 @@
           {#if !rec}
             <p class="small" aria-busy="true" style="margin: 0">Loading the records…</p>
           {:else if recordCount === 0 && !picked.records.flags.length && picked.facts.origin !== 'audit log'}
-            <p class="small" style="margin: 0">{picked.rule === 'hour-profit' || picked.rule === 'balance' ? 'This finding is worked out from the orders and balances of the time shown; open the player or the account for them.' : 'No single rows behind it.'}</p>
+            <p class="small" style="margin: 0">{picked.rule === 'hour-profit' || picked.rule === 'balance' ? 'This finding is worked out from the orders and balances of the time shown; open the player or the account for them.'
+              : picked.rule === 'market-alert' ? "The market mod sums all of the player's orders in its time window and does not record which they were; open the player for them." : 'No single rows behind it.'}</p>
           {:else}
             <div class="scroll">
               {#if rec.orders.length}

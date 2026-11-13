@@ -4,7 +4,7 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { buildFixtures } from '../fixtures/build.ts';
+import { buildFixtures, EXPORT } from '../fixtures/build.ts';
 
 const fx = buildFixtures(path.resolve('test-results/fixtures'));
 
@@ -119,5 +119,26 @@ test.describe('with the invented network loaded', () => {
     await expect(page.locator('nav')).toContainText('2 saves loaded');
     await page.getByRole('link', { name: 'Saves and servers' }).first().click();
     await expect(page.locator('section.save h2')).toHaveText(['survival-main', 'nether-hub']);
+  });
+});
+
+test.describe('an audit export (BS-255)', () => {
+  let program: ElectronApplication;
+  let page: Page;
+  test.beforeAll(async () => ({ program, page } = await launch(path.resolve('test-results/app-data-export'), [fx.exported])));
+  test.afterAll(() => program.close());
+
+  test('the saves screen says it is an export, when it was made, and both mod versions', async () => {
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Overview');
+    await page.getByRole('link', { name: 'Saves and servers' }).first().click();
+    const save = page.locator('section.save').first();
+    await expect(save.locator('h2')).toHaveText(EXPORT.folder);
+    await expect(save).toContainText(/Audit export made 4 Nov 2026, \d\d:\d\d/);
+    await expect(save).toContainText('BankSystem 2.2.0 · StockMarket 1.9.0 · Minecraft 1.21.1');
+    await expect(page.locator('main')).toContainText('dividend_history.db when it made this export');
+    await page.screenshot({ path: 'test-results/saves-export-dark.png' });
+    await page.getByRole('button', { name: 'Switch to the light theme' }).click();
+    await page.screenshot({ path: 'test-results/saves-export-light.png' });
+    await page.getByRole('button', { name: 'Switch to the dark theme' }).click();
   });
 });

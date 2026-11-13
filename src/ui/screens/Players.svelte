@@ -8,7 +8,7 @@
   import FindingLinks from '../app/FindingLinks.svelte';
   import StepChart from '../app/StepChart.svelte';
   import { app, engine } from '../app/state.svelte.ts';
-  import { entries, gapRows, LEVEL_COLOR, tone, words, type GapRow } from '../app/words.ts';
+  import { entries, gapRows, LEVEL_COLOR, tone, whereMade, words, type GapRow } from '../app/words.ts';
 
   let { selected }: { selected: string | null } = $props();
 
@@ -93,9 +93,16 @@
     if (r.kind === 'ADMIN_SET' && r.change !== null && r.balanceAfter !== null && isMoney(r.item)) parts.push(`from ${money(r.balanceAfter - r.change)} to ${money(r.balanceAfter)}`);
     else if (r.note) parts.push(r.note);
     if (r.change === null) parts.push('the log does not say in which direction');
+    const where = whereMade(r, main?.name);
+    if (where) parts.push(where);
     return parts.join(' · ');
   }
   const SIDE = { market: 'Market', limit: 'Limit', intermarket: 'Inter-market' };
+  /** SM-317: the limit price beside the kind; a limit price of 0 is a market order. */
+  const kindOf = (o: OrderRow) => (o.limitPrice !== null && o.limitPrice > 0n && o.type !== 'intermarket' ? `Limit at ${money(o.limitPrice)}` : SIDE[o.type]);
+  const abs = (v: bigint) => (v < 0n ? -v : v);
+  /** Filled, and of how many when the player wanted another amount (SM-317). */
+  const filled = (o: OrderRow) => quantity(abs(o.amount)) + (o.wanted !== null && abs(o.wanted) !== abs(o.amount) ? ` of ${quantity(abs(o.wanted))}` : '');
 
   // ---- Figures ----
   const lead = $derived.by(() => {
@@ -300,8 +307,8 @@
                       <td class="mono">{o.time ? time(o.time, false, true) : 'no time recorded'}</td>
                       <td><a class="ref" href="#/markets/{o.item}">{itemName(o.item)}</a></td>
                       <td style="font-weight: 500; color: {o.amount > 0n ? 'var(--buy)' : 'var(--sell)'}">{o.amount > 0n ? 'Buy' : 'Sell'}</td>
-                      <td class="dim">{SIDE[o.type]}</td>
-                      <td class="r">{quantity(o.amount < 0n ? -o.amount : o.amount)}</td>
+                      <td class="dim">{kindOf(o)}</td>
+                      <td class="r">{filled(o)}{#if o.status && o.status !== 'filled'}<span class="small" style="display: block">{o.status}</span>{/if}</td>
                       <td class="r">{money(o.price)}</td>
                       <td class="r">{money(o.money < 0n ? -o.money : o.money)}</td>
                       <td class="dim">{o.server ?? 'not recorded'}</td>

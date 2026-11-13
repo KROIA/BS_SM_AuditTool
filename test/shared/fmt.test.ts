@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { amount, bytes, count, countShort, items, money, moneyShort, time } from '../../src/shared/fmt.ts';
+import { amount, bytes, count, countShort, items, money, moneyShort, percent, time } from '../../src/shared/fmt.ts';
 
 test('apostrophe between thousands, point before decimals', () => {
   assert.equal(amount(153205n), "1'532.05");
@@ -52,4 +52,8 @@ test('time and file size', () => {
   assert.equal(bytes(736_100_352), '702 MB');
   assert.equal(bytes(1_252_000_000), "1'194 MB");
   assert.equal(bytes(2048), '2 KB');
+});
+
+test('percent: two decimals at most, apostrophes above a thousand', () => {
+  assert.deepEqual([percent(24.99489), percent(20), percent(12.5), percent(1234.5)], ['24.99%', '20%', '12.5%', "1'234.5%"]);
 });

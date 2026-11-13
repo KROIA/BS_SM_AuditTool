@@ -22,20 +22,21 @@ test.afterAll(() => program.close());
 
 test('the list is sorted by suspicion, then by profit, and the first player opens with their findings', async () => {
   await page.getByRole('link', { name: 'Players', exact: true }).click();
-  // Tavrik and Quenby both weigh 12 (one high and four medium, one critical and two medium): profit decides. So do AdmiralNoor
-  // and Ombrelune at 8: AdmiralNoor's two transfer findings (lost, and iron credited as diamonds) are two high ones.
-  await expect(page.locator('aside .pick .who > span:first-child')).toHaveText(['Tavrik', 'Quenby', 'AdmiralNoor', 'Ombrelune', 'Brindle', 'Mikko_82']);
+  // Tavrik 18 (two high, five medium), Quenby 14 (one critical, three medium), Ombrelune 10, AdmiralNoor 8: the market alerts
+  // (SM-316) add one high and one medium for Tavrik and one medium each for Quenby and Ombrelune.
+  await expect(page.locator('aside .pick .who > span:first-child')).toHaveText(['Tavrik', 'Quenby', 'Ombrelune', 'AdmiralNoor', 'Brindle', 'Mikko_82']);
   await expect(page.locator('aside')).toContainText('most suspicious first');
   // Transfer findings (fixtures, TRANSFER_CASES): two for AdmiralNoor, one each for Ombrelune, Brindle and Mikko_82.
-  await expect(page.locator('aside .count')).toHaveText(['5', '3', '2', '2', '2', '2']);
-  await expect(page.locator('aside .count').nth(1)).toHaveAttribute('title', '3 open findings, the highest critical');
+  await expect(page.locator('aside .count')).toHaveText(['7', '4', '3', '2', '2', '2']);
+  await expect(page.locator('aside .count').nth(1)).toHaveAttribute('title', '4 open findings, the highest critical');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tavrik');
   await expect(page.locator('.uuid')).toHaveText('a1b2c3d4-e5f6-4a7b-8c9d-000000000001');
   await expect(page.locator('.lead')).toHaveText('Tavrik made $5.44M trading profit in this time range, on the Diamond market.');
-  await expect(page.locator('.fvalue')).toHaveText(['+$5.44M', '60', "$940'830.00", '5']);
-  await expect(page.locator('.figure').nth(3)).toContainText(/Open findings\s*5\s*1 high, 4 medium/);
+  await expect(page.locator('.fvalue')).toHaveText(['+$5.44M', '60', "$940'830.00", '7']);
+  await expect(page.locator('.figure').nth(3)).toContainText(/Open findings\s*7\s*2 high, 5 medium/);
   const flagged = page.getByRole('region', { name: 'What was flagged' }).locator('a.link-row');
-  await expect(flagged).toHaveCount(5);
+  await expect(flagged).toHaveCount(5); // the first five of 7
+  await expect(page.getByRole('region', { name: 'What was flagged' }).getByRole('button', { name: 'Show all 7' })).toBeVisible();
   await expect(flagged.first()).toContainText("$5.44M trading profit within one hour");
   await flagged.first().click();
   await expect(page).toHaveURL(/#\/findings\/hour-profit%3A/);
@@ -56,10 +57,11 @@ test('the trades tab: profit by market, trading sessions and the latest orders',
   const rows = page.locator('tbody tr');
   await expect(rows).toHaveCount(10);
   await expect(page.locator('main')).toContainText('the latest 10 of 60');
+  // SM-317: a filled order says nothing more; only a cancelled one gets a line under its quantity.
   await expect(rows.first().locator('td')).toHaveText([/^\d+ Nov 2026, \d\d:\d\d:\d\d\.580$/, 'Diamond', 'Sell', 'Market', '100', "$1'960.40", "$196'040.00", 'survival-main']);
   await page.setViewportSize({ width: 1440, height: 1500 });
   await page.screenshot({ path: 'test-results/players-dark.png' });
-  await page.getByRole('button', { name: 'Show all' }).click();
+  await page.getByRole('button', { name: 'Show all', exact: true }).click();
   await expect(rows).toHaveCount(60);
   await page.getByRole('button', { name: 'Show fewer' }).click();
 });
@@ -74,6 +76,10 @@ test('the bank history tab: the log of the player\'s accounts in words', async (
   await expect(entries.nth(1)).toContainText("Withdrawal");
   await expect(entries.nth(3)).toContainText('Sold 100 Diamond');
   await expect(entries.nth(3)).toContainText("+$196'040.00");
+  // BS-256 and BS-258: a slave's row names its server (the master's rows do not), and where the player stood.
+  await expect(entries.first()).not.toContainText('on survival-main');
+  await expect(entries.nth(1)).toContainText('on mining-1');
+  await expect(entries.nth(2)).toContainText('Account 11 · at the overworld, -230 70 -920');
   await page.screenshot({ path: 'test-results/players-bank-dark.png' });
 });
 
@@ -91,6 +97,16 @@ test('a player picked from the list gets an address; sales without a purchase ar
   await expect(page.locator('.entry').first()).toContainText("-$25'000.00");
   await page.getByRole('tab', { name: 'Trades' }).click();
   await expect(page.locator('.empty')).toHaveText('No orders in the selected time range.');
+});
+
+test('orders (SM-317): the limit price, less filled than wanted, and how the order ended', async () => {
+  await page.getByRole('link', { name: /Ombrelune/ }).click();
+  await page.getByRole('tab', { name: 'Trades' }).click();
+  await expect(page.locator('tbody tr').first().locator('td').nth(3)).toHaveText("Limit at $10.00");
+  await expect(page.locator('tbody tr').first().locator('td').nth(4)).toHaveText('8 of 16cancelled by the player'); // volumes are in hundredths of an item
+  await page.screenshot({ path: 'test-results/players-orders-end-dark.png' });
+  await page.getByRole('link', { name: /Mikko_82/ }).click();
+  await expect(page.locator('tbody tr').first().locator('td').nth(4)).toContainText('cancelled by the server');
 });
 
 test.describe('an old 2.1.2 save', () => {

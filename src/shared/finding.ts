@@ -1,7 +1,7 @@
 // A finding in plain words (DESIGN_SPEC 8.2): its title, summary, facts and rule, for the Findings screen and the report.
 // Every number goes through fmt.ts. The facts each rule fills are listed in engine/query/findings.ts.
 import type { Finding, Rating, RuleId, RuleSettings } from './api.ts';
-import { count, items, money, moneyShort, time } from './fmt.ts';
+import { count, items, money, moneyShort, percent, time } from './fmt.ts';
 
 /** What the screens know about items: the name ("Diamond") and whether it is money. */
 export interface ItemWords { itemName: (id: number) => string; isMoney: (id: number) => boolean }
@@ -40,7 +40,7 @@ export function ruleText(rule: RuleId, s: RuleSettings): string {
     case 'order-ledger': return 'Flags an order whose rows in the bank log do not add up to its volume, or that has no row at all.';
     case 'bank-flag': return 'Shows the flags the bank mod raised itself on the server, with the thresholds the server used.';
     case 'last-save': return 'Flags log rows newer than the bank\'s last save: if the server crashed before the next save, what they did may have been undone.';
-    case 'market-alert': return 'The market mod keeps its alerts in memory and the server log only; no save holds them.';
+    case 'market-alert': return 'Shows the alerts the market mod raised itself on the server: a large profit within a time window, and the two pump-and-dump patterns, with the thresholds the server used then.';
     case 'transfer': return 'Pairs each transfer between the master and a slave by its id, and flags one that was lost, arrived twice, came from nothing, or was left for an admin.';
     case 'banknotes': return 'Counts the banknotes withdrawn against those paid in and found in the world. It comes with milestone M3.';
   }
@@ -95,6 +95,20 @@ export function flagRule(type: number, bank: Record<string, number | boolean>): 
     case 8: return 'A rule of the bank mod: more shares deposited than the company issued.';
     case 9: return 'A rule of the bank mod: shares made by /give or in creative mode.';
     default: return `A rule of the bank mod that this version of the tool does not know (type ${type}).`;
+  }
+}
+
+const ALERT: Record<string, string> = { profit: 'Profit alert', pump_dump_pump: 'Pump and dump: price pushed up', pump_dump_cycle: 'Pump and dump: bought and sold again' };
+const minutes = (ms: unknown) => (typeof ms === 'number' ? `${count(Math.round(ms / 60_000))} minutes` : 'its time window');
+/** The market mod's rule behind an alert, with the threshold the row says the server used then. */
+export function alertRule(f: Finding): string {
+  const x = f.facts, limit = typeof x.threshold === 'number' ? x.threshold : null;
+  const m = limit === null ? "the server's amount" : money(BigInt(Math.round(limit * 100)));
+  switch (x.kind) {
+    case 'profit': return `A rule of the market mod: a player's trading cash flow over all markets above ${m} within ${minutes(x.windowMs)}. Selling items bought before the window counts as profit.`;
+    case 'pump_dump_cycle': return `A rule of the market mod: buying on one market and selling it again within ${minutes(x.windowMs)} for more than ${m} profit.`;
+    case 'pump_dump_pump': return `A rule of the market mod: a market buy in a moment the price rose by more than ${limit === null ? "the server's percent" : percent(limit)}, while the same player had sell orders waiting above the price.`;
+    default: return 'A rule of the market mod that this version of the tool does not know.';
   }
 }
 
@@ -215,6 +229,40 @@ export function describe(f: Finding, w: ItemWords): FindingWords {
         facts: [['Flag', FLAG[type] ?? `type ${type}`], ['Amount', shown], ...(x.ref ? [['Reference', String(x.ref)] as [string, string]] : []),
           ...(x.details ? [['Details', String(x.details)] as [string, string]] : []), ['Acknowledged', f.acknowledged === null ? 'unknown' : f.acknowledged ? 'yes' : 'no']],
       };
+    }
+    case 'market-alert': {
+      const kind = String(x.kind), limit = f.measured.threshold, amount = b('amount');
+      const raised = 'The market mod raised this itself while the server was running.';
+      const facts: [string, string][] = [['Alert', ALERT[kind] ?? `kind ${kind}`], ['Orders behind it', count(f.records.orders.length)]];
+      const log: [string, string][] = x.text ? [['Server log line', String(x.text)]] : [];
+      if (kind === 'pump_dump_pump') {
+        const pct = typeof x.percent === 'number' ? x.percent : null;
+        return {
+          rule: ALERT[kind]!, facts: [...facts, ['Price rise', `${money(amount)} per item`], ["That minute's opening price", x.open === null || x.open === undefined ? 'no price recorded' : money(b('open'))], ...log],
+          measured: pct === null ? `a rise of ${money(amount)} per item; without a price for that minute the percent is unknown`
+            : `a rise of ${percent(pct)}` + (limit === null ? '' : `, the server's limit is ${percent(limit as number)}`),
+          title: `Bought ${market} while the price rose ${pct === null ? `by ${money(amount)}` : percent(pct)}, with own sell orders waiting above`,
+          summary: `${raised} ${who} bought ${market} at market price in a moment the price jumped ${pct === null ? `by ${money(amount)} per item` : `about ${percent(pct)}`}, while ${f.players.length > 1 ? 'they' : 'the same player'} had sell orders waiting above the old price. `
+            + "Pushing the price up into one's own sell orders is the first half of a pump and dump."
+            + (pct === null ? '' : ' The percent is measured against the opening price of that minute; the mod measured it against the price just before.'),
+        };
+      }
+      const short = moneyShort(amount);
+      const over = limit === null ? '' : `, above the server's limit of ${money(limit as bigint)}`;
+      if (kind === 'profit') return {
+        rule: ALERT[kind]!, facts: [...facts, ['Profit', money(amount)], ['Time window', minutes(x.windowMs)], ...log],
+        measured: money(amount) + (limit === null ? '' : `, the server's limit is ${money(limit as bigint)}`),
+        title: `${short} trading profit within ${minutes(x.windowMs)}`,
+        summary: `${raised} ${who} took in ${money(amount)} more than ${f.players.length > 1 ? 'they' : 'the player'} paid, over all markets, within ${minutes(x.windowMs)}${over}. `
+          + 'The mod counts cash: selling items bought before the window counts as profit too.',
+      };
+      if (kind === 'pump_dump_cycle') return {
+        rule: ALERT[kind]!, facts: [...facts, ['Profit', money(amount)], ['Time window', minutes(x.windowMs)], ...log],
+        measured: money(amount) + (limit === null ? '' : `, the server's limit is ${money(limit as bigint)}`),
+        title: `Bought and sold ${market} again within ${minutes(x.windowMs)} for ${short} profit`,
+        summary: `${raised} ${who} bought ${market} and sold it again within ${minutes(x.windowMs)} for ${money(amount)} profit${over}. The mod calls this a pump-and-dump cycle.`,
+      };
+      return { rule: RULE_NAME[f.rule], facts: [...facts, ...log], measured: money(amount), title: 'An alert of the market mod', summary: `${raised} ${x.text ? String(x.text) : ''}`.trim() };
     }
     case 'last-save': return {
       rule: RULE_NAME[f.rule], measured: plural(n('rows'), 'row', 'rows'),

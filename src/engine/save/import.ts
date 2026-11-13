@@ -8,23 +8,26 @@ import type { SaveSource, SaveSummary, SaveTable } from '../../shared/api.ts';
 import { time } from '../../shared/fmt.ts';
 import { placeInTime, readAuditLog } from './audit.ts';
 import { readBankAudit, readFiles, readUserCache } from './files.ts';
-import { findDataDir, readIdentity, readLevel } from './locate.ts';
+import { findDataDir, readIdentity, readLevel, readManifest } from './locate.ts';
 
 /** Raise when the layout of the cache changes: caches written by an older version are rebuilt. */
-export const CACHE_VERSION = 9;
+export const CACHE_VERSION = 10;
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE candle (id INTEGER PRIMARY KEY, market INTEGER NOT NULL, time INTEGER NOT NULL, open INTEGER NOT NULL, low INTEGER NOT NULL, high INTEGER NOT NULL, volume REAL NOT NULL);
 CREATE TABLE candle_hour (market INTEGER NOT NULL, time INTEGER NOT NULL, open INTEGER NOT NULL, low INTEGER NOT NULL, high INTEGER NOT NULL, volume REAL NOT NULL, PRIMARY KEY (market, time)) WITHOUT ROWID;
-CREATE TABLE orders (id INTEGER PRIMARY KEY, order_id INTEGER, item INTEGER NOT NULL, account INTEGER NOT NULL, player TEXT NOT NULL, type INTEGER NOT NULL, amount INTEGER NOT NULL, price INTEGER NOT NULL, time INTEGER NOT NULL, finish_time INTEGER);
-CREATE TABLE ledger (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, account INTEGER NOT NULL, actor TEXT, actor_name TEXT, source_kind TEXT, kind TEXT NOT NULL, type_code INTEGER, item INTEGER NOT NULL, amount INTEGER NOT NULL, other_account INTEGER, company_id INTEGER, note TEXT, ref TEXT, tag TEXT, money_amount INTEGER, price INTEGER, currency_item INTEGER, balance_after INTEGER, virtual_qty INTEGER);
+CREATE TABLE orders (id INTEGER PRIMARY KEY, order_id INTEGER, item INTEGER NOT NULL, account INTEGER NOT NULL, player TEXT NOT NULL, type INTEGER NOT NULL, amount INTEGER NOT NULL, price INTEGER NOT NULL, time INTEGER NOT NULL, finish_time INTEGER,
+  limit_price INTEGER, target_volume INTEGER, final_status INTEGER);
+CREATE TABLE ledger (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, account INTEGER NOT NULL, actor TEXT, actor_name TEXT, source_kind TEXT, kind TEXT NOT NULL, type_code INTEGER, item INTEGER NOT NULL, amount INTEGER NOT NULL, other_account INTEGER, company_id INTEGER, note TEXT, ref TEXT, tag TEXT, money_amount INTEGER, price INTEGER, currency_item INTEGER, balance_after INTEGER, virtual_qty INTEGER,
+  server TEXT, dimension TEXT, x INTEGER, y INTEGER, z INTEGER);
 CREATE TABLE snapshot (id INTEGER PRIMARY KEY, account INTEGER NOT NULL, item INTEGER NOT NULL, time INTEGER NOT NULL, balance INTEGER NOT NULL, locked INTEGER NOT NULL);
 CREATE TABLE flag (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, account INTEGER NOT NULL, flag_type INTEGER NOT NULL, severity INTEGER NOT NULL, amount INTEGER NOT NULL, ref TEXT, details TEXT, acknowledged INTEGER NOT NULL);
 CREATE TABLE transfer_step (id INTEGER PRIMARY KEY, transfer_id TEXT NOT NULL, ts INTEGER NOT NULL, direction TEXT, path TEXT, step TEXT NOT NULL, account INTEGER, player TEXT, items_json TEXT, ledger_type INTEGER, context TEXT, detail TEXT);
 CREATE TABLE note_flow (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, source TEXT NOT NULL, player TEXT, item INTEGER NOT NULL, amount INTEGER NOT NULL, context TEXT, villager TEXT, dimension TEXT, x INTEGER, y INTEGER, z INTEGER);
 CREATE TABLE audit (id INTEGER PRIMARY KEY, ts INTEGER, approx INTEGER NOT NULL, local INTEGER, kind TEXT NOT NULL, type TEXT, account INTEGER, item INTEGER, amount INTEGER, severity INTEGER, ref TEXT, actor TEXT, actor_uuid TEXT, player TEXT, subject TEXT, state TEXT, text TEXT, row_id INTEGER);
 CREATE TABLE order_origin (ref TEXT PRIMARY KEY, server_uid TEXT, name TEXT NOT NULL);
+CREATE TABLE trade_alert (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, kind TEXT NOT NULL, player TEXT, account INTEGER, item INTEGER, amount INTEGER, window_ms INTEGER, threshold REAL, text TEXT, order_ids TEXT);
 CREATE TABLE diag_meta (source TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL);
 CREATE TABLE player (uuid TEXT PRIMARY KEY, name TEXT NOT NULL, bank_admin INTEGER NOT NULL, market_admin INTEGER NOT NULL);
 CREATE TABLE account (number INTEGER PRIMARY KEY, name TEXT NOT NULL, frozen INTEGER NOT NULL, created_ms INTEGER, owner TEXT, company TEXT);
@@ -60,11 +63,14 @@ const TABLES: TableImport[] = [
   { source: 'market', from: 'MarketPrice', to: 'candle', time: 'time',
     columns: [...same('id', 'time', 'open', 'low', 'high'), { to: 'market', from: 'marketid' }, { to: 'volume', from: 'traded_volume' }] },
   { source: 'market', from: 'OrderHistory', to: 'orders', time: 'time',
-    columns: [...same('id', 'order_id', 'type', 'amount', 'price', 'time', 'finish_time'), { to: 'item', from: 'itemid' }, { to: 'account', from: 'accountid' },
+    columns: [...same('id', 'order_id', 'type', 'amount', 'price', 'time', 'finish_time', 'limit_price', 'target_volume', 'final_status'), { to: 'item', from: 'itemid' }, { to: 'account', from: 'accountid' },
       { to: 'player', from: uuid('userid_one', 'userid_two'), needs: ['userid_one', 'userid_two'] }] },
   { source: 'bank', from: 'TransactionLog', to: 'ledger', time: 'ts',
     columns: [...same('id', 'ts', 'actor_name', 'source_kind', 'kind', 'type_code', 'amount', 'other_account', 'company_id', 'note', 'ref', 'tag', 'money_amount', 'price', 'currency_item', 'balance_after', 'virtual_qty'),
-      { to: 'account', from: 'account_number' }, { to: 'actor', from: 'lower(actor_uuid)', needs: ['actor_uuid'] }, { to: 'item', from: 'item_id' }] },
+      { to: 'account', from: 'account_number' }, { to: 'actor', from: 'lower(actor_uuid)', needs: ['actor_uuid'] }, { to: 'item', from: 'item_id' },
+      // BS-256: where the column exists, NULL is the master; '' says so in the cache, NULL stays "the save does not say".
+      { to: 'server', from: "coalesce(substr(origin_server, 1, 200), '')", needs: ['origin_server'] },
+      { to: 'dimension', from: 'substr(dimension, 1, 200)', needs: ['dimension'] }, ...same('x', 'y', 'z')] },
   { source: 'bank', from: 'BalanceHistory', to: 'snapshot', time: 'time',
     columns: [...same('id', 'time', 'balance'), { to: 'account', from: 'account_number' }, { to: 'item', from: 'item_id' }, { to: 'locked', from: 'locked_balance' }] },
   { source: 'bank', from: 'SuspicionFlag', to: 'flag', time: 'ts',
@@ -78,6 +84,11 @@ const TABLES: TableImport[] = [
   { source: 'bankDiag', from: 'Meta', to: 'diag_meta', columns: same('key', 'value'), fixed: { source: "'bank'" } },
   { source: 'marketDiag', from: 'OrderOrigin', to: 'order_origin',
     columns: [{ to: 'ref', from: 'ref' }, { to: 'server_uid', from: 'origin_server_uid' }, { to: 'name', from: 'origin_name' }] },
+  // SM-316. Text columns are cut: a save is untrusted.
+  { source: 'marketDiag', from: 'TradeAlert', to: 'trade_alert', time: 'ts',
+    columns: [...same('id', 'ts', 'amount', 'window_ms', 'threshold'), { to: 'kind', from: 'substr(kind, 1, 40)', needs: ['kind'] },
+      { to: 'player', from: 'lower(substr(player_uuid, 1, 36))', needs: ['player_uuid'] }, { to: 'account', from: 'account_number' }, { to: 'item', from: 'item_id' },
+      { to: 'text', from: 'substr(text, 1, 2000)', needs: ['text'] }, { to: 'order_ids', from: 'substr(order_ids, 1, 2000)', needs: ['order_ids'] }] },
   { source: 'marketDiag', from: 'Meta', to: 'diag_meta', columns: same('key', 'value'), fixed: { source: "'market'" } },
 ];
 const FILES: Record<Exclude<SaveSource['id'], 'audit'>, string> = {
@@ -90,7 +101,7 @@ const SOURCE_IDS = Object.keys(FILES) as (keyof typeof FILES)[];
 // A database's -wal and -journal hold changes its main file does not show yet; the NBT folders and level.dat feed the summary too.
 const FINGERPRINT_FILES = [
   ...Object.values(FILES).flatMap((f) => [f, f + '-wal', f + '-journal']),
-  'ModUtilities/server_identity.json', 'BankSystem/ItemIDs.nbt', 'BankSystem/Meta_data.nbt', 'BankSystem/settings.json', '../level.dat', '../../usercache.json',
+  'ModUtilities/server_identity.json', 'BankSystem/ItemIDs.nbt', 'BankSystem/Meta_data.nbt', 'BankSystem/settings.json', '../level.dat', '../manifest.json', '../../usercache.json',
 ];
 const FINGERPRINT_DIRS = ['BankSystem/audit', 'BankSystem/Bank_data', 'BankSystem/Companies', 'StockMarket/MarketManager'];
 const CHUNK = 200_000; // ids per insert; a failing insert is halved until the damage is fenced in
@@ -273,6 +284,7 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
   const dataDir = findDataDir(picked);
   const identity = readIdentity(dataDir);
   const level = readLevel(dataDir);
+  const manifest = readManifest(dataDir);
   const print = fingerprint(picked);
   const tmp = cacheFile + '.copies';
   for (const f of [cacheFile, cacheFile + '-journal']) fs.rmSync(f, { force: true });
@@ -350,6 +362,9 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
     add('balance', files.accounts.flatMap((a) => a.balances.map((b) => ({ account: a.number, item: b.item, balance: b.balance, locked: b.locked }))));
     add('item', files.items.map((i) => ({ id: i.id, name: i.name, money: +i.money })));
     add('market', files.markets.map((m) => ({ item: m.item, price: m.price, default_price: m.defaultPrice, maintenance: +m.maintenance })));
+    // An alert names the market by the number it had then: an old number goes to the one that replaced it.
+    db.prepare(`UPDATE trade_alert SET item = (SELECT json_extract(value, '$[1]') FROM json_each(:map) WHERE json_extract(value, '$[0]') = trade_alert.item)
+      WHERE item IN (SELECT json_extract(value, '$[0]') FROM json_each(:map))`).run({ map: JSON.stringify(files.aliases) });
     db.exec('COMMIT');
 
     report('Preparing the data for quick searching', 0, 1);
@@ -361,9 +376,11 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
       JOIN candle c ON c.market = h.market AND c.time = h.first
       GROUP BY h.market, h.t`);
 
-    const role = identity?.role ?? (found.has('bank') ? 'MASTER' : 'SLAVE');
-    const warnings: string[] = [];
-    if (!identity) warnings.push('This save has no server identity file. Its role was worked out from the files that were found.');
+    // An audit export's manifest names the role and the server id too; the identity file wins where both exist.
+    const role = identity?.role ?? manifest?.role ?? (found.has('bank') ? 'MASTER' : 'SLAVE');
+    const assumed = !identity && !manifest?.role;
+    const warnings: string[] = [...(manifest?.warnings ?? [])];
+    if (assumed) warnings.push('This save has no server identity file. Its role was worked out from the files that were found.');
     const sources = SOURCE_IDS.map((id): SaveSource => {
       const f = found.get(id);
       if (f) {
@@ -380,8 +397,11 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
     }
     const folder = path.basename(dataDir) === 'data' ? path.basename(path.dirname(dataDir)) : path.basename(dataDir);
     const summary: SaveSummary = {
-      path: picked, name: identity?.slaveId || folder, role, roleAssumed: !identity, serverUid: identity?.uid ?? null, masterUid: identity?.masterUid ?? null,
-      knownSlaves: identity?.knownSlaves ?? null, generation: current ? 'current' : 'legacy', lastPlayedMs: level?.lastPlayedMs ?? null, minecraft: level?.version ?? null, bankVersion: files.bankVersion,
+      path: picked, name: identity?.slaveId || folder, role, roleAssumed: assumed, serverUid: identity?.uid ?? manifest?.uid ?? null, masterUid: identity?.masterUid ?? null,
+      knownSlaves: identity?.knownSlaves ?? null, generation: current ? 'current' : 'legacy',
+      // An export has no level.dat: the time it was made is when the copy was taken.
+      lastPlayedMs: manifest?.createdMs ?? level?.lastPlayedMs ?? null, minecraft: level?.version ?? manifest?.minecraft ?? null,
+      bankVersion: files.bankVersion ?? manifest?.bankVersion ?? null, marketVersion: manifest?.marketVersion ?? null, exported: manifest !== null,
       players: files.players.length, accounts: files.accounts.length, sources, warnings,
     };
     const put = db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)');
