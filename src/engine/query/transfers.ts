@@ -4,7 +4,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { SaveSummary, Scope, TransferClass, TransferItem, TransferRow, TransfersResult } from '../../shared/api.ts';
 import { loadedSaves, mainData, mainSave, saveData } from '../workspace.ts';
-import { moneyItems } from './check.ts';
+import { noteWorth } from './check.ts';
 import { all, big, names, num, text } from './db.ts';
 import { change } from './players.ts';
 
@@ -139,7 +139,7 @@ export function classify(p: Pair): { items: TransferItem[]; class: TransferClass
 const abs = (v: bigint) => (v < 0n ? -v : v);
 
 /** A slave of the loaded master, by the master id it names (or none). */
-const isSlaveOf = (main: SaveSummary) => (s: SaveSummary) => s.role === 'SLAVE' && (!s.masterUid || !main.serverUid || s.masterUid === main.serverUid);
+export const isSlaveOf = (main: SaveSummary) => (s: SaveSummary) => s.role === 'SLAVE' && (!s.masterUid || !main.serverUid || s.masterUid === main.serverUid);
 const journal = (s: SaveSummary) => s.sources.find((x) => x.id === 'bankDiag')?.tables.find((t) => t.name === 'TransferJournal') ?? null;
 
 /** Why nothing can be checked; null when something can. */
@@ -197,9 +197,7 @@ export function allTransfers(): TransferRow[] {
   const masterFrom = num(all(db, `SELECT min(ts) AS t FROM ledger WHERE ref GLOB '${UUID_GLOB}'`)[0]!.t);
   const known = main.knownSlaves ?? null;
   const knownSaves = known?.map((name) => slaves.find((s) => s.name === name) ?? null) ?? null;
-  // ponytail: banknotes are told apart by name only; a denomination with extra components would count as money too.
-  const nameOf = names(db), money = new Set([...moneyItems(db),
-    ...all(db, `SELECT id FROM item WHERE name GLOB 'banksystem:money[0-9]*' OR name GLOB 'banksystem:money_cent[0-9]*'`).map((r) => num(r.id)!)]);
+  const nameOf = names(db), money = new Set(noteWorth(db).keys());
   const owner = new Map(all(db, 'SELECT number, owner FROM account WHERE owner IS NOT NULL').map((r) => [num(r.number)!, String(r.owner)]));
 
   const out: TransferRow[] = [];

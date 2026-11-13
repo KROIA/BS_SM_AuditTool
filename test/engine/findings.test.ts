@@ -141,7 +141,7 @@ test('old save: the rules without data say why, the rules still not built are li
   open(fx.legacy);
   const r = api.findings(ALL, DEFAULT_RULES);
   const why = Object.fromEntries(r.rules.map((s) => [s.rule, s.notApplicable === null ? s.found : 'n/a']));
-  assert.deepEqual(why, { 'round-trip': 0, 'order-rate': 3, 'hour-profit': 1, 'far-price': 2, 'price-spike': 1, 'balance': 2,
+  assert.deepEqual(why, { 'round-trip': 0, 'order-rate': 3, 'hour-profit': 1, 'far-price': 2, 'price-spike': 1, 'balance': 5,
     'order-ledger': 'n/a', 'bank-flag': 'n/a', 'last-save': 'n/a', 'market-alert': 'n/a', 'transfer': 'n/a', 'banknotes': 'n/a' });
   assert.ok(r.rules.every((s) => s.notApplicable === null || s.notApplicable.length > 10));
   assert.equal(r.bankSettings.LAUNDERING_MIN_AMOUNT, 1_000_000); // no settings file: the mod's defaults
@@ -207,13 +207,16 @@ test('fixed run: every finding on the current and the old save', () => {
   assert.deepEqual(run(), [
     `high hour-profit:${tavrik}@${T0}`,
     `medium balance:${PLAYERS.AdmiralNoor.account}:${ITEM.money}@${at(-24 * 60)}`,
+    `medium balance:${PLAYERS.Mikko_82.account}:${ITEM.money}@${at(13)}`, // an admin raised the balance, unlogged (2.1.2)
     `medium order-rate:${tavrik}@${at(21)}`,
     `medium far-price:market ${ITEM.diamond}@${at(40)}`,
     `medium order-rate:${tavrik}@${at(40)}`,
     `medium price-spike:market ${ITEM.diamond}@${at(40)}`,
     `medium order-rate:${quenby}@${at(46)}`,
+    `medium balance:${PLAYERS.Tavrik.account}:${ITEM.money}@${at(51)}`, // notes put back without a row (2.1.2)
     `medium far-price:market ${ITEM.emerald}@${at(60)}`,
     `medium balance:${PLAYERS.Quenby.account}:${ITEM.money}@${at(61)}`,
+    `medium balance:${PLAYERS.Brindle.account}:${ITEM.money}@${at(63)}`, // notes paid in through the ATM converter, unlogged (2.1.2)
   ]);
 });
 

@@ -111,9 +111,11 @@ test('an old 2.1.2 save: the same accounts, a log without trade or admin rows', 
   open(fx.legacy);
   const list = api.accounts(ALL, DEFAULT_RULES);
   for (const a of list) assert.equal(a.money, moneyOf(fx.balances.legacy, a.number), `account ${a.number}`);
-  // The unlogged admin actions are the gaps, rated low; they come first.
-  assert.deepEqual(list.map((a) => [a.number, a.rows, a.unexplained, a.rating]).slice(0, 8), [[7, 1, 20_000_000n, 'low'], [10, 1, 2_500_000n, 'low'],
-    [41, 1, 0n, null], [24, 2, 0n, null], [11, 3, 0n, null], [27, 1, 0n, null], [3, 1, 0n, null], [30, 1, 0n, null]]);
+  // The unlogged changes are the gaps, rated low; they come first: an admin raise on 27, notes paid in through the ATM
+  // converter on 3, notes put back after a withdrawal on 11, the admin actions on 7 and 10. 2.1.2 logged none of them,
+  // nor the starting balances, so most accounts have no rows.
+  assert.deepEqual(list.map((a) => [a.number, a.rows, a.unexplained, a.rating]).slice(0, 8), [[27, 0, 1_000_000_000n, 'low'], [3, 0, 150_000_000n, 'low'],
+    [11, 2, 50_000_000n, 'low'], [7, 0, 20_000_000n, 'low'], [10, 0, 2_500_000n, 'low'], [41, 0, 0n, null], [24, 1, 0n, null], [30, 0, 0n, null]]);
   assert.deepEqual(api.balances(10, ITEM.money, ALL), [[T0 - 24 * 60 * MIN, 10_000_000n], [T0 + 126 * MIN, 7_500_000n]]);
 });
 

@@ -42,7 +42,7 @@ export function ruleText(rule: RuleId, s: RuleSettings): string {
     case 'last-save': return 'Flags log rows newer than the bank\'s last save: if the server crashed before the next save, what they did may have been undone.';
     case 'market-alert': return 'Shows the alerts the market mod raised itself on the server: a large profit within a time window, and the two pump-and-dump patterns, with the thresholds the server used then.';
     case 'transfer': return 'Pairs each transfer between the master and a slave by its id, and flags one that was lost, arrived twice, came from nothing, or was left for an admin.';
-    case 'banknotes': return 'Counts the banknotes withdrawn against those paid in and found in the world. It comes with milestone M3.';
+    case 'banknotes': return 'Counts the banknotes withdrawn against those paid in and found in the world. It needs the world scan, which is not built yet.';
   }
 }
 

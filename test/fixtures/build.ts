@@ -276,6 +276,7 @@ function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers
   ];
   for (const [account, by, amount] of starts) {
     const after = change(account, ITEM.money, amount, start);
+    if (legacy) continue; // 2.1.2 created the account with its starting balance and no row (ServerBankManager createPersonal)
     row({ account_number: account, ...actor(by), kind: legacy ? 'DEPOSIT' : 'STARTING_BALANCE', item_id: ITEM.money, amount, ts: start },
       { type_code: 19, source_kind: 'SYSTEM', balance_after: after });
   }
@@ -306,6 +307,14 @@ function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers
   // BS-258: two terminal rows carry where the player stood; BS-256: the second withdrawal was made on a slave.
   simple('Tavrik', 'Tavrik', 50, 'WITHDRAW', 2, -200_000_000n, 'PLAYER', {}, PLACES.withdraw);
   simple('Tavrik', 'Tavrik', 51, 'WITHDRAW', 2, -200_000_000n, 'PLAYER', {}, { origin_server: 'mining-1' });
+  if (legacy) {
+    // 2.1.2 logged the $2M asked for, then put the $500'000 of notes that did not fit back without a row (putRemainingItemsBack).
+    events.push({ ts: T0 + 51 * MIN + 600, run: () => change(PLAYERS.Tavrik.account, ITEM.money, 50_000_000n, T0 + 51 * MIN + 600) });
+    // Notes paid in through the ATM converter: 2.1.2 wrote no row (ConverterCommitToBankPacket).
+    events.push({ ts: T0 + 80 * MIN + 500, run: () => change(PLAYERS.Brindle.account, ITEM.money, 150_000_000n, T0 + 80 * MIN + 500) });
+    // An admin raising a balance: 2.1.2 logged no admin action, and $10M is more than all notes outside the bank then.
+    events.push({ ts: T0 + 90 * MIN + 500, run: () => change(PLAYERS.Mikko_82.account, ITEM.money, 1_000_000_000n, T0 + 90 * MIN + 500) });
+  }
   simple('Ombrelune', 'Ombrelune', 70, 'DEPOSIT', 1, 300_000_000n, 'PLAYER', {}, PLACES.deposit);
   simple('Quenby', 'AdmiralNoor', 120, 'ADMIN_REMOVE', 9, -20_000_000n, 'ADMIN', { note: 'exploit profit removed' });
   // An admin sets a balance: the row stores |new - old|, the direction is only in the note.
@@ -386,6 +395,11 @@ function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers
     // its volume. It sits on a deleted account without snapshots, so no account's figures and no check move.
     log(STRAY.account, 5, 'TRADE_BUY', 4, ITEM.coal, 3_200n, { source_kind: 'STOCKMARKET', tag: 'PERIODIC', ref: `sm:order:${STRAY.order}`,
       money_amount: 3_840n, price: 120n, currency_item: ITEM.money });
+
+    // A slave's code the master rejected: stored as UNKNOWN_LEGACY, unsigned, so the note count cannot tell its direction.
+    log(STRAY.account, 75, 'UNKNOWN_LEGACY', 0, ITEM.money, 30_000n, { source_kind: 'PLAYER', note: 'rejected code 25 from slave mining-1', origin_server: 'mining-1' });
+    // An admin deletes Quenby: the $50 left is paid out in notes. The notes are Quenby's, the actor is the admin.
+    log(STRAY.account, 76, 'ACCOUNT_DELETE_PAYOUT', 25, ITEM.money, 5_000n, { source_kind: 'ADMIN', ...actor('AdmiralNoor'), note: `user deleted: ${uuidText(PLAYERS.Quenby.n)}` });
 
     db.insert('SuspicionFlag', { ts: T0 + 45 * MIN, account_number: PLAYERS.Tavrik.account, flag_type: 3, severity: 1, amount: 3_900_000_000n, details: 'wealth more than doubled within one hour' });
     db.insert('SuspicionFlag', { ts: T0 + 70 * MIN + 600, account_number: PLAYERS.Ombrelune.account, flag_type: 1, severity: 2, amount: 300_000_000n,
@@ -556,6 +570,29 @@ export const TRANSFER_CASES: { id: string; class: string; slave: number | null; 
   { id: 'not-a-transfer-id', class: 'ignored', slave: 0, journal: [then(at(150), 'CONFIRMED', 10n)], master: [] },
 ];
 
+/**
+ * NoteFlow per save (DESIGN_SPEC 8.7): minute after T0, source, player, item, a signed note count. One row of each source
+ * the mods write, $100 notes among them, plus a row of an item that is no money and one of a source no mod writes.
+ */
+type Flow = [minute: number, source: string, player: Name, item: number, amount: number, villager?: number];
+export const NOTE_FLOW: Record<'master' | 'mining-1' | 'nether-hub', Flow[]> = {
+  master: [
+    [52, 'banksystem:converter_out', 'Tavrik', ITEM.money, 40], [55, 'banksystem:creative_create', 'AdmiralNoor', NOTE, 5],
+    [58, 'banksystem:give', 'AdmiralNoor', NOTE, 2], [62, 'stockmarket:villager_consume', 'Ombrelune', ITEM.money, -10, 901],
+    [63, 'stockmarket:villager_change', 'Ombrelune', ITEM.money, 2, 901], [66, 'banksystem:creative_destroy', 'AdmiralNoor', NOTE, -1],
+    [69, 'stockmarket:villager_pay', 'Ombrelune', ITEM.money, 3, 900],
+  ],
+  'mining-1': [
+    [20, 'banksystem:converter_in', 'Brindle', ITEM.money, -12], [21, 'banksystem:converter_out', 'Brindle', NOTE, 3],
+    [22, 'banksystem:give', 'Brindle', ITEM.diamond, 7], [23, 'othermod:lottery', 'Brindle', ITEM.money, 1],
+  ],
+  'nether-hub': [[20, 'banksystem:converter_in', 'Brindle', ITEM.money, -12]],
+};
+const flowRow = ([minute, source, player, item, amount, villager]: Flow): Record<string, SQLInputValue> => ({
+  ts: T0 + minute * MIN, source, player_uuid: uuidText(PLAYERS[player].n), item_id: item, amount, context: villager ? 'trade' : 'converter',
+  ...(villager ? { villager_uuid: uuidText(villager), dimension: 'minecraft:overworld', x: 120, y: 64, z: -340 } : {}),
+});
+
 /** When each SM-316 alert of the master was raised. */
 export const ALERT = { pump: T0 + 21 * MIN + 700, profit: T0 + 40 * MIN + 700, cycle: T0 + 60 * MIN + 200, noPrice: T0 + 165 * MIN } as const;
 
@@ -647,9 +684,7 @@ export function buildFixtures(root: string): Fixtures {
   fs.writeFileSync(path.join(data, 'BankSystem', 'settings.json'), JSON.stringify({ Utilities: { STARTING_BALANCE: 0 },
     Audit: { LAUNDERING_MIN_AMOUNT: 2_000_000, WEALTH_JUMP_PERCENT: 'lots' } }, null, 2));
   auditLog(data);
-  db.insert('NoteFlow', { ts: T0 + 52 * MIN, source: 'banksystem:converter_out', player_uuid: uuidText(PLAYERS.Tavrik.n), item_id: ITEM.money, amount: 40, context: 'converter' });
-  db.insert('NoteFlow', { ts: T0 + 69 * MIN, source: 'stockmarket:villager_pay', player_uuid: uuidText(PLAYERS.Ombrelune.n), item_id: ITEM.money, amount: -3, context: 'trade',
-    villager_uuid: uuidText(900), dimension: 'minecraft:overworld', x: 120, y: 64, z: -340 });
+  for (const f of NOTE_FLOW.master) db.insert('NoteFlow', flowRow(f));
   Object.assign(rows.master, db.close());
   db = database(path.join(data, 'StockMarket/Database/stockmarket_diagnostics.db'), [SQL.meta, SQL.orderOrigin, SQL.tradeAlert], true);
   db.insert('Meta', { key: 'created_ms', value: String(T0 - 15 * 24 * 60 * MIN) });
@@ -673,7 +708,7 @@ export function buildFixtures(root: string): Fixtures {
       d.insert('TransferJournal', { transfer_id: t.id, ts: t.ts + 15, step: 'CONFIRMED' });
     }
     for (const c of TRANSFER_CASES.filter((x) => x.slave === i)) for (const j of c.journal) d.insert('TransferJournal', { transfer_id: c.id, ...j });
-    d.insert('NoteFlow', { ts: T0 + 20 * MIN, source: 'banksystem:converter_in', player_uuid: uuidText(PLAYERS.Brindle.n), item_id: ITEM.money, amount: -12, context: 'converter' });
+    for (const f of NOTE_FLOW[s.name as 'mining-1' | 'nether-hub']) d.insert('NoteFlow', flowRow(f));
     rows[s.name] = d.close();
     return dir;
   });

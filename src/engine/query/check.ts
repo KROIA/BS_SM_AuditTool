@@ -125,6 +125,19 @@ function join(list: RawGap[]): RawGap[] {
 const gap = (g: RawGap, rating: (from: number) => Rating): Gap => ({ from: g.from, to: g.to, difference: g.diff, labels: g.labels, rating: rating(g.from), after: g.after });
 
 export const moneyItems = (db: DatabaseSync) => new Set(all(db, 'SELECT id FROM item WHERE money = 1').map((r) => num(r.id)!));
+/**
+ * Every money item and what one of it is worth, raw (BS MoneyItem*.java, worth()): the base item 100, banksystem:money<N>
+ * N x 100, banksystem:money_cent<N> N.
+ */
+// ponytail: denominations are told apart by name only; one with extra components would count as money too.
+export function noteWorth(db: DatabaseSync): Map<number, bigint> {
+  const out = new Map([...moneyItems(db)].map((id) => [id, 100n]));
+  for (const r of all(db, `SELECT id, name FROM item WHERE name GLOB 'banksystem:money*'`)) {
+    const m = /^banksystem:money(_cent)?(\d{1,7})$/.exec(String(r.name));
+    if (m) out.set(num(r.id)!, BigInt(m[2]!) * (m[1] ? 1n : 100n));
+  }
+  return out;
+}
 /** The "Balance not explained" threshold of an item: money or goods (DESIGN_SPEC 8.2). */
 export function threshold(db: DatabaseSync, s: RuleSettings['balance']) {
   const money = moneyItems(db);

@@ -9,7 +9,7 @@ import { readChunks } from '../../src/engine/save/files.ts';
 import { importSave } from '../../src/engine/save/import.ts';
 import { isCompound, num } from '../../src/engine/save/nbt.ts';
 import type { SaveSummary } from '../../src/shared/api.ts';
-import { ACCOUNT_ORDER, ALERT, ALIAS, buildFixtures, EXPORT, COMPANY, GONE, ITEM, MINECRAFT, PLAYERS, SHARED, T0, uuidText, VOUCHER, type Fixtures } from '../fixtures/build.ts';
+import { ACCOUNT_ORDER, ALERT, ALIAS, buildFixtures, EXPORT, COMPANY, GONE, ITEM, MINECRAFT, NOTE_FLOW, PLAYERS, SHARED, T0, uuidText, VOUCHER, type Fixtures } from '../fixtures/build.ts';
 
 const MIN = 60_000;
 let fx: Fixtures;
@@ -92,7 +92,7 @@ test('a slave is named after its slave id and is expected to have only the journ
   assert.equal(save.masterUid, 'f0000000-0000-4000-8000-000000000001');
   assert.equal(save.generation, 'current');
   assert.deepEqual(status(save), ['bank:none', 'market:none', 'bankDiag:read', 'marketDiag:none', 'audit:none']);
-  assert.deepEqual(rowsOf(save, 'bankDiag'), { TransferJournal: 29, NoteFlow: 1, Meta: 2 }); // 4 of the plain deposits, 25 of the transfer cases
+  assert.deepEqual(rowsOf(save, 'bankDiag'), { TransferJournal: 29, NoteFlow: NOTE_FLOW['mining-1'].length, Meta: 2 }); // 4 of the plain deposits, 25 of the transfer cases
   assert.deepEqual([save.players, save.accounts, save.bankVersion], [0, 0, null]);
   assert.equal(save.lastPlayedMs, fx.lastPlayed['mining-1']);
   assert.deepEqual(save.warnings, []);

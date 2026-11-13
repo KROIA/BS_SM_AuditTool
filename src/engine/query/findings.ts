@@ -380,9 +380,9 @@ export function orderIds(v: string | null): number[] {
   return [...new Set(v.split(',').map((x) => Number(x.trim())))];
 }
 
-/** Rules whose data no save holds yet or that come with M3. */
+/** Rules that need data the tool does not read yet. */
 const NOT_AVAILABLE: [RuleId, string][] = [
-  ['banknotes', 'The banknote count comes with milestone M3.'],
+  ['banknotes', 'It compares the note count with the notes found in the world, and the world scan is not built yet.'],
 ];
 
 /** Overlaps the time range, and under a server filter was placed there or has no server. Findings and incidents alike. */

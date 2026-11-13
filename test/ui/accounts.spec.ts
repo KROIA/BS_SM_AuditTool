@@ -179,17 +179,17 @@ test.describe('an old 2.1.2 save', () => {
 
   test('the check says once that this version did not log trades and admin actions; its gaps are rated low', async () => {
     await page.getByRole('link', { name: 'Bank accounts', exact: true }).click();
-    await expect(page.locator('aside .badge')).toHaveText(['7', '10', '41', '24', '11', '27', '3', '30', '31', '32', '33']);
+    await expect(page.locator('aside .badge')).toHaveText(['27', '3', '11', '7', '10', '41', '24', '30', '31', '32', '33']);
     await expect(page.locator('main')).toContainText('BankSystem 2.1.2 wrote this save. It did not log trades or admin actions: orders stand in for trades, and gaps are expected and rated low.');
     await expect(page.getByText('did not log trades or admin actions')).toHaveCount(1);
-    await expect(page.locator('.verdict')).toContainText("The log does not explain $200'000.00.");
+    await expect(page.locator('.verdict')).toContainText("The log does not explain $10'000'000.00."); // an admin raise, unlogged in 2.1.2
     await expect(page.locator('.verdict')).toContainText('How much this says: little.');
     await page.screenshot({ path: 'test-results/accounts-legacy-check-dark.png' });
     await page.locator('aside a[href="#/accounts/11"]').click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Account 11 · Tavrik');
     await expect(page.getByText('did not log trades or admin actions')).toHaveCount(1);
-    await expect(page.locator('tbody tr td:nth-child(2) > span:first-child')).toHaveText(['Withdrawal', 'Withdrawal', 'Deposit']);
-    await expect(page.locator('tbody tr').first().locator('td').nth(3)).toHaveText('not recorded');
+    await expect(page.locator('tbody tr td:nth-child(2) > span:first-child')).toHaveText(['Balance rose with no log entry', 'Withdrawal', 'Withdrawal']); // the notes 2.1.2 put back unlogged; no row for the starting balance
+    await expect(page.locator('tbody tr').nth(1).locator('td').nth(3)).toHaveText('not recorded');
     await page.setViewportSize({ width: 1440, height: 1300 });
     await page.screenshot({ path: 'test-results/accounts-legacy-dark.png' });
   });

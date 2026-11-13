@@ -533,6 +533,12 @@ export interface QueryApi {
    * first. The time range keeps transfers that start in it; a server filter keeps that slave's and those of no known slave.
    */
   transfers(scope: Scope): TransfersResult;
+  /**
+   * Notes handed out by the bank minus notes paid back in, plus and minus NoteFlow on every loaded server (DESIGN_SPEC 8.7).
+   * The time range limits the movements; outstanding and the series count everything up to its end. A server filter keeps
+   * log rows made there (and rows without an origin) and that server's NoteFlow.
+   */
+  banknotes(scope: Scope): BanknotesResult;
 }
 
 /** The classes of DESIGN_SPEC 8.6. */
@@ -575,6 +581,67 @@ export interface TransfersResult {
   counts: Record<TransferClass, number>;
   /** Why nothing could be checked (no slave with a journal is loaded, ...); null when the check ran. */
   reason: string | null;
+}
+
+/**
+ * Raw money of notes, for one account of the master's log: proven by its rows. out is net of refunds; net = out - back.
+ * An estimate on a save without NoteFlow (2.1.2) when a withdrawal was cut to how far the balance fell (BanknotesResult.putBack).
+ */
+export interface BanknoteAccount { account: number; owner: { uuid: string; name: string } | null; out: bigint; back: bigint; net: bigint; basis: 'proven' | 'estimate' }
+/** Money that appeared on an account between two snapshots without a log row (a positive gap of the check per account). */
+export interface BanknoteGap { account: number; owner: { uuid: string; name: string } | null; from: number; to: number; amount: bigint }
+/**
+ * For one player: out and back from the log rows they made (the player who withdrew or paid in), created and destroyed from
+ * the NoteFlow rows that name them. An estimate: notes carry no owner and change hands. net = out - back + created - destroyed.
+ */
+export interface BanknotePlayer {
+  player: { uuid: string; name: string };
+  out: bigint;
+  back: bigint;
+  created: bigint;
+  destroyed: bigint;
+  net: bigint;
+  basis: 'estimate';
+}
+
+/**
+ * The banknote count (DESIGN_SPEC 8.7): money in notes that should exist outside the bank. Raw money throughout; NoteFlow
+ * counts notes, so each of its rows is valued by its denomination. The log is proven, NoteFlow is what the mods recorded.
+ */
+export interface BanknotesResult {
+  /** Why nothing can be counted (no bank data, no money item); null when the count ran. */
+  reason: string | null;
+  /** Notes that should be outside the bank at the end of the range: every row up to it, not only those in the range. */
+  outstanding: bigint;
+  /** In the range, from the master's log: handed out (less refunds and put-backs) and paid back in. */
+  ledger: { out: bigint; back: bigint };
+  /**
+   * Save without NoteFlow (2.1.2) only: what its withdrawal rows in the range said beyond how far the balance fell. 2.1.2
+   * logged the amount asked for and put notes that did not fit back without a row, so this is taken off out. An estimate.
+   */
+  putBack: bigint;
+  /**
+   * Save without NoteFlow (2.1.2) only: money gaps above the check's default threshold ending in the range that no
+   * withdrawal row takes up, oldest first, each at most the notes outstanding at its start. They could be notes paid in
+   * through the ATM converter (2.1.2 logged none). Not in outstanding. The server filter does not apply.
+   */
+  appeared: BanknoteGap[];
+  /** The other such gaps: more than all notes outside the bank at their start, so an admin action or another cause. */
+  tooLarge: BanknoteGap[];
+  /** In the range, per NoteFlow source ("banksystem:converter_in", ...; any other source is "other"), sorted by source. */
+  flow: { source: string; created: bigint; destroyed: bigint }[];
+  /** Accounts with note rows in the range, largest net first. */
+  accounts: BanknoteAccount[];
+  /** Players named by those rows, largest net first. */
+  players: BanknotePlayer[];
+  /** The running total over time, from the first row; the range starts with what was outstanding at its start. */
+  series: Point[];
+  /** Money rows of the log in the range whose direction the save does not give (UNKNOWN_LEGACY, rejected slave codes): not counted. */
+  unclear: { rows: number; amount: bigint };
+  /** NoteFlow rows in the range of an item that is no money item: not counted. */
+  skipped: number;
+  /** What the count cannot see or had to estimate, one sentence each: saves without a NoteFlow table, slaves that are not loaded. */
+  missing: string[];
 }
 
 export interface Overview {
@@ -620,7 +687,7 @@ export interface AdminEvent {
   ledgerId: number | null;
 }
 
-export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers'> {
+export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers' | 'banknotes'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
   addSave(path: string): Workspace;

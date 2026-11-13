@@ -172,7 +172,7 @@ test('an old 2.1.2 save: the same profits, no server for any order, and a log wi
   assert.ok(rows.every((r) => r.server === null && r.place === null)); // before BS-256 and BS-258
   assert.deepEqual(api.ledger({ accounts: [PLAYERS.Tavrik.account] }, { ...ALL, server: 'old-world' }), rows); // not known, so not filtered out
   assert.deepEqual(rows.map((r) => [r.kind, r.change, r.money, r.balanceAfter]), [
-    ['WITHDRAW', -200_000_000n, null, null], ['WITHDRAW', -200_000_000n, null, null], ['DEPOSIT', 50_000_000n, null, null],
+    ['WITHDRAW', -200_000_000n, null, null], ['WITHDRAW', -200_000_000n, null, null], // 2.1.2 logged no starting balance
   ]);
 });
 
@@ -192,14 +192,14 @@ test('ledger rows (BS-256, BS-258): the server a row was made for and where the 
   const accounts = api.accounts(ALL, DEFAULT_RULES).map((a) => a.number);
   const rows = api.ledger({ accounts }, ALL);
   const count = (server: string) => rows.filter((r) => r.server === server).length;
-  assert.deepEqual([count('survival-main'), count('mining-1'), count('nether-hub'), rows.length], [106, 10, 2, 118]); // no origin is the master
+  assert.deepEqual([count('survival-main'), count('mining-1'), count('nether-hub'), rows.length], [107, 11, 2, 120]); // no origin is the master (with the delete payout on account 18); mining-1's include the rejected code there
   assert.deepEqual(rows.filter((r) => r.place).map((r) => [r.kind, r.account, r.place]), [
     ['DEPOSIT', PLAYERS.Ombrelune.account, PLACES.deposit], ['WITHDRAW', PLAYERS.Tavrik.account, PLACES.withdraw],
   ]);
   // The filter keeps the rows of that server only; the master's name keeps those without an origin.
   const mining = api.ledger({ accounts }, { ...ALL, server: 'mining-1' });
-  assert.ok(mining.length === 10 && mining.every((r) => r.server === 'mining-1'));
-  assert.equal(api.ledger({ accounts }, { ...ALL, server: 'survival-main' }).length, 106);
+  assert.ok(mining.length === 11 && mining.every((r) => r.server === 'mining-1'));
+  assert.equal(api.ledger({ accounts }, { ...ALL, server: 'survival-main' }).length, 107);
   const tavrik = api.ledger({ accounts: [PLAYERS.Tavrik.account] }, { from: T0 + 50 * MIN, to: T0 + 55 * MIN, server: 'mining-1' });
   assert.deepEqual(tavrik.map((r) => [r.kind, r.time]), [['WITHDRAW', T0 + 51 * MIN + 500]]);
 });

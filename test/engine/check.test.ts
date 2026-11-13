@@ -102,13 +102,16 @@ test('a deleted account with snapshots only is checked', () => {
   assert.deepEqual(api.check(999, ALL, EVERY), []);
 });
 
-test('legacy save: orders stand in for trades, the unlogged admin actions are the only gaps, rated low', () => {
+test('legacy save: orders stand in for trades; the unlogged admin actions, a put-back and a converter deposit are the gaps, rated low', () => {
   open(fx.legacy);
   const tavrik = api.check(PLAYERS.Tavrik.account, ALL, EVERY);
-  assert.deepEqual(tavrik.map((c) => [c.item, c.verdict]), [[ITEM.money, 'explained'], [ITEM.diamond, 'explained']]);
+  assert.deepEqual(tavrik.map((c) => [c.item, c.verdict]), [[ITEM.money, 'unexplained'], [ITEM.diamond, 'explained']]);
   assert.ok(tavrik[0]!.trades > 0n);
   assert.deepEqual(allGaps().map((g) => [g.account, g.from, g.to, g.difference, g.rating]), [
+    [PLAYERS.Brindle.account, at(63), at(81), 150_000_000n, 'low'], // notes paid in through the ATM converter: 2.1.2 wrote no row
     [PLAYERS.Quenby.account, at(61), at(121), -20_000_000n, 'low'],
     [PLAYERS.AdmiralNoor.account, at(-24 * 60), at(126), -2_500_000n, 'low'],
+    [PLAYERS.Tavrik.account, at(51), at(52), 50_000_000n, 'low'], // the $500'000 of notes that did not fit, put back without a row
+    [PLAYERS.Mikko_82.account, at(13), at(91), 1_000_000_000n, 'low'], // an admin raised the balance, unlogged
   ]);
 });
