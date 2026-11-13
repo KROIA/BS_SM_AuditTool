@@ -11,7 +11,7 @@ import { readBankAudit, readFiles, readUserCache } from './files.ts';
 import { findDataDir, readIdentity, readLevel } from './locate.ts';
 
 /** Raise when the layout of the cache changes: caches written by an older version are rebuilt. */
-export const CACHE_VERSION = 8;
+export const CACHE_VERSION = 9;
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -381,7 +381,7 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
     const folder = path.basename(dataDir) === 'data' ? path.basename(path.dirname(dataDir)) : path.basename(dataDir);
     const summary: SaveSummary = {
       path: picked, name: identity?.slaveId || folder, role, roleAssumed: !identity, serverUid: identity?.uid ?? null, masterUid: identity?.masterUid ?? null,
-      generation: current ? 'current' : 'legacy', lastPlayedMs: level?.lastPlayedMs ?? null, minecraft: level?.version ?? null, bankVersion: files.bankVersion,
+      knownSlaves: identity?.knownSlaves ?? null, generation: current ? 'current' : 'legacy', lastPlayedMs: level?.lastPlayedMs ?? null, minecraft: level?.version ?? null, bankVersion: files.bankVersion,
       players: files.players.length, accounts: files.accounts.length, sources, warnings,
     };
     const put = db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)');

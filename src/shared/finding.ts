@@ -41,7 +41,7 @@ export function ruleText(rule: RuleId, s: RuleSettings): string {
     case 'bank-flag': return 'Shows the flags the bank mod raised itself on the server, with the thresholds the server used.';
     case 'last-save': return 'Flags log rows newer than the bank\'s last save: if the server crashed before the next save, what they did may have been undone.';
     case 'market-alert': return 'The market mod keeps its alerts in memory and the server log only; no save holds them.';
-    case 'transfer': return 'Compares what left the master with what arrived on each slave. It comes with milestone M3.';
+    case 'transfer': return 'Pairs each transfer between the master and a slave by its id, and flags one that was lost, arrived twice, came from nothing, or was left for an admin.';
     case 'banknotes': return 'Counts the banknotes withdrawn against those paid in and found in the world. It comes with milestone M3.';
   }
 }
@@ -223,6 +223,26 @@ export function describe(f: Finding, w: ItemWords): FindingWords {
         + 'If the server crashed before the next save, what these rows did may have been undone while the rows stay. Check the accounts they name.',
       facts: [['Bank last saved', time(n('lastSave'))], ['Rows after it', count(n('rows'))], ['Accounts', count(f.accounts.length)]],
     };
+    case 'transfer': {
+      const id = typeof x.item === 'number' ? x.item : null; // null: money
+      const unit = (raw: bigint) => (id === null ? money(raw) : value(id, raw));
+      const size = unit(v as bigint), short = id === null ? moneyShort(v as bigint) : size;
+      const others = n('itemsOff') - 1;
+      const where = f.servers[0] ? `the slave "${f.servers[0]}"` : 'a slave';
+      const title: Record<string, string> = {
+        lost: `${short} sent between servers did not arrive`, twice: `${short} more arrived than was sent between servers`,
+        created: `${short} arrived from another server that no server sent`, parked: `A transfer of ${short} between servers was left for an admin`,
+      };
+      return {
+        rule: RULE_NAME[f.rule], measured: `${size} ${x.class === 'twice' || x.class === 'created' ? 'too much' : 'missing'}`,
+        title: title[String(x.class)] ?? RULE_NAME[f.rule],
+        summary: `${x.direction === 'FROM_MASTER' ? `From the master to ${where}` : x.direction === 'TO_MASTER' ? `From ${where} to the master` : `Between the master and ${where}`}: `
+          + `${unit(b('sent'))} was sent and ${unit(b('received'))} arrived. ${String(x.why ?? '')}`
+          + (others > 0 ? ` ${plural(others, 'other item differs', 'other items differ')} too.` : ''),
+        facts: [['Transfer id', String(x.transferId)], ['Sent', unit(b('sent'))], ['Arrived', unit(b('received'))],
+          ['Journal steps', ((x.steps as string[] | null) ?? []).join(', ') || 'none'], ['Bank log rows', count(f.records.ledger.length)]],
+      };
+    }
     default: return { rule: RULE_NAME[f.rule], measured: count(v), title: RULE_NAME[f.rule], summary: '', facts: [] };
   }
 }

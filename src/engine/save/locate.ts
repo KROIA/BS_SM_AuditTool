@@ -23,17 +23,20 @@ export function findDataDir(picked: string): string {
   throw new Error('This folder holds no BankSystem or StockMarket data. Pick a world folder or its "data" folder.');
 }
 
-export interface Identity { role: 'MASTER' | 'SLAVE' | 'STANDALONE'; uid: string | null; slaveId: string; masterUid: string | null }
+/** knownSlaves: a master's slave ids (known_slaves); null when the file does not list them. */
+export interface Identity { role: 'MASTER' | 'SLAVE' | 'STANDALONE'; uid: string | null; slaveId: string; masterUid: string | null; knownSlaves: string[] | null }
 
 export function readIdentity(dataDir: string): Identity | null {
   try {
     const file = readSmallFile(path.join(dataDir, 'ModUtilities', 'server_identity.json'));
     const json: unknown = file && JSON.parse(file.toString('utf8'));
     if (typeof json !== 'object' || json === null) return null;
-    const { role, server_uid, slave_id, master_uid } = json as Record<string, unknown>;
+    const { role, server_uid, slave_id, master_uid, known_slaves } = json as Record<string, unknown>;
     if (role !== 'MASTER' && role !== 'SLAVE' && role !== 'STANDALONE') return null;
     const text = (v: unknown) => (typeof v === 'string' && v ? v : null);
-    return { role, uid: text(server_uid), slaveId: text(slave_id) ?? '', masterUid: text(master_uid) };
+    const known = typeof known_slaves === 'object' && known_slaves !== null && !Array.isArray(known_slaves)
+      ? Object.keys(known_slaves).filter((k) => k.length <= 200).slice(0, 1000) : null;
+    return { role, uid: text(server_uid), slaveId: text(slave_id) ?? '', masterUid: text(master_uid), knownSlaves: known };
   } catch {
     return null; // a broken identity file is treated like a missing one, and the screen says the role was assumed
   }

@@ -19,8 +19,10 @@ const MINUTES = 160;
 export const ITEM = { money: 1, diamond: 2, emerald: 3, iron: 4, gold: 5, coal: 6, redstone: 7, wheat: 8, oak: 9 } as const;
 const ITEM_NAME: Record<number, string> = {
   1: 'banksystem:money', 2: 'minecraft:diamond', 3: 'minecraft:emerald', 4: 'minecraft:iron_ingot', 5: 'minecraft:gold_ingot',
-  6: 'minecraft:coal', 7: 'minecraft:redstone', 8: 'minecraft:wheat', 9: 'minecraft:oak_log',
+  6: 'minecraft:coal', 7: 'minecraft:redstone', 8: 'minecraft:wheat', 9: 'minecraft:oak_log', 14: 'banksystem:money100',
 };
+/** A $100 banknote: its own item, not money in the bank's log, but the slave's journal counts it as money. */
+export const NOTE = 14;
 /** A money item with a custom name: not money, because it has components. */
 export const VOUCHER = 12;
 /** An id whose mod is gone; only Meta_data's name digest knows it. */
@@ -229,7 +231,10 @@ function marketDatabase(dataDir: string, legacy: boolean, price: Map<number, num
 }
 
 /** Bank log and balance snapshots that agree with each other and with the orders. */
-function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers: { id: string; account: number; amount: bigint; ts: number; player: Name }[]) {
+/** A master ledger row with a transfer id. amount: what it did to the balance (signed); a DEPOSIT unless kind says else. */
+type RefRow = { id: string; account: number; amount: bigint; ts: number; player: Name; kind?: string; code?: number; item?: number };
+
+function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers: RefRow[]) {
   const db = database(path.join(dataDir, 'BankSystem/Database/banksystem.db'),
     legacy ? [SQL.transactionLogLegacy, SQL.balanceHistory, SQL.payoutHistory] : [SQL.transactionLog, SQL.balanceHistory, SQL.suspicionFlag, SQL.payoutHistory]);
   const balance = new Map<string, bigint>(); // "account:item" -> raw
@@ -293,11 +298,11 @@ function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers
     row({ account_number: to, ...actor('Tavrik'), kind: 'TRANSFER', item_id: ITEM.money, amount, other_account: from, ts },
       { type_code: 3, source_kind: 'PLAYER', balance_after: b });
   } });
-  // Deposits that arrived from a slave carry the transfer id as their reference (current mods only).
+  // Rows of transfers with a slave carry the transfer id as their reference (current mods only).
   if (!legacy) for (const t of transfers) events.push({ ts: t.ts, run: () => {
-    const after = change(t.account, ITEM.money, t.amount, t.ts);
-    db.insert('TransactionLog', { account_number: t.account, ...actor(t.player), kind: 'DEPOSIT', type_code: 1, item_id: ITEM.money, amount: t.amount, ts: t.ts,
-      source_kind: 'PLAYER', ref: t.id, balance_after: after });
+    const after = change(t.account, t.item ?? ITEM.money, t.amount, t.ts);
+    db.insert('TransactionLog', { account_number: t.account, ...actor(t.player), kind: t.kind ?? 'DEPOSIT', type_code: t.code ?? 1, item_id: t.item ?? ITEM.money,
+      amount: t.amount < 0n ? -t.amount : t.amount, ts: t.ts, source_kind: 'PLAYER', ref: t.id, balance_after: after });
   } });
 
   // One snapshot per account and item at the start, then one at the end of every minute in which it changed.
@@ -474,6 +479,62 @@ function nbtFiles(dataDir: string, bankVersion: string, balance: Map<string, big
   chunked(path.join(market, 'meta'), [comp({ nextOrderId: long(1000) })], 1);
 }
 
+/**
+ * One transfer per class of the cross-server check (DESIGN_SPEC 8.6), on top of the three plain deposits above. slave: the
+ * index in SLAVES whose journal holds the rows (mining-1 is copied at minute 157, nether-hub 9 hours before the master).
+ * The flagged ones (lost, twice, created, parked) are on players and at times that join no other finding into an incident.
+ */
+const tid = (n: number) => `c0000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`;
+const at = (minute: number, second = 0) => T0 + minute * MIN + second * 1000;
+const json = (raw: bigint, item: number = ITEM.money) => JSON.stringify({ [item]: Number(raw) });
+const asked = (player: Name, ts: number, direction: string, path: string, raw: bigint, ledgerType: number | null, context: string | null) =>
+  ({ ts, direction, path, step: 'REQUESTED', account_number: PLAYERS[player].account, player_uuid: uuidText(PLAYERS[player].n), items_json: json(raw), ledger_type: ledgerType, context });
+const then = (ts: number, step: string, raw?: bigint, detail?: string) => ({ ts, step, items_json: raw === undefined ? null : json(raw), detail: detail ?? null });
+const dropped = (player: Name, ts: number, step: string, raw: bigint, item: number = ITEM.money) =>
+  ({ ts, direction: 'FROM_MASTER', path: 'DROP', step, player_uuid: uuidText(PLAYERS[player].n), items_json: json(raw, item) });
+const ref = (n: number, player: Name, ts: number, amount: bigint, kind?: string, code?: number, item?: number): RefRow =>
+  ({ id: tid(n), account: PLAYERS[player].account, amount, ts, player, kind, code, item });
+const TIMEOUT = 'java.util.concurrent.TimeoutException';
+export const TRANSFER_CASES: { id: string; class: string; slave: number | null; journal: Record<string, SQLInputValue>[]; master: RefRow[] }[] = [
+  // A converter commit the master took in part: the rest went back into the converter.
+  { id: tid(4), class: 'ok', slave: 0, journal: [asked('Mikko_82', at(85), 'TO_MASTER', 'CONVERTER_DEPOSIT', 500_000n, 13, 'converter'),
+    then(at(85, 2), 'CONFIRMED', 300_000n), then(at(85, 3), 'RETURNED', 200_000n)], master: [ref(4, 'Mikko_82', at(85, 1), 300_000n, 'CONVERTER_DEPOSIT', 13)] },
+  // The slave stopped waiting, but the master had taken the deposit.
+  { id: tid(5), class: 'ok', slave: 0, journal: [asked('Brindle', at(45), 'TO_MASTER', 'ASYNC_BANK', 150_000n, 1, 'terminal'), then(at(55), 'TIMED_OUT', undefined, TIMEOUT)],
+    master: [ref(5, 'Brindle', at(45, 1), 150_000n)] },
+  // Banknotes dropped on the slave in part ($100 notes: their own item, money all the same); the master gave the rest back.
+  { id: tid(6), class: 'ok', slave: 0, journal: [dropped('Mikko_82', at(100, 2), 'DELIVERED', 300_000n, NOTE), dropped('Mikko_82', at(100, 2), 'FAILED', 200_000n, NOTE)],
+    master: [ref(6, 'Mikko_82', at(100, 1), -500_000n, 'WITHDRAW', 2), ref(6, 'Mikko_82', at(100, 3), 200_000n, 'WITHDRAW_REFUND', 6)] },
+  // A withdrawal the master refused: nothing moved.
+  { id: tid(7), class: 'ok', slave: 0, journal: [asked('AdmiralNoor', at(60), 'FROM_MASTER', 'ASYNC_BANK', 400_000n, 2, 'terminal')], master: [] },
+  // Confirmed by the master, and the master has no row for it.
+  { id: tid(8), class: 'lost', slave: 0, journal: [asked('AdmiralNoor', at(25), 'TO_MASTER', 'ASYNC_BANK', 250_000n, 1, 'terminal'), then(at(25, 2), 'CONFIRMED')], master: [] },
+  // Paid in once on the slave, credited twice on the master.
+  { id: tid(9), class: 'twice', slave: 0, journal: [asked('Ombrelune', at(10), 'TO_MASTER', 'ASYNC_BANK', 70_000n, 1, 'terminal'), then(at(10, 2), 'CONFIRMED')],
+    master: [ref(9, 'Ombrelune', at(10, 1), 70_000n), ref(9, 'Ombrelune', at(10, 4), 70_000n)] },
+  // Banknotes dropped on the slave that the master never took from an account.
+  { id: tid(10), class: 'created', slave: 0, journal: [dropped('Mikko_82', at(15), 'DELIVERED', 120_000n)], master: [] },
+  // The slave stopped waiting and the master has no row: the items stay taken and an admin has to sort it out.
+  { id: tid(11), class: 'parked', slave: 0, journal: [asked('Brindle', at(80), 'TO_MASTER', 'ASYNC_BANK', 90_000n, 1, 'terminal'), then(at(90), 'TIMED_OUT', undefined, TIMEOUT)],
+    master: [] },
+  // A raw call (no ledger type): the master logs it without the id.
+  { id: tid(12), class: 'known-gap', slave: 0, journal: [asked('Brindle', at(40), 'TO_MASTER', 'ASYNC_BANK', 30_000n, null, null), then(at(40, 2), 'CONFIRMED')], master: [] },
+  // Two hours before the master's first row with a transfer id.
+  { id: tid(13), class: 'data-gap', slave: 0, journal: [asked('Ombrelune', at(-120), 'TO_MASTER', 'ASYNC_BANK', 60_000n, 1, 'terminal'), then(at(-120, 2), 'CONFIRMED')],
+    master: [] },
+  // Only on the master, after nether-hub's copy was taken.
+  { id: tid(14), class: 'after-snapshot', slave: null, journal: [], master: [ref(14, 'Mikko_82', at(115), 90_000n)] },
+  // Asked two minutes before mining-1 was copied, no answer yet.
+  { id: tid(15), class: 'after-snapshot', slave: 0, journal: [asked('Quenby', at(155), 'TO_MASTER', 'ASYNC_BANK', 45_000n, 1, 'terminal')], master: [] },
+  // Rows no mod writes: items the tool cannot read (and that try to reach an object's prototype), an id that is no UUID.
+  { id: tid(16), class: 'data-gap', slave: 0, journal: [{ ...asked('Quenby', at(150), 'TO_MASTER', 'ASYNC_BANK', 0n, 1, 'terminal'), items_json: '{"__proto__":{"x":1}}' },
+    then(at(150, 2), 'CONFIRMED')], master: [] },
+  // Iron paid in on the slave, credited as diamonds on the master: the same raw amount, another item. Not ok.
+  { id: tid(17), class: 'twice', slave: 0, journal: [{ ...asked('AdmiralNoor', at(70), 'TO_MASTER', 'ASYNC_BANK', 0n, 1, 'terminal'), items_json: json(50_000n, ITEM.iron) },
+    then(at(70, 2), 'CONFIRMED')], master: [ref(17, 'AdmiralNoor', at(70, 1), 50_000n, 'DEPOSIT', 1, ITEM.diamond)] },
+  { id: 'not-a-transfer-id', class: 'ignored', slave: 0, journal: [then(at(150), 'CONFIRMED', 10n)], master: [] },
+];
+
 export interface Fixtures {
   root: string;
   master: string;
@@ -501,7 +562,7 @@ export function buildFixtures(root: string): Fixtures {
 
   // The master: bank and market data, both diagnostics files, identity.
   const master = path.join(root, 'survival-main'), data = path.join(master, 'data');
-  const masterBank = bankDatabase(data, false, list, transfers);
+  const masterBank = bankDatabase(data, false, list, [...transfers, ...TRANSFER_CASES.flatMap((c) => c.master)]);
   rows.master = { ...marketDatabase(data, false, price, list), ...masterBank.counts };
   nbtFiles(data, '2.2.0', masterBank.balance, price);
   identity(data, { server_uid: MASTER_UID, role: 'MASTER', slave_id: '', master_uid: '', first_start_ms: T0 - 100 * 24 * 60 * MIN,
@@ -537,6 +598,7 @@ export function buildFixtures(root: string): Fixtures {
         player_uuid: uuidText(PLAYERS[t.player].n), items_json: JSON.stringify({ [ITEM.money]: Number(t.amount) }), ledger_type: 1, context: 'terminal' });
       d.insert('TransferJournal', { transfer_id: t.id, ts: t.ts + 15, step: 'CONFIRMED' });
     }
+    for (const c of TRANSFER_CASES.filter((x) => x.slave === i)) for (const j of c.journal) d.insert('TransferJournal', { transfer_id: c.id, ...j });
     d.insert('NoteFlow', { ts: T0 + 20 * MIN, source: 'banksystem:converter_in', player_uuid: uuidText(PLAYERS.Brindle.n), item_id: ITEM.money, amount: -12, context: 'converter' });
     rows[s.name] = d.close();
     return dir;

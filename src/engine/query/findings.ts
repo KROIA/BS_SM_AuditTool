@@ -11,14 +11,17 @@
 //   order-ledger volume, logged (of the order furthest off), orders
 //   bank-flag    flagType, severity, amount, ref, details; origin 'audit log' and approximateTime for a flag only the audit log has
 //   last-save    lastSave, rows
+//   transfer     transferId, class (lost, twice, created, parked), direction, path, item (null: money), sent, received (of that
+//                item), itemsOff (items that differ), steps, why
 import type { DatabaseSync } from 'node:sqlite';
-import type { Fact, Finding, FindingsResult, Level, OrderRow, RuleId, RuleSettings, RuleStatus, Scope } from '../../shared/api.ts';
+import type { Fact, Finding, FindingsResult, Level, OrderRow, RuleId, RuleSettings, RuleStatus, Scope, TransferItem } from '../../shared/api.ts';
 import { mainData, mainSave } from '../workspace.ts';
 import { allGaps, moneyItems, threshold } from './check.ts';
 import { all, big, names, num, text } from './db.ts';
 import { median, usualPrice } from './markets.ts';
 import { readOrders } from './players.ts';
 import { sales } from './sessions.ts';
+import { allTransfers, noTransfers } from './transfers.ts';
 
 const MIN = 60_000, HOUR = 3_600_000;
 /** Hits of one rule on the same subject less than this apart form one finding (DESIGN_SPEC 8.2, repeated hits). */
@@ -304,7 +307,29 @@ const RULES: { [K in keyof RuleSettings]: Rule<K> } = {
       }];
     },
   },
+
+  'transfer': {
+    applies: () => noTransfers(),
+    // One finding per transfer id of the classes that mean value went wrong (DESIGN_SPEC 8.6); ok, the known and data gaps
+    // and transfers newer than a copy are on the Transfers tab only.
+    // Measured: the item furthest off in the class's direction (more arrived for twice and created, less for lost, either
+    // way for parked), so the title's item and words agree.
+    run: () => allTransfers().filter((t) => FLAGGED.has(t.class)).map((t): Finding => {
+      const way = t.class === 'lost' ? -1n : t.class === 'parked' ? 0n : 1n;
+      const off = (i: TransferItem) => (way === 0n ? (i.received > i.sent ? i.received - i.sent : i.sent - i.received) : way * (i.received - i.sent));
+      const top = t.items.reduce<TransferItem | null>((a, i) => (a === null || off(i) > off(a) ? i : a), null) ?? { item: null, sent: 0n, received: 0n };
+      return {
+        ...blank('transfer', t.id), level: 'high', start: t.start, end: t.end,
+        players: t.player ? [t.player] : [], accounts: t.account === null ? [] : [t.account], servers: t.server === null ? [] : [t.server],
+        measured: { value: top.sent > top.received ? top.sent - top.received : top.received - top.sent, threshold: null, unit: top.item === null ? 'money' : 'items' },
+        facts: { transferId: t.id, class: t.class, direction: t.direction, path: t.path, item: top.item, sent: top.sent, received: top.received,
+          itemsOff: t.items.filter((i) => i.sent !== i.received).length, steps: t.steps, why: t.why },
+        records: { orders: [], ledger: t.ledger, flags: t.flags, candles: [] },
+      };
+    }),
+  },
 };
+const FLAGGED = new Set(['lost', 'twice', 'created', 'parked']);
 
 /** bank_last_save_ms is decimal text in the bank's diagnostics Meta; null when missing or not a number. */
 function lastSave(db: DatabaseSync): number | null {
@@ -322,7 +347,6 @@ function bankSettings(db: DatabaseSync): Record<string, number | boolean> {
 /** Rules whose data no save holds yet or that come with M3. */
 const NOT_AVAILABLE: [RuleId, string][] = [
   ['market-alert', 'The market mod keeps its alerts in memory and the server log only; no save holds them.'],
-  ['transfer', 'The cross-server transfer check comes with milestone M3.'],
   ['banknotes', 'The banknote count comes with milestone M3.'],
 ];
 

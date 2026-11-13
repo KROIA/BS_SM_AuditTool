@@ -11,7 +11,8 @@ import { findDataDir } from './save/locate.ts';
 let root = ''; // the workspace folder: case.json and cache/
 let saves: SaveSummary[] = [];
 let report: (p: Progress) => void = () => {};
-let masterDb: DatabaseSync | null = null;
+/** The cache databases opened read-only, by cache file. Closed whenever the loaded saves change. */
+const opened = new Map<string, DatabaseSync>();
 
 const caseFile = () => path.join(root, 'case.json');
 const cacheFile = (picked: string) => path.join(root, 'cache', crypto.createHash('sha1').update(path.resolve(picked).toLowerCase()).digest('hex').slice(0, 16) + '.db');
@@ -102,8 +103,8 @@ function load(picked: string): SaveSummary {
 }
 
 function closeMaster() {
-  masterDb?.close();
-  masterDb = null;
+  for (const db of opened.values()) db.close();
+  opened.clear();
 }
 
 /** What is odd about how the loaded saves fit together (DESIGN_SPEC section 4.3). */
@@ -184,7 +185,16 @@ export const mainName = (): string | null => mainSave()?.name ?? null;
 /** The cache database of the save with the bank and market data, opened read-only; null when none is loaded. */
 export function mainData(): DatabaseSync | null {
   const main = mainSave();
-  if (!main) return null;
-  masterDb ??= new DatabaseSync(cacheFile(main.path), { readOnly: true });
-  return masterDb;
+  return main ? saveData(main) : null;
+}
+
+/** The loaded saves, in the order they were added. */
+export const loadedSaves = (): readonly SaveSummary[] => saves;
+
+/** The cache database of one loaded save, opened read-only (the slaves' transfer journals). */
+export function saveData(s: SaveSummary): DatabaseSync {
+  const file = cacheFile(s.path);
+  let db = opened.get(file);
+  if (!db) opened.set(file, (db = new DatabaseSync(file, { readOnly: true })));
+  return db;
 }

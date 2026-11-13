@@ -37,7 +37,8 @@ test('accounts: most money first where the log explains everything, money from t
   assert.deepEqual(list.map((a) => a.number), [COMPANY.account, 24, 11, 3, 27, 10, 7, SHARED.account, 31, 32, 33]);
   for (const a of list) assert.equal(a.money, moneyOf(fx.balances.master, a.number), `account ${a.number}`);
   assert.equal(list[0]!.money, 9_007_199_254_740_993n); // above 2^53: exact only as a bigint
-  assert.deepEqual(list.map((a) => a.rows), [1, 4, 64, 6, 4, 2, 22, 1, 0, 0, 0]);
+  // Ombrelune, Brindle, Mikko_82 and AdmiralNoor carry the master's rows of the transfer cases (fixtures, TRANSFER_CASES).
+  assert.deepEqual(list.map((a) => a.rows), [1, 6, 64, 7, 8, 3, 22, 1, 0, 0, 0]);
   assert.deepEqual(list.find((a) => a.number === 11), {
     number: 11, name: 'Tavrik', company: null, frozen: false, owner: uuid('Tavrik'), ownerName: 'Tavrik', money: 94_083_000n, rows: 64,
     deleted: false, unexplained: 0n, gaps: 0, rating: null,
@@ -76,10 +77,10 @@ test('one account: company and shared accounts, users with names, every item slo
     { uuid: uuid('Tavrik'), name: 'Tavrik', permissions: 7 },
     { uuid: uuid('Quenby'), name: 'Quenby', permissions: 3 },
   ]);
-  // Brindle's coal is saved under the old and the current id; the slots come back merged.
+  // Brindle's coal is saved under the old and the current id; the slots come back merged. Money includes the $1'500 of transfer case 5.
   const brindle = api.account(PLAYERS.Brindle.account, ALL)!;
   assert.deepEqual(brindle.items.map((i) => [i.item, i.balance]),
-    [[ITEM.money, 11_274_848n], [ITEM.iron, -1_600n], [ALIAS.to, fx.balances.master.get(`3:${ITEM.coal}`)!]]);
+    [[ITEM.money, 11_424_848n], [ITEM.iron, -1_600n], [ALIAS.to, fx.balances.master.get(`3:${ITEM.coal}`)!]]);
   assert.equal(brindle.items.find((i) => i.item === ALIAS.from), undefined);
   assert.deepEqual(api.account(31, ALL)!.items, []);
   assert.equal(api.account(99, ALL), null);

@@ -11,6 +11,7 @@ import { keyEvents, overview } from './query/overview.ts';
 import { items, ledger, orders, player, players } from './query/players.ts';
 import { search } from './query/search.ts';
 import { sessions } from './query/sessions.ts';
+import { transfers } from './query/transfers.ts';
 import { addSave, caseData, mark, removeSave, setRules, workspace } from './workspace.ts';
 
 export const api: EngineApi = {
@@ -40,6 +41,7 @@ export const api: EngineApi = {
   adminEvents,
   overview,
   keyEvents,
+  transfers,
   selfCheck() {
     const db = new DatabaseSync(':memory:');
     try {

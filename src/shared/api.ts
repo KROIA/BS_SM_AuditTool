@@ -40,6 +40,11 @@ export interface SaveSummary {
   serverUid: string | null;
   /** For a slave: the id of the master it belongs to. */
   masterUid: string | null;
+  /**
+   * For a master: the ids of the slaves it knows (server_identity.json, known_slaves). null when the file does not list
+   * them; a summary cached before this field existed has none either, so read it as `?? null`.
+   */
+  knownSlaves: string[] | null;
   /** legacy: mod version 2.1.2, before the audit additions. */
   generation: 'legacy' | 'current';
   /** When the world was last played (level.dat), which is when the copy was taken at the latest. */
@@ -331,6 +336,7 @@ export interface RuleSettings {
   'order-ledger': { on: boolean };
   'bank-flag': { on: boolean };
   'last-save': { on: boolean };
+  'transfer': { on: boolean };
 }
 export const DEFAULT_RULES: RuleSettings = {
   'round-trip': { on: true, times: 2, seconds: 30 },
@@ -342,6 +348,7 @@ export const DEFAULT_RULES: RuleSettings = {
   'order-ledger': { on: true },
   'bank-flag': { on: true },
   'last-save': { on: true },
+  'transfer': { on: true },
 };
 
 /** One value of a finding's facts. Which keys a rule fills is listed at the rule in engine/query/findings.ts. */
@@ -499,6 +506,53 @@ export interface QueryApi {
   overview(scope: Scope): Overview;
   /** The few strongest moments of the time range for the Overview's chart, oldest first. */
   keyEvents(scope: Scope, settings: RuleSettings): KeyEvent[];
+  /**
+   * Value moved between servers (DESIGN_SPEC 8.6): every transfer id of the slaves' journals and the master's log, newest
+   * first. The time range keeps transfers that start in it; a server filter keeps that slave's and those of no known slave.
+   */
+  transfers(scope: Scope): TransfersResult;
+}
+
+/** The classes of DESIGN_SPEC 8.6. */
+export type TransferClass = 'ok' | 'parked' | 'twice' | 'lost' | 'created' | 'known-gap' | 'data-gap' | 'after-snapshot';
+
+/** One item of a transfer, raw amounts. item null: money (every banknote denomination and the base money item, folded into one). */
+export interface TransferItem { item: number | null; sent: bigint; received: bigint }
+
+/** One transfer id with the rows of both sides. */
+export interface TransferRow {
+  id: string;
+  /** First and last row of either side. */
+  start: number;
+  end: number;
+  /** From the journal; null when only the master has rows. */
+  direction: 'TO_MASTER' | 'FROM_MASTER' | null;
+  path: 'ASYNC_BANK' | 'CONVERTER_DEPOSIT' | 'DROP' | null;
+  /** The slave whose journal holds it; null when no loaded journal does. */
+  server: string | null;
+  account: number | null;
+  player: { uuid: string; name: string } | null;
+  /** The journal's steps, oldest first. */
+  steps: string[];
+  /**
+   * Per item, what left the sending side and what reached the receiving side (DESIGN_SPEC 8.6); the difference of an item is
+   * received - sent. Money first, then by item id. Item amounts are item units (count x 100).
+   */
+  items: TransferItem[];
+  /** The master's ledger rows and TRANSFER_PARKED flags with this id. */
+  ledger: number[];
+  flags: number[];
+  class: TransferClass;
+  /** Why it is in its class, in one sentence. */
+  why: string;
+}
+
+export interface TransfersResult {
+  transfers: TransferRow[];
+  /** Per class, of the transfers in the result. */
+  counts: Record<TransferClass, number>;
+  /** Why nothing could be checked (no slave with a journal is loaded, ...); null when the check ran. */
+  reason: string | null;
 }
 
 export interface Overview {
@@ -544,7 +598,7 @@ export interface AdminEvent {
   ledgerId: number | null;
 }
 
-export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents'> {
+export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
   addSave(path: string): Workspace;

@@ -22,10 +22,12 @@ test.afterAll(() => program.close());
 
 test('the list is sorted by suspicion, then by profit, and the first player opens with their findings', async () => {
   await page.getByRole('link', { name: 'Players', exact: true }).click();
-  // Tavrik and Quenby both weigh 12 (one high and four medium, one critical and two medium): profit decides.
-  await expect(page.locator('aside .pick .who > span:first-child')).toHaveText(['Tavrik', 'Quenby', 'Ombrelune', 'Brindle', 'Mikko_82', 'AdmiralNoor']);
+  // Tavrik and Quenby both weigh 12 (one high and four medium, one critical and two medium): profit decides. So do AdmiralNoor
+  // and Ombrelune at 8: AdmiralNoor's two transfer findings (lost, and iron credited as diamonds) are two high ones.
+  await expect(page.locator('aside .pick .who > span:first-child')).toHaveText(['Tavrik', 'Quenby', 'AdmiralNoor', 'Ombrelune', 'Brindle', 'Mikko_82']);
   await expect(page.locator('aside')).toContainText('most suspicious first');
-  await expect(page.locator('aside .count')).toHaveText(['5', '3', '1', '1', '1']);
+  // Transfer findings (fixtures, TRANSFER_CASES): two for AdmiralNoor, one each for Ombrelune, Brindle and Mikko_82.
+  await expect(page.locator('aside .count')).toHaveText(['5', '3', '2', '2', '2', '2']);
   await expect(page.locator('aside .count').nth(1)).toHaveAttribute('title', '3 open findings, the highest critical');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tavrik');
   await expect(page.locator('.uuid')).toHaveText('a1b2c3d4-e5f6-4a7b-8c9d-000000000001');
