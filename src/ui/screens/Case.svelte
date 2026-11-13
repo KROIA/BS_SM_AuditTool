@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Case and report (DESIGN_SPEC 6.8, 8.10): where the incident's money stands, the evidence, what each player may keep and
+  // Case and report: where the incident's money stands, the evidence, what each player may keep and
   // the command lines for the admins. The engine works the amounts out (query/takeback.ts); nothing here changes a save.
   import type { Answer, CaseChoices, Cutoff, Finding, Incident, ItemRow, Scope, TakeBack, TakeBackRow } from '../../shared/api.ts';
   import { commands, itemList, type BankVersion } from '../../shared/commands.ts';
@@ -130,7 +130,7 @@
     copied = what;
   }
 
-  // ---- The report (DESIGN_SPEC 9): style and language are stored with the choices ----
+  // ---- The report: style and language are stored with the choices ----
   const STYLE_NOTE = {
     admin: 'For admins: about two pages in plain language: what happened, what to take back, the commands, where the banknotes are and what could not be checked.',
     tech: 'Technical: the same, plus every finding with its rule, measured value and record ids, the coverage of each save, the warnings and the versions.',

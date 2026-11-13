@@ -1,4 +1,4 @@
-// The one number and time format of the tool (DESIGN_SPEC rules 9 and 10).
+// The one number and time format of the tool.
 // Every number a person sees goes through here: apostrophe between thousands, point before decimals, 1'532.05.
 // Amounts are bigints in the mods' raw unit (real value x 100) and never pass through a floating-point number.
 

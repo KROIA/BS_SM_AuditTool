@@ -84,7 +84,7 @@ export interface Progress {
 }
 
 /**
- * How much of the region files the scan has read (DESIGN_SPEC 6.7). Files and bytes are those on disk now; a file is done
+ * How much of the region files the scan has read. Files and bytes are those on disk now; a file is done
  * when the scan read it at its current size and time, so a changed file counts as not done.
  */
 export interface ScanCoverage {
@@ -109,7 +109,7 @@ export interface ScanStatus extends ScanCoverage {
 }
 
 /**
- * What every question about the data is limited to (DESIGN_SPEC section 5): the time range and the server filter
+ * What every question about the data is limited to: the time range and the server filter
  * of the top bar. Times are epoch ms; null leaves that end open. server is a save's name; null means all servers.
  */
 export interface Scope {
@@ -151,7 +151,7 @@ export interface OrderRow {
   amount: bigint;
   /** Average execution price, raw money per whole item. */
   price: bigint;
-  /** Money of the order (DESIGN_SPEC 8.1): amount x price / 100, cut off like the mod does it. Signed like amount. */
+  /** Money of the order: amount x price / 100, cut off like the mod does it. Signed like amount. */
   money: bigint;
   /** When the order was placed. 0 when the save has no time for it. */
   time: number;
@@ -175,7 +175,7 @@ export interface LedgerRow {
   /** The type's name as stored, for example "TRADE_BUY". 2.1.2 saves have names only, no codes. */
   kind: string;
   item: number;
-  /** As stored. Unsigned for most types (DATA_SOURCES.md, sign rules). */
+  /** As stored. Unsigned for most types. */
   amount: bigint;
   /** What the row did to the balance: + in, - out. null when the direction is unknown (ADMIN_SET without a readable note, old unsigned payouts). */
   change: bigint | null;
@@ -198,7 +198,7 @@ export interface LedgerRow {
   place: { dimension: string; x: number; y: number; z: number } | null;
 }
 
-/** Realised profit per item with the average cost method (DESIGN_SPEC 8.1). Sales within the scope; purchases before it count for the cost. */
+/** Realised profit per item with the average cost method. Sales within the scope; purchases before it count for the cost. */
 export interface MarketProfit {
   item: number;
   orders: number;
@@ -236,7 +236,7 @@ export interface PlayerDetail extends PlayerRow {
   markets: MarketProfit[];
   /** Of the orders counted in `orders`, the buys. */
   buys: number;
-  /** Money on the owned accounts over time: per account the last snapshot at or before each point, summed (DESIGN_SPEC 8.1). */
+  /** Money on the owned accounts over time: per account the last snapshot at or before each point, summed. */
   money: Point[];
 }
 
@@ -255,7 +255,7 @@ export interface AccountRow {
   deleted: boolean;
 }
 
-/** An account in the list, with what the check per account (DESIGN_SPEC 8.4) found in the scope. */
+/** An account in the list, with what the check per account found in the scope. */
 export interface AccountListRow extends AccountRow {
   /** Money the log does not explain: the size of each gap above the threshold, summed (gaps that cancel each other both count). */
   unexplained: bigint;
@@ -285,7 +285,7 @@ export interface MarketRow {
 }
 
 export interface MarketFacts {
-  /** DESIGN_SPEC 8.1: the usual price at the end of the scope (median open of the last 1'440 minutes before its hour). */
+  /** The usual price at the end of the scope (median open of the last 1'440 minutes before its hour). */
   usual: bigint | null;
   low: bigint | null;
   high: bigint | null;
@@ -312,7 +312,7 @@ export interface Trader {
   profit: bigint;
 }
 
-/** Orders of one player less than 5 minutes apart (DESIGN_SPEC 8.1). Times are when the orders were placed. */
+/** Orders of one player less than 5 minutes apart. Times are when the orders were placed. */
 export interface Session {
   start: number;
   end: number;
@@ -326,7 +326,7 @@ export interface Session {
   medianGapMs: number | null;
 }
 
-/** How much a gap says (DESIGN_SPEC 8.4): low on a legacy save, high after the first BS-254 row, else medium. */
+/** How much a gap says: low on a legacy save, high after the first BS-254 row, else medium. */
 export type Rating = 'low' | 'medium' | 'high';
 
 /** A time between two snapshots in which the balance moved by more or less than the log explains. */
@@ -343,7 +343,7 @@ export interface Gap {
 }
 
 /**
- * The check of one item on one account (DESIGN_SPEC 8.4), from the first to the last snapshot in the scope:
+ * The check of one item on one account, from the first to the last snapshot in the scope:
  * start + trades + paidIn - paidOut = shouldBe, next to is. Amounts raw. start, shouldBe and is are null without a snapshot.
  */
 export interface ItemCheck {
@@ -369,7 +369,7 @@ export interface ItemCheck {
   verdict: 'unchecked' | 'explained' | 'unexplained' | 'unknown-rows';
 }
 
-// ---- Findings (DESIGN_SPEC 8.2). Money thresholds are raw (real x 100), item thresholds raw too (count x 100).
+// ---- Findings. Money thresholds are raw (real x 100), item thresholds raw too (count x 100).
 
 export type RuleId = 'round-trip' | 'order-rate' | 'hour-profit' | 'far-price' | 'price-spike' | 'balance' | 'order-ledger' | 'bank-flag' | 'last-save'
   | 'market-alert' | 'transfer' | 'banknotes';
@@ -447,7 +447,7 @@ export interface FindingsResult {
 }
 
 /**
- * Findings that belong together (DESIGN_SPEC 8.5): they share a player or a market and lie less than 30 minutes apart,
+ * Findings that belong together: they share a player or a market and lie less than 30 minutes apart,
  * also through other findings. Its title and sentence are made from these figures (shared/incident.ts).
  */
 export interface Incident {
@@ -492,13 +492,13 @@ export interface Mark {
   note: string;
 }
 
-/** The cutoff of the take-back (DESIGN_SPEC 8.10): the end of the day before the incident, right before its first finding, or a time picked (at). */
+/** The cutoff of the take-back: the end of the day before the incident, right before its first finding, or a time picked (at). */
 export interface Cutoff { kind: 'day' | 'first' | 'custom'; at: number | null }
 /** Did an admin remove money that left a 2.1.2 account without a log row? */
 export type Answer = 'yes' | 'unsure' | 'no';
 /** What the Case screen remembers. answers: by removal key (TakeBackRow.removed); order: pinned finding ids, the evidence order; style and lang: the report's. */
 export interface CaseChoices { cutoff: Cutoff; answers: Record<string, Answer>; order: string[]; style: ReportOptions['style']; lang: ReportOptions['lang'] }
-/** The report (DESIGN_SPEC 9): for admins or technical, English or German, the commands for this BankSystem version. */
+/** The report: for admins or technical, English or German, the commands for this BankSystem version. */
 export interface ReportOptions { style: 'admin' | 'tech'; lang: 'en' | 'de'; version: '2.1.2' | '2.2.0' }
 
 /** The parts of case.json the screens use. */
@@ -509,14 +509,14 @@ export interface CaseData {
   choices: CaseChoices;
 }
 
-/** One item to take back from an account (DESIGN_SPEC 8.10), raw counts: remove = max(0, min(bought, now - before)). */
+/** One item to take back from an account, raw counts: remove = max(0, min(bought, now - before)). */
 export interface TakeBackItem { item: number; before: bigint; bought: bigint; spent: bigint; now: bigint; remove: bigint }
 /**
  * One personal account of the take-back. start: the balance at the cutoff (the newest snapshot at or before it, else the
  * first one after it, from); other: net trading since then on markets outside the incident; keep = min(now, start +
  * max(0, other)); take = now - keep. removed: 2.1.2 money that left without a log row since the cutoff, one per gap.
  * via: for a player outside the incident, the incident player whose notes this one likely paid in after the cutoff
- * (DESIGN_SPEC 8.9) and the sum of those notes; their take = min(now, notes + max(0, net on the incident's markets)).
+ * and the sum of those notes; their take = min(now, notes + max(0, net on the incident's markets)).
  * null for the incident's own players.
  */
 export interface TakeBackRow {
@@ -533,7 +533,7 @@ export interface TakeBackRow {
   /** Largest money spent first. */
   items: TakeBackItem[];
 }
-/** What to take back for one incident (DESIGN_SPEC 6.8, 8.10). */
+/** What to take back for one incident. */
 export interface TakeBack {
   /** Why nothing can be shown; null when it ran. */
   reason: string | null;
@@ -593,7 +593,7 @@ export interface QueryApi {
   market(item: number, scope: Scope): MarketFacts;
   /**
    * At most 5'000 candles; capped says that the scope held more and should be narrowed. usual: the usual price at each
-   * candle's start (DESIGN_SPEC 8.1, it follows the market), one per candle.
+   * candle's start (it follows the market), one per candle.
    */
   candles(item: number, minutes: 1 | 5 | 15 | 60 | 1440, scope: Scope): { candles: Candle[]; capped: boolean; usual: (bigint | null)[] };
   /** Sorted by profit, highest first. */
@@ -622,37 +622,37 @@ export interface QueryApi {
   /** The few strongest moments of the time range for the Overview's chart, oldest first. */
   keyEvents(scope: Scope, settings: RuleSettings): KeyEvent[];
   /**
-   * Value moved between servers (DESIGN_SPEC 8.6): every transfer id of the slaves' journals and the master's log, newest
+   * Value moved between servers: every transfer id of the slaves' journals and the master's log, newest
    * first. The time range keeps transfers that start in it; a server filter keeps that slave's and those of no known slave.
    */
   transfers(scope: Scope): TransfersResult;
   /**
-   * Notes handed out by the bank minus notes paid back in, plus and minus NoteFlow on every loaded server (DESIGN_SPEC 8.7).
+   * Notes handed out by the bank minus notes paid back in, plus and minus NoteFlow on every loaded server.
    * The time range limits the movements; outstanding and the series count everything up to its end. A server filter keeps
    * log rows made there (and rows without an origin) and that server's NoteFlow.
    */
   banknotes(scope: Scope): BanknotesResult;
   /**
-   * The players linked to one player (DESIGN_SPEC 8.9), strongest first. The range and the server filter apply to
+   * The players linked to one player, strongest first. The range and the server filter apply to
    * transfers, notes and sessions; a shared account is the state of the copy. At most 5 players linked by trading alone,
    * at most 3 markets per player.
    */
   links(uuid: string, scope: Scope): PlayerLink[];
   /**
-   * Where the money of one incident went (DESIGN_SPEC 6.6, 8.10), for all its players (player null) or one. The time range
+   * Where the money of one incident went, for all its players (player null) or one. The time range
    * does not apply; the server filter applies to orders and trade rows (trading elsewhere becomes "other-server").
    * settings: the incidents are made from the findings, and the threshold of gaps on 2.1.2 is the balance rule's.
    */
   moneyFlow(scope: Scope, incidentId: string, player: string | null, settings: RuleSettings): MoneyFlow;
-  /** What to take back from the incident's players (DESIGN_SPEC 8.10), from the cutoff to the copy. No scope applies. */
+  /** What to take back from the incident's players, from the cutoff to the copy. No scope applies. */
   takeBack(incidentId: string, cutoff: Cutoff, settings: RuleSettings): TakeBack;
   /**
-   * What the players carry in their inventories and ender chests (DESIGN_SPEC 8.7), from the player files of the main
+   * What the players carry in their inventories and ender chests, from the player files of the main
    * save and its loaded slaves: the state when each copy was taken, so no scope applies.
    */
   worldItems(): WorldItemsResult;
   /**
-   * Starts the region scan in the background (DESIGN_SPEC 6.7) for the loaded save at this path, or all loaded saves:
+   * Starts the region scan in the background for the loaded save at this path, or all loaded saves:
    * every region file not done yet. Progress arrives as Progress with scan set. Does nothing while a scan runs.
    */
   startScan(save?: string): ScanStatus;
@@ -739,7 +739,7 @@ export interface WorldItemsResult {
   without: string[];
 }
 
-/** The classes of DESIGN_SPEC 8.6. */
+/** The transfer classes. */
 export type TransferClass = 'ok' | 'parked' | 'twice' | 'lost' | 'created' | 'known-gap' | 'data-gap' | 'after-snapshot';
 
 /** One item of a transfer, raw amounts. item null: money (every banknote denomination and the base money item, folded into one). */
@@ -761,7 +761,7 @@ export interface TransferRow {
   /** The journal's steps, oldest first. */
   steps: string[];
   /**
-   * Per item, what left the sending side and what reached the receiving side (DESIGN_SPEC 8.6); the difference of an item is
+   * Per item, what left the sending side and what reached the receiving side; the difference of an item is
    * received - sent. Money first, then by item id. Item amounts are item units (count x 100).
    */
   items: TransferItem[];
@@ -803,7 +803,7 @@ export interface BanknotePlayer {
 }
 
 /**
- * The banknote count (DESIGN_SPEC 8.7): money in notes that should exist outside the bank. Raw money throughout; NoteFlow
+ * The banknote count: money in notes that should exist outside the bank. Raw money throughout; NoteFlow
  * counts notes, so each of its rows is valued by its denomination. The log is proven, NoteFlow is what the mods recorded.
  */
 export interface BanknotesResult {
@@ -843,7 +843,7 @@ export interface BanknotesResult {
 }
 
 /**
- * One part of the money flow (DESIGN_SPEC 6.6, 8.10). side in: where money came from; out: where it is now. amount is raw
+ * One part of the money flow. side in: where money came from; out: where it is now. amount is raw
  * and never negative. A part belongs to one player; the screen adds them up per kind or market.
  * - start (in): the balance at the incident's start (the newest snapshot at or before it, else the first one after it).
  * - market (in): the net trading result on one market, when it is a gain. Proven.
@@ -852,7 +852,7 @@ export interface BanknotesResult {
  * - lost (out): the rest of a losing market's money: lost by buying high and selling low. Proven.
  * - other-server (in or out): trading on servers outside the server filter, netted. Proven.
  * - received, sent: transfers from or to the account `other`. Proven.
- * - notes: notes handed out minus paid back in (DESIGN_SPEC 8.7); out when more went out. An estimate on 2.1.2.
+ * - notes: notes handed out minus paid back in; out when more went out. An estimate on 2.1.2.
  * - appeared (in, 2.1.2): money that appeared without a log row, at most the notes then outside: probably notes paid in
  *   through the ATM converter. added (in, 2.1.2): more than that: an admin action or another cause. Estimates.
  * - admin: ADMIN_* rows. Proven. removed (out, 2.1.2): money that went without a log row (a negative gap above the
@@ -886,7 +886,7 @@ export interface FlowPart {
 }
 
 /**
- * Where the money of an incident's players went (DESIGN_SPEC 6.6, 8.10): per player and personal account, the balance at
+ * Where the money of an incident's players went: per player and personal account, the balance at
  * the incident's start plus every part in equals every part out, the balance now included. Closes by construction:
  * "unexplained" takes the rest. From the incident's start to the copy; the time range does not apply.
  */
@@ -903,7 +903,7 @@ export interface MoneyFlow {
   /** Where the notes still outside are (estimates), for the chosen players as one: notes out minus notes paid in minus
    *  "appeared" minus others, then in their own files, found elsewhere (any file but the incident players', owner unknown), not found.
    *  With one player chosen, elsewhere and notFound are null: the notes found elsewhere are one pool for all players.
-   *  others: notes they took out that a player not chosen likely paid in (a Likely note link, DESIGN_SPEC 8.9). */
+   *  others: notes they took out that a player not chosen likely paid in (a Likely note link). */
   notes: { outside: bigint; inFiles: bigint; elsewhere: bigint | null; notFound: bigint | null; others: { player: { uuid: string; name: string }; amount: bigint }[] };
   /** The copy: when the main save was last played. */
   to: number | null;
@@ -912,7 +912,7 @@ export interface MoneyFlow {
   missing: string[];
 }
 
-/** How sure a link between two players is (DESIGN_SPEC 8.9). */
+/** How sure a link between two players is. */
 export type LinkStrength = 'proven' | 'likely' | 'weak';
 /** One way two players are linked; "this" is the player asked about, "they" the other one. */
 export type LinkWay =
@@ -939,7 +939,7 @@ export interface PlayerLink {
 }
 
 export interface Overview {
-  /** Money on all bank accounts over time (DESIGN_SPEC 8.1): per account the last snapshot at or before each point, summed. */
+  /** Money on all bank accounts over time: per account the last snapshot at or before each point, summed. */
   money: Point[];
   /** The bank's wealth series (item 32767) summed the same way; null when the save has none (it needs StockMarket). */
   wealth: Point[] | null;
@@ -987,7 +987,7 @@ export interface AdminEvent {
 export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers' | 'banknotes' | 'links' | 'moneyFlow' | 'takeBack' | 'worldItems' | 'startScan' | 'stopScan' | 'scanStatus'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
-  /** A save folder, or a .zip that holds one or several (DESIGN_SPEC 4.1); a zip is unpacked first, so it answers later. */
+  /** A save folder, or a .zip that holds one or several; a zip is unpacked first, so it answers later. */
   addSave(path: string): Workspace | Promise<Workspace>;
   removeSave(path: string): Workspace;
   selfCheck(): EngineCheck;
@@ -997,7 +997,7 @@ export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player'
   mark(id: string, mark: Mark): CaseData;
   setRules(rules: RuleSettings): CaseData;
   setChoices(choices: CaseChoices): CaseData;
-  /** The report of one incident as one self-contained HTML page, with the stored cutoff, answers and evidence order (DESIGN_SPEC 9). */
+  /** The report of one incident as one self-contained HTML page, with the stored cutoff, answers and evidence order. */
   report(incidentId: string, options: ReportOptions, settings: RuleSettings): string;
 }
 

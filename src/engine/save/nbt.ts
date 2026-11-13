@@ -1,5 +1,5 @@
-// Reader for Minecraft's NBT format, for files that come out of a save and are therefore untrusted
-// (DESIGN_SPEC section 4.4): the unpacked size, the nesting depth and every length are checked against limits.
+// Reader for Minecraft's NBT format, for files that come out of a save and are therefore untrusted:
+// the unpacked size, the nesting depth and every length are checked against limits.
 import zlib from 'node:zlib';
 
 export type Nbt = number | bigint | string | Nbt[] | NbtCompound | Int8Array | Int32Array | BigInt64Array;

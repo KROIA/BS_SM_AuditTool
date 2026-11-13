@@ -1,4 +1,4 @@
-// The report (DESIGN_SPEC 9): both styles in both languages, the take-back figures and commands as takeBack gives them,
+// The report: both styles in both languages, the take-back figures and commands as takeBack gives them,
 // escaping of save strings, nothing that loads or runs, German without English headings.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

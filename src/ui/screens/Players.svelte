@@ -1,6 +1,6 @@
 <script lang="ts">
   // Players: what did this player do? A list on the left, the picked player on the right.
-  // The list is in the suspicion order (DESIGN_SPEC 8.3), then by profit. Connected players: DESIGN_SPEC 8.9.
+  // The list is in the suspicion order, then by profit.
   import type { BanknotesResult, Finding, ItemRow, LedgerRow, Level, LinkStrength, LinkWay, OrderRow, PlayerDetail, PlayerLink, PlayerRow, Session, WorldItemsResult, WorldStack } from '../../shared/api.ts';
   import { span } from '../../shared/finding.ts';
   import { count, items as quantity, money, moneyShort, time } from '../../shared/fmt.ts';
@@ -13,7 +13,7 @@
 
   let { selected }: { selected: string | null } = $props();
 
-  const ROWS = 10; // tables show this many rows until "Show all" (DESIGN_SPEC rule 3)
+  const ROWS = 10; // tables show this many rows until "Show all"
   const ALL = { from: null, to: null, server: null }; // a link's records are its own ids: no range applies
   let list = $state<PlayerRow[] | null>(null);
   let itemRows = $state(new Map<number, ItemRow>());

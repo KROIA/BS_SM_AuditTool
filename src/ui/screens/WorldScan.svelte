@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The World scan tab of Saves and servers (DESIGN_SPEC 6.7 and 8.7): how much money in banknotes should be outside the
+  // The World scan tab of Saves and servers: how much money in banknotes should be outside the
   // bank, how much was found and where, and where the tool could not look. The region scan is started here and runs in the
   // engine's background; its state lives in the app store (app.scan), so the bar goes on while other screens are open.
   import type { BanknotesResult, WorldItemsResult, WorldPlace } from '../../shared/api.ts';
@@ -8,7 +8,7 @@
   import CsvButton from '../app/CsvButton.svelte';
   import { heldText } from '../app/words.ts';
 
-  const TOP = 5; // places shown until "Show all" (DESIGN_SPEC rule 3)
+  const TOP = 5; // places shown until "Show all"
   /** The count runs to the copy: the world is the state when each copy was taken, so the time range does not apply. */
   const EVER = { from: null, to: null, server: null };
 

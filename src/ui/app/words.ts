@@ -8,7 +8,7 @@ export const tone = (raw: bigint) => (raw > 0n ? 'var(--up)' : raw < 0n ? 'var(-
 /** A level's colour; a gap's rating (low, medium, high) uses the same. */
 export const LEVEL_COLOR: Record<Level, string> = { critical: 'var(--crit)', high: 'var(--high)', medium: 'var(--med)', low: 'var(--low)' };
 
-/** A gap of the check per account (DESIGN_SPEC 8.4) as an entry of a history, at the snapshot that showed it. */
+/** A gap of the check per account as an entry of a history, at the snapshot that showed it. */
 export interface GapRow { id: string; time: number; account: number; item: number; gap: Gap }
 export const gapRows = (account: number, checks: ItemCheck[]): GapRow[] =>
   checks.flatMap((c) => c.gaps.map((gap) => ({ id: `gap:${account}:${c.item}:${gap.to}`, time: gap.to, account, item: c.item, gap })));

@@ -1,4 +1,4 @@
-// The cross-server check (DESIGN_SPEC 8.6) on the invented network: one transfer per class, the rule's findings, saves
+// The cross-server check on the invented network: one transfer per class, the rule's findings, saves
 // without a journal, and rows no mod writes.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

@@ -1,4 +1,4 @@
-// What to take back (DESIGN_SPEC 8.10): the rules, the cutoffs, an account at each edge, the 2.1.2 removal and its question,
+// What to take back: the rules, the cutoffs, an account at each edge, the 2.1.2 removal and its question,
 // a player outside the incident who likely paid in notes, and the command lines.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

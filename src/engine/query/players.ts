@@ -131,7 +131,7 @@ export function orders(filter: { player?: string; item?: number; ids?: number[];
 
 // ---- The bank's log ----
 
-/** Kinds whose amount is stored with its sign (DATA_SOURCES sign rules; RAW_CHANGE and the EXTERNAL pair are BS-254, LedgerType.java:13-15). */
+/** Kinds whose amount is stored with its sign (RAW_CHANGE and the EXTERNAL pair are BS-254, LedgerType.java:13-15). */
 const SIGNED = new Set(['TRANSFER', 'SHARE_TRADE', 'RAW_CHANGE', 'EXTERNAL_BIND', 'EXTERNAL_UNBIND']);
 const OUT = new Set(['WITHDRAW', 'ADMIN_REMOVE', 'BANK_CLOSED', 'CONVERTER_WITHDRAW', 'DOWNLOAD_WITHDRAW', 'CRAFT_CONSUME',
   'ACCOUNT_DELETE_PAYOUT', 'ADMIN_DISALLOW_ITEM', 'ACCOUNT_DELETE_LOSS', 'TRANSFER_OUT']);

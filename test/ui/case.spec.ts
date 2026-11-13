@@ -1,4 +1,4 @@
-// Case and report (DESIGN_SPEC 6.8, 8.10) on the old 2.1.2 save with Tavrik's extra money (FLOW): where the money stands,
+// Case and report on the old 2.1.2 save with Tavrik's extra money (FLOW): where the money stands,
 // the pinned evidence, the cutoff, the admin question, the table and the commands; the choices survive a restart.
 // Screenshots land in test-results/.
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';

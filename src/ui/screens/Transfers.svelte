@@ -1,6 +1,6 @@
 <script lang="ts">
   // The Transfers tab of Saves and servers: do the master and its slaves agree on what moved between them? The classes of
-  // DESIGN_SPEC 8.6 as tiles that filter the table below; pairs are made by the engine (query/transfers.ts).
+  // The transfer classes as tiles that filter the table below; pairs are made by the engine (query/transfers.ts).
   import type { ItemRow, TransferClass, TransferItem, TransferRow, TransfersResult } from '../../shared/api.ts';
   import { tick } from 'svelte';
   import { count, items as quantity, money, time } from '../../shared/fmt.ts';
@@ -11,7 +11,7 @@
   /** mark: a transfer id from the search (#/saves/transfers/<id>), marked and scrolled into view. */
   let { mark = null }: { mark?: string | null } = $props();
 
-  const PAGE = 10; // rows shown, then "Show more" adds as many again (DESIGN_SPEC rule 3)
+  const PAGE = 10; // rows shown, then "Show more" adds as many again
   /** The classes in tile order: value went wrong first (these raise a finding, level high), then the rest. */
   const CLASS: [TransferClass, string, boolean][] = [
     ['lost', 'Lost on the way', true],

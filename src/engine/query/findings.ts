@@ -1,4 +1,4 @@
-// The rules of DESIGN_SPEC 8.2 over all loaded data. Each rule's findings are kept per workspace (the cache database)
+// The rules over all loaded data. Each rule's findings are kept per workspace (the cache database)
 // and its own settings: the same settings give them back at once, a changed threshold re-runs only that rule.
 //
 // Facts per rule (keys of Finding.facts; money and volumes raw):
@@ -34,14 +34,14 @@ import { banknotes } from './banknotes.ts';
 import { scanStamp } from '../scan.ts';
 
 const MIN = 60_000, HOUR = 3_600_000;
-/** Hits of one rule on the same subject less than this apart form one finding (DESIGN_SPEC 8.2, repeated hits). */
+/** Hits of one rule on the same subject less than this apart form one finding. */
 const REPEAT = 15 * MIN;
 const UP: Record<Level, Level> = { low: 'medium', medium: 'high', high: 'critical', critical: 'critical' };
 export const RANK: Record<Level, number> ={ critical: 0, high: 1, medium: 2, low: 3 };
 const abs = (v: bigint) => (v < 0n ? -v : v);
 const ratio = (a: bigint, b: bigint) => Number(a) / Number(b > 0n ? b : 1n); // ponytail: a price of 0 counts as 1 raw, like the markets' swing
 
-/** The rule's level, one higher at ten times the threshold or more (DESIGN_SPEC 8.2). */
+/** The rule's level, one higher at ten times the threshold or more. */
 export function level(base: Level, value: number | bigint, limit: number | bigint | null): Level {
   if (limit === null) return base;
   const ten = typeof value === 'bigint' ? value >= BigInt(limit) * 10n : value >= Number(limit) * 10;
@@ -278,7 +278,7 @@ const RULES: { [K in keyof RuleSettings]: Rule<K> } = {
         const owner = st.owner.get(account);
         return {
           ...blank('bank-flag', String(id)), basis: 'as raised', source: 'bank mod', start: num(r.ts)!, end: num(r.ts)!,
-          // The mod's severity 1, 2, 3 are medium, high, critical; 0 comes from a migrated table (DESIGN_SPEC 8.2).
+          // The mod's severity 1, 2, 3 are medium, high, critical; 0 comes from a migrated table.
           level: severity >= 3 ? 'critical' : severity === 2 ? 'high' : severity === 1 ? 'medium' : 'low',
           players: owner ? [{ uuid: owner, name: st.nameOf(owner) }] : [], accounts: account === 0 ? [] : [account], // flag 5 is raised on account 0
           measured: { value: amount, threshold: limit[type] ?? null, unit: type <= 6 ? 'money' : type === 7 ? 'items' : 'shares' },
@@ -348,7 +348,7 @@ const RULES: { [K in keyof RuleSettings]: Rule<K> } = {
 
   'transfer': {
     applies: () => noTransfers(),
-    // One finding per transfer id of the classes that mean value went wrong (DESIGN_SPEC 8.6); ok, the known and data gaps
+    // One finding per transfer id of the classes that mean value went wrong; ok, the known and data gaps
     // and transfers newer than a copy are on the Transfers tab only.
     // Measured: the item furthest off in the class's direction (more arrived for twice and created, less for lost, either
     // way for parked), so the title's item and words agree.
@@ -369,8 +369,8 @@ const RULES: { [K in keyof RuleSettings]: Rule<K> } = {
 
   'banknotes': {
     applies: () => banknotes(EVER).reason ?? worldItems().reason,
-    // The notes the log says are outside the bank against those found in the player files and by the region scan
-    // (DESIGN_SPEC 8.7). An estimate: the scan may not have run, and players without a file are not counted.
+    // The notes the log says are outside the bank against those found in the player files and by the region scan.
+    // An estimate: the scan may not have run, and players without a file are not counted.
     run: (db, s) => {
       const count = banknotes(EVER), world = worldItems();
       const diff = world.notes - count.outstanding;

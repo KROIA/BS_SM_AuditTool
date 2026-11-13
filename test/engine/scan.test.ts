@@ -1,4 +1,4 @@
-// The region scan (AT-36, DESIGN_SPEC 6.7 and 8.7): the Anvil reader and its limits, what it finds in blocks and entities,
+// The region scan (AT-36): the Anvil reader and its limits, what it finds in blocks and entities,
 // the background scan with stop and continue, its coverage, and the banknote rule's sentence that follows it.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

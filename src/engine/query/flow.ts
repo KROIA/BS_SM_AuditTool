@@ -1,4 +1,4 @@
-// Where the money of an incident went (DESIGN_SPEC 6.6 and 8.10): per player and personal account, from the balance at the
+// Where the money of an incident went: per player and personal account, from the balance at the
 // incident's start to the copy, every move of the money items sorted into a part. "unexplained" takes the rest, so it closes.
 import type { BanknotesResult, FlowPart, MoneyFlow, RuleSettings, Scope } from '../../shared/api.ts';
 import { mainData, mainSave } from '../workspace.ts';
@@ -201,7 +201,7 @@ export function moneyFlow(scope: Scope, incidentId: string, player: string | nul
   let outside = 0n;
   for (const p of merged.values()) if (chosen.includes(p.player)) outside += p.kind === 'notes' ? (p.side === 'out' ? p.amount : -p.amount) : p.kind === 'appeared' ? -p.amount : 0n;
   if (outside < 0n) outside = 0n;
-  // Notes they took out after the start that another player likely paid in (a Likely note link, DESIGN_SPEC 8.9).
+  // Notes they took out after the start that another player likely paid in (a Likely note link).
   const others: MoneyFlow['notes']['others'] = [];
   for (const m of noteMatches(ALL)) {
     if (!chosen.includes(m.out) || chosen.includes(m.in) || m.withdrawn[0]!.ts <= t0 || outside === 0n) continue;

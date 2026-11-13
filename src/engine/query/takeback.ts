@@ -1,4 +1,4 @@
-// What to take back (DESIGN_SPEC 8.10): per personal account of an incident's players, from a cutoff to the copy. The money
+// What to take back: per personal account of an incident's players, from a cutoff to the copy. The money
 // comes from the money flow run from the cutoff (flow.ts), the items from the trades on the account since its snapshot.
 import type { Cutoff, RuleSettings, Scope, TakeBack, TakeBackItem } from '../../shared/api.ts';
 import type { DatabaseSync } from 'node:sqlite';
@@ -64,7 +64,7 @@ export function takeBack(incidentId: string, cutoff: Cutoff, settings: RuleSetti
   if (!db || !main) return empty('No save with bank data is loaded, so there is nothing to take back.');
   if (!inc) return empty('This incident is not raised with the current rule settings.');
 
-  // Players outside the incident who likely paid in notes its players took out after the cutoff (DESIGN_SPEC 8.9).
+  // Players outside the incident who likely paid in notes its players took out after the cutoff.
   const own = new Set(inc.players.map((p) => p.uuid)), via = new Map<string, { out: string; notes: bigint }>();
   for (const m of noteMatches(ALL)) {
     if (!own.has(m.out) || own.has(m.in) || m.withdrawn[0]!.ts <= at || m.paidIn.to <= at) continue;

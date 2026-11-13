@@ -1,6 +1,6 @@
 <script lang="ts">
   // Bank accounts: does the bank's log explain the balance? A list on the left, largest gap first; the picked account on the
-  // right with the check per account (DESIGN_SPEC 8.4), its chart and its history.
+  // right with the check per account, its chart and its history.
   import type { AccountDetail, AccountListRow, AccountRow, Gap, ItemCheck, ItemRow, LedgerRow, Point, Rating } from '../../shared/api.ts';
   import { GAP_SAYS, span } from '../../shared/finding.ts';
   import { count, items as quantity, money, moneyShort, time } from '../../shared/fmt.ts';
@@ -11,7 +11,7 @@
 
   let { selected }: { selected: number | null } = $props();
 
-  const ROWS = 10; // tables show this many rows until "Show all" (DESIGN_SPEC rule 3)
+  const ROWS = 10; // tables show this many rows until "Show all"
   let list = $state<AccountListRow[] | null>(null);
   let itemRows = $state(new Map<number, ItemRow>());
   let detail = $state<AccountDetail | null>(null);

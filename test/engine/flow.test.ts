@@ -1,4 +1,4 @@
-// The money flow (DESIGN_SPEC 6.6, 8.10) on the invented network with Tavrik's extra money (FLOW) and on the old 2.1.2
+// The money flow on the invented network with Tavrik's extra money (FLOW) and on the old 2.1.2
 // save: the balance closes, each part is what the rows and orders say, proven and estimate, the player switch.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

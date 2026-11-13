@@ -1,6 +1,6 @@
 // The engine's memory of what is loaded: the saves of one network, each read once into its own cache database.
 // case.json remembers the save folders between sessions; the cache can be deleted at any time and is rebuilt.
-// A zip is unpacked into zips/ once (DESIGN_SPEC 4.1) and then opens like a folder; the save keeps the zip's path.
+// A zip is unpacked into zips/ once and then opens like a folder; the save keeps the zip's path.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -38,7 +38,7 @@ const isSame = (s: SaveSummary, picked: string) => cacheFile(s.path) === cacheFi
 /** The save that holds the bank and market data: the master, or a single server. */
 export const mainSave = () => saves.find(hasBankOrMarket);
 
-// ---- case.json: the save folders, the rule settings and the marks on findings (DESIGN_SPEC 4.5)
+// ---- case.json: the save folders, the rule settings and the marks on findings
 
 /** case.json is small; anything above this was not written by the tool. */
 export const CASE_LIMIT = 8 * 1024 * 1024;
@@ -144,7 +144,7 @@ function load(picked: string): SaveSummary {
   return zip ? { ...summary, path: picked, warnings: [...zip.problems, ...summary.warnings] } : summary;
 }
 
-// ---- zips (DESIGN_SPEC 4.1): unpacked once per zip path, size and time; unzip.json beside the contents says it is complete
+// ---- zips: unpacked once per zip path, size and time; unzip.json beside the contents says it is complete
 
 const zipHome = (zip: string) => path.join(root, 'zips', crypto.createHash('sha1').update(path.resolve(zip).toLowerCase()).digest('hex').slice(0, 16));
 /** The folder the contents go into is named after the zip, so a save at the top of the zip is named like it. */
@@ -242,7 +242,7 @@ function closeMaster() {
   opened.clear();
 }
 
-/** What is odd about how the loaded saves fit together (DESIGN_SPEC section 4.3). */
+/** What is odd about how the loaded saves fit together. */
 function networkWarnings(): string[] {
   const out: string[] = [];
   const main = mainSave();

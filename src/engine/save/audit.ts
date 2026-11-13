@@ -1,4 +1,4 @@
-// The bank's audit log: data/BankSystem/audit/<yyyy-mm-dd>.log (DATA_SOURCES.md, "Files"; BS AdminAudit.java).
+// The bank's audit log: data/BankSystem/audit/<yyyy-mm-dd>.log (BS AdminAudit.java).
 // One entry per admin action and per flag, each starting with "yyyy-MM-dd HH:mm:ss " in the server's local time,
 // without a zone. Details and notes are not escaped, so an entry can span several lines.
 // Untrusted input: the total size and each entry are bounded, and what does not parse is kept as raw text.

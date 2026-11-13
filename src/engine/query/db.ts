@@ -12,7 +12,7 @@ export const num = (v: SQLOutputValue) => (v === null ? null : Number(v));
 export const big = (v: SQLOutputValue) => (v === null ? null : BigInt(v as bigint));
 export const text = (v: SQLOutputValue) => (v === null ? null : String(v));
 
-/** Player names: the one lookup every name goes through (DESIGN_SPEC rule 11). Unknown players get the name a row gave, else the start of their UUID. */
+/** Player names: the one lookup every name goes through. Unknown players get the name a row gave, else the start of their UUID. */
 export function names(db: DatabaseSync) {
   const map = new Map(all(db, 'SELECT uuid, name FROM player').map((r) => [String(r.uuid), String(r.name)]));
   return (uuid: string, fallback?: string | null) => map.get(uuid) ?? fallback ?? uuid.slice(0, 8);
@@ -20,7 +20,7 @@ export function names(db: DatabaseSync) {
 
 /**
  * Snapshot rows (account, item, time, v), oldest first and already cut at the scope's end, as one value over time:
- * per account and item the last snapshot at or before each point, summed (DESIGN_SPEC 8.1).
+ * per account and item the last snapshot at or before each point, summed.
  * The range starts with what was held at its start.
  */
 export function series(rows: Row[], scope: Scope): Point[] {

@@ -1,11 +1,11 @@
-// A finding in plain words (DESIGN_SPEC 8.2): its title, summary, facts and rule, for the Findings screen and the report.
+// A finding in plain words: its title, summary, facts and rule, for the Findings screen and the report.
 // Every number goes through fmt.ts. The facts each rule fills are listed in engine/query/findings.ts.
 import type { Finding, Rating, RuleId, RuleSettings } from './api.ts';
 import { count, items, money, moneyShort, percent, time } from './fmt.ts';
 
 /** What the screens know about items: the name ("Diamond") and whether it is money. */
 export interface ItemWords { itemName: (id: number) => string; isMoney: (id: number) => boolean }
-/** The screens are English; the report is English or German (DESIGN_SPEC 9). German writes ss, never the sharp s. */
+/** The screens are English; the report is English or German. German writes ss, never the sharp s. */
 export type Lang = 'en' | 'de';
 
 /** "minecraft:shulker_box" -> "Shulker box": an item id as the screens and the report name it. */
@@ -74,7 +74,7 @@ export function ruleText(rule: RuleId, s: RuleSettings, lang: Lang = 'en'): stri
   }
 }
 
-/** How much a gap of the check per account says, by its rating (DESIGN_SPEC 8.4). */
+/** How much a gap of the check per account says, by its rating. */
 export const GAP_SAYS: Record<Rating, { short: string; why: string }> = {
   low: { short: 'Little: old save', why: 'This save was written by BankSystem 2.1.2, which did not log trades or admin actions, so gaps like this are expected there.' },
   medium: { short: 'Some: the log has known holes',
@@ -145,7 +145,7 @@ export function alertRule(f: Finding): string {
   }
 }
 
-/** What a finding is called and what it measured: the list line, the report's line (DESIGN_SPEC 9). */
+/** What a finding is called and what it measured: the list line, the report's line. */
 export interface Headline {
   title: string;
   /** The rule's name: for a bank flag the flag's. */
@@ -422,7 +422,7 @@ function story(f: Finding, w: ItemWords): Pick<FindingWords, 'summary' | 'facts'
       const listed = (l: string[]) => (l.length <= 5 ? l.join(', ') : `${l.slice(0, 5).join(', ')} and ${count(l.length - 5)} more`);
       const missing = names('missing'), without = names('without');
       const files = n('scanFiles'), total = n('scanFilesTotal'), unread = n('chunksUnread'), lz4 = n('lz4'), filesUnread = n('filesUnread');
-      // What was looked at follows the region scan's coverage (DESIGN_SPEC 8.7).
+      // What was looked at follows the region scan's coverage.
       const looked = {
         'complete': 'Looked at: player files, ender chests and every region file (chests and other blocks, dropped items and other entities).',
         'partial': `Looked at: player files, ender chests and ${count(files)} of ${count(total)} region files; the region scan was stopped or the world changed since, so notes in the rest of the world are not counted.`,

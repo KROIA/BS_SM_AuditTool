@@ -1,4 +1,4 @@
-// Incidents (DESIGN_SPEC 8.5), made from the findings. The suspicion order of the players (8.3) is in shared/incident.ts.
+// Incidents, made from the findings. The suspicion order of the players is in shared/incident.ts.
 import type { Finding, Incident, IncidentsResult, Level, RuleSettings, Scope } from '../../shared/api.ts';
 import { blamed } from '../../shared/incident.ts';
 import { caseData, mainData } from '../workspace.ts';

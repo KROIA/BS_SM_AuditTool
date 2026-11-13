@@ -1,4 +1,4 @@
-// Money flow (DESIGN_SPEC 6.6, 8.10) on the invented network with Tavrik's extra money (FLOW): the answer first, the three
+// Money flow on the invented network with Tavrik's extra money (FLOW): the answer first, the three
 // columns, the player switch, a picked part with its records, and the 2.1.2 save's estimates. Screenshots land in test-results/.
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';

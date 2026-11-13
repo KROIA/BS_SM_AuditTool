@@ -1,4 +1,4 @@
-// CSV export (DESIGN_SPEC 9) on the invented network: the whole table behind three screens, written through the save dialog
+// CSV export on the invented network: the whole table behind three screens, written through the save dialog
 // of main (stubbed as in case.spec), never into a save; and the search finding a transfer by its id.
 // Screenshots of a table heading with its button land in test-results/.
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';

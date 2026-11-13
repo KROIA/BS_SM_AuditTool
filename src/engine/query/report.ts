@@ -1,4 +1,4 @@
-// The report (DESIGN_SPEC 9): one self-contained HTML page for the admins, or a technical one, in English or German.
+// The report: one self-contained HTML page for the admins, or a technical one, in English or German.
 // It shows what the screens show, from the same calls (takeBack, findings, the case's choices, the save summaries); no amount
 // is worked out a second time. Every string from a save or the case goes through h``, which escapes it.
 import fs from 'node:fs';
@@ -253,7 +253,7 @@ dd { margin: 0; overflow-wrap: anywhere; }
 table.compact td { padding: 2px 8px 2px 0; font-size: 9.5pt; }
 `;
 
-/** The report of one incident as one HTML page (DESIGN_SPEC 9). Throws, in plain words, when there is nothing to report. */
+/** The report of one incident as one HTML page. Throws, in plain words, when there is nothing to report. */
 export function report(incidentId: string, options: ReportOptions, settings: RuleSettings): string {
   // The window process passes these on unchecked: anything unknown falls back to the defaults.
   const lang = options?.lang === 'de' ? 'de' : 'en', style = options?.style === 'tech' ? 'tech' : 'admin', version = options?.version === '2.2.0' ? '2.2.0' : '2.1.2';

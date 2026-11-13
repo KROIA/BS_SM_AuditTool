@@ -1,4 +1,4 @@
-// Opening a .zip (DESIGN_SPEC 4.1) in the program: through --open and through the file picker (stubbed in main), the
+// Opening a .zip in the program: through --open and through the file picker (stubbed in main), the
 // unpacking progress, and a restart that does not unpack again. Screenshots land in test-results/.
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';

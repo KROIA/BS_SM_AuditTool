@@ -180,7 +180,7 @@ test('scope: the time range keeps what overlaps it, a server keeps its orders\' 
   assert.equal(mining.length, all.length - api.findings(ALL, DEFAULT_RULES).findings.filter((f) => f.servers.length && !f.servers.includes('mining-1')).length);
 });
 
-// The fixed run (PLAN.md section 5): every finding on the fixture network. A change to a rule shows up here as a diff.
+// The fixed run: every finding on the fixture network. A change to a rule shows up here as a diff.
 test('fixed run: every finding on the current and the old save', () => {
   const run = () => api.findings(ALL, DEFAULT_RULES).findings.map((f) => `${f.level} ${f.id}`);
   const tavrik = uuid('Tavrik'), quenby = uuid('Quenby'), brindle = uuid('Brindle');

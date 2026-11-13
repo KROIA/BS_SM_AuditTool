@@ -1,4 +1,4 @@
-// The Transfers tab of Saves and servers: the classes of DESIGN_SPEC 8.6 as tiles on the invented network, a tile filtering
+// The Transfers tab of Saves and servers: the transfer classes as tiles on the invented network, a tile filtering
 // the table, and the sentence a save without a journal gets. Screenshots land in test-results/ to be looked at.
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';

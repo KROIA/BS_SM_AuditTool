@@ -1,4 +1,4 @@
-// The banknote count (DESIGN_SPEC 8.7): how much money in notes should exist outside the bank. Notes the master's log
+// The banknote count: how much money in notes should exist outside the bank. Notes the master's log
 // handed out minus those paid back in (print and redeem classification of the interfaces draft, B4), plus and minus what
 // NoteFlow recorded on each loaded server. The notes found in the world are the other side; the rule compares them (AT-35).
 import type { SQLInputValue } from 'node:sqlite';
@@ -17,7 +17,7 @@ import { isSlaveOf } from './transfers.ts';
  */
 const NOTE_KINDS = ['WITHDRAW', 'DOWNLOAD_WITHDRAW', 'CRAFT_CONSUME', 'ACCOUNT_DELETE_PAYOUT', 'SHARE_TRADE', 'DEPOSIT', 'UPLOAD_DEPOSIT', 'CRAFT_OUTPUT', 'WITHDRAW_REFUND'];
 const KINDS = new Set(NOTE_KINDS);
-/** The sources the mods write (DATA_SOURCES, NoteFlow); anything else is summed as "other". */
+/** The sources the mods write (NoteFlow); anything else is summed as "other". */
 const SOURCES = new Set(['banksystem:converter_in', 'banksystem:converter_out', 'banksystem:creative_create', 'banksystem:creative_destroy', 'banksystem:give',
   'stockmarket:villager_pay', 'stockmarket:villager_change', 'stockmarket:villager_consume']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

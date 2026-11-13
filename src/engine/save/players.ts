@@ -1,7 +1,7 @@
 // Reads the player files of a world (playerdata/<uuid>.dat): what each player carries in the inventory and the ender
 // chest, into nested containers (shulker boxes, bundles). Money items are valued; every other stack is kept by name, and
 // the query decides which of them are valuables (they need the master's market list, which a slave's save does not have).
-// The files are untrusted (DESIGN_SPEC 4.4): a file that breaks a limit is skipped whole and counted, never fatal.
+// The files are untrusted: a file that breaks a limit is skipped whole and counted, never fatal.
 import fs from 'node:fs';
 import path from 'node:path';
 import { readSmallFile } from './locate.ts';

@@ -1,4 +1,4 @@
-// Realised profit by sale, trading sessions and profit per clock hour (DESIGN_SPEC 8.1): the building blocks of the rules.
+// Realised profit by sale, trading sessions and profit per clock hour: the building blocks of the rules.
 import type { OrderRow, Scope, Session } from '../../shared/api.ts';
 import { mainData } from '../workspace.ts';
 import { median } from './markets.ts';

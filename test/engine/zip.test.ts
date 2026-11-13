@@ -1,4 +1,4 @@
-// Opening a .zip (DESIGN_SPEC 4.1): an Explorer zip of an export, a zip of a network, zip64, and every way a zip can try to
+// Opening a .zip: an Explorer zip of an export, a zip of a network, zip64, and every way a zip can try to
 // get out of its folder, blow up or be broken. The zips are written by test/fixtures/zip.ts.
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';

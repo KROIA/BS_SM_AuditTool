@@ -1,4 +1,4 @@
-// Connected players (DESIGN_SPEC 8.9): who is linked to a player, and how sure it is. Proven: a shared account or a
+// Connected players: who is linked to a player, and how sure it is. Proven: a shared account or a
 // transfer between their accounts. Likely: notes one withdrew and the other paid in, the exact amount within a day.
 // Weak: both traded the same market in trading sessions that overlap. Never a finding of its own.
 import type { SQLInputValue } from 'node:sqlite';
@@ -118,7 +118,7 @@ export function links(uuid: string, scope: Scope): PlayerLink[] {
     if (l.strength === 'weak') l.strength = 'likely';
   }
 
-  // Weak: the same market in trading sessions that overlap (DESIGN_SPEC 8.1 sessions, in the range).
+  // Weak: the same market in trading sessions that overlap (in the range).
   // ponytail: every session of the player against every other session, fine for the thousands of a real copy.
   const byPlayer = new Map<string, OrderRow[]>();
   for (const o of readOrders(db, {}, scope.to)) byPlayer.get(o.player)?.push(o) ?? byPlayer.set(o.player, [o]);

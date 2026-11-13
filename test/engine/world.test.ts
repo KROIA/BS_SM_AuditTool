@@ -1,4 +1,4 @@
-// The player files (AT-35, DESIGN_SPEC 8.7): what the reader takes from them and what it refuses, the query over the
+// The player files (AT-35): what the reader takes from them and what it refuses, the query over the
 // network, and the banknote rule that compares them with the bank's note count.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

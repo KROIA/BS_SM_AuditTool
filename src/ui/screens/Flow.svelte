@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Money flow (DESIGN_SPEC 6.6, 8.10): where the money of one incident came from, which player got it and where it is now.
+  // Money flow: where the money of one incident came from, which player got it and where it is now.
   // Three columns as on the design canvas; the engine sorts every move into a part (query/flow.ts), this screen groups them.
   import type { Finding, FlowPart, Incident, ItemRow, LedgerRow, MoneyFlow, OrderRow, Scope } from '../../shared/api.ts';
   import { count, items as quantity, money, moneyShort, time } from '../../shared/fmt.ts';

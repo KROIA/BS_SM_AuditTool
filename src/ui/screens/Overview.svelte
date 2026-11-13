@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Overview: is something wrong, and where do I start? (DESIGN_SPEC 6.1) The quick blocks show at once; the summary
+  // Overview: is something wrong, and where do I start? The quick blocks show at once; the summary
   // and the findings figure wait for the first run of the rules.
   import type { Finding, ItemRow, KeyEvent, Level, Overview } from '../../shared/api.ts';
   import { count, money, moneyShort, time } from '../../shared/fmt.ts';

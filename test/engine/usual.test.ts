@@ -1,4 +1,4 @@
-// The usual price follows the market (DESIGN_SPEC 8.1, AT-45): the median open of the last 1'440 minutes before the hour.
+// The usual price follows the market (AT-45): the median open of the last 1'440 minutes before the hour.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';

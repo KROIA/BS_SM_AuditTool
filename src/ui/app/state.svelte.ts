@@ -48,7 +48,7 @@ export const app = $state({
   choices: { cutoff: { kind: 'day', at: null }, answers: {}, order: [], style: 'admin', lang: 'en' } as CaseChoices,
   /** "The incident" of the range menu and the Overview (ScopeMenus works it out); undefined while the rules run. */
   incident: undefined as Incident | null | undefined,
-  /** How far the region scan got (DESIGN_SPEC 6.7); kept here so the bar lives on while other screens are open. */
+  /** How far the region scan got; kept here so the bar lives on while other screens are open. */
   scan: null as ScanStatus | null,
   /** Goes up when the scan's results change (a scan ended or was stopped): what shows them asks again. */
   scanRound: 0,
@@ -136,7 +136,7 @@ async function run(call: () => Promise<Workspace>) {
 }
 
 /**
- * From the Saves screen to the Overview once saves are loaded (DESIGN_SPEC 6.0). Not when something went wrong: the
+ * From the Saves screen to the Overview once saves are loaded. Not when something went wrong: the
  * Saves screen says what. The route is set at once, not on hashchange, so the Overview asks before the slow rules run.
  */
 function toOverview() {

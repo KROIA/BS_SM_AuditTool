@@ -1,4 +1,4 @@
-// What the world holds (DESIGN_SPEC 8.7): the stacks read from the player files of the main save and its loaded slaves at
+// What the world holds: the stacks read from the player files of the main save and its loaded slaves at
 // import (save/players.ts), and what the region scan found in blocks and entities (scan.ts). The other side of the banknote count.
 import type { WorldItemsResult, WorldPlace, WorldPlayer, WorldStack } from '../../shared/api.ts';
 import { at } from '../../shared/fmt.ts';

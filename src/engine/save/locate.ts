@@ -43,7 +43,7 @@ export function readIdentity(dataDir: string): Identity | null {
 }
 
 /**
- * The manifest.json of an audit export (BS-255; DATA_SOURCES.md, "Audit export"), beside the export's data folder.
+ * The manifest.json of an audit export (BS-255), beside the export's data folder.
  * Untrusted: at most 1 MB, only the known fields of the expected types, never throws. null when there is none.
  * The per-file sha256 is not checked: hashing copied databases of hundreds of MB on every load is not cheap. Their sizes are.
  */

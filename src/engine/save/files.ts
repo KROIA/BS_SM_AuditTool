@@ -7,7 +7,7 @@ import { big, compound, flag, isCompound, list, num, readNbt, str, uuidFromInts,
 
 /**
  * The server's usercache.json, which sits beside the world folder when the server folder was copied: uuid -> name.
- * The third source of names (DESIGN_SPEC 8.1) for players the mods' files do not name. Malformed entries are skipped.
+ * The third source of names for players the mods' files do not name. Malformed entries are skipped.
  */
 export function readUserCache(dataDir: string): Map<string, string> {
   const out = new Map<string, string>();
@@ -26,7 +26,7 @@ export function readUserCache(dataDir: string): Map<string, string> {
   return out;
 }
 
-/** The bank mod's flag settings and their defaults (BS BankSystemModSettings.java:456-480; DATA_SOURCES.md). Money in whole units. */
+/** The bank mod's flag settings and their defaults (BS BankSystemModSettings.java:456-480). Money in whole units. */
 const BANK_AUDIT: Record<string, number | boolean> = {
   LAUNDERING_FLAG_ENABLED: true, LAUNDERING_MIN_AMOUNT: 1_000_000, LAUNDERING_WINDOW_HOURS: 24,
   LARGE_NOTE_WITHDRAWAL_FLAG_ENABLED: true, LARGE_NOTE_WITHDRAWAL_AMOUNT: 10_000_000,

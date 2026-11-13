@@ -1,4 +1,4 @@
-// Realised profit per item with the average cost method (DESIGN_SPEC 8.1). Pure: orders in, figures out.
+// Realised profit per item with the average cost method. Pure: orders in, figures out.
 import type { MarketProfit } from '../../shared/api.ts';
 
 export interface Trade {

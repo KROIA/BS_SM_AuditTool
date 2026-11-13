@@ -1,4 +1,4 @@
-// The check per account (DESIGN_SPEC 8.4): for every account and item, every gap between two neighbouring snapshots,
+// The check per account: for every account and item, every gap between two neighbouring snapshots,
 // the change of free plus locked against what the ledger (or, before the save has trade rows, the orders) explains.
 // Accounts that are gone from the bank's files are checked too: everything here starts from the snapshot and ledger rows.
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
@@ -9,9 +9,9 @@ import { all, big, num, text } from './db.ts';
 import { change } from './players.ts';
 
 const WEALTH = 32767; // the bank's wealth series, a sum and not an item
-/** Neighbouring differences that cancel are joined when both lie within this time (DESIGN_SPEC 8.4). */
+/** Neighbouring differences that cancel are joined when both lie within this time. */
 const JOIN_MS = 15 * 60_000;
-/** They cancel when what is left is at most 1% of the larger one: order money is cut off per fill (DATA_SOURCES, known gaps). */
+/** They cancel when what is left is at most 1% of the larger one: order money is cut off per fill. */
 const cancels = (a: bigint, b: bigint) => (a > 0n) !== (b > 0n) && abs(a + b) * 100n <= (abs(a) > abs(b) ? abs(a) : abs(b));
 const abs = (v: bigint) => (v < 0n ? -v : v);
 
@@ -28,7 +28,7 @@ interface RawGap { from: number; to: number; diff: bigint; trades: bigint; paidI
 type Series = [number, bigint][];
 
 /**
- * How much a gap says (DESIGN_SPEC 8.4). Below 2.2.0 trades and admin actions are not logged: low. From the first row
+ * How much a gap says. Below 2.2.0 trades and admin actions are not logged: low. From the first row
  * only BS-254 writes (types 29 to 31) nearly every change has a row: high. Every other gap: medium. No version: low.
  */
 export function rate(version: string | null, firstBs254: number | null, from: number): Rating {
@@ -158,7 +158,7 @@ export function noteWorth(db: DatabaseSync): Map<number, bigint> {
   }
   return out;
 }
-/** The "Balance not explained" threshold of an item: money or goods (DESIGN_SPEC 8.2). */
+/** The "Balance not explained" threshold of an item: money or goods. */
 export function threshold(db: DatabaseSync, s: RuleSettings['balance']) {
   const money = moneyItems(db);
   return (item: number) => (money.has(item) ? s.money : s.items);

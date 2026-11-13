@@ -14,7 +14,7 @@
 
   let { selected }: { selected: string | null } = $props();
 
-  const FIRST = 5; // findings shown per group until "Show all" (DESIGN_SPEC rule 3)
+  const FIRST = 5; // findings shown per group until "Show all"
   const ROWS = 10;
   const ALL = { from: null, to: null, server: null };
   let result = $state<FindingsResult | null>(null);

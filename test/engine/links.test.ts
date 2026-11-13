@@ -1,4 +1,4 @@
-// Connected players (DESIGN_SPEC 8.9, AT-41): a shared account and a transfer are proven, notes paid in at the exact amount
+// Connected players (AT-41): a shared account and a transfer are proven, notes paid in at the exact amount
 // another player withdrew are likely, overlapping sessions on one market are weak. Each kind with one near miss.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

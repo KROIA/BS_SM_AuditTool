@@ -1,4 +1,4 @@
-// The lines an admin runs to take money back (DESIGN_SPEC 8.10), checked against BankSystem's command tree in
+// The lines an admin runs to take money back, checked against BankSystem's command tree in
 // BankSystemCommandsRegistration.java: 2.1.2 (tag 1.21.1-2.1.2) and the current code (2.2.0). The tool runs nothing.
 import type { TakeBackRow } from './api.ts';
 import { items as quantity, plain } from './fmt.ts';

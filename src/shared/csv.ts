@@ -1,4 +1,4 @@
-// Tables as CSV files (DESIGN_SPEC 9, AT-44): RFC 4180 with CRLF line ends, UTF-8 with a byte order mark so Excel reads the
+// Tables as CSV files (AT-44): RFC 4180 with CRLF line ends, UTF-8 with a byte order mark so Excel reads the
 // characters right. Every number goes through fmt.ts, in full: 1'532.05. Save data is untrusted: a text cell that a
 // spreadsheet would read as a formula gets a leading apostrophe. Number cells are typed and never changed.
 import { amount, count, items } from './fmt.ts';

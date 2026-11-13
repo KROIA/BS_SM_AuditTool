@@ -1,5 +1,5 @@
 // Builds invented saves for the tests: a current network (one master, two slaves) and one old 2.1.2 save.
-// Names, ids and amounts are made up (DESIGN_SPEC rule 12); the shape follows the scenario of the design canvas:
+// Names, ids and amounts are made up; the shape follows the scenario of the design canvas:
 // two players push a market price up with rapid orders and sell into it.
 //
 // The table definitions are copied from the mods (BankSystem 3835d933, StockMarket 898aac66):
@@ -390,7 +390,7 @@ function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers
   flush(minute);
 
   if (!legacy) {
-    // Cases for the check per account (DESIGN_SPEC 8.4), on account numbers that are in no bank file, like deleted accounts:
+    // Cases for the check per account, on account numbers that are in no bank file, like deleted accounts:
     // that keeps every value of the accounts above. Rows without an actor, so no player's activity moves.
     const snap = (account: number, minute: number, v: bigint, item: number = ITEM.money) =>
       db.insert('BalanceHistory', { account_number: account, item_id: item, balance: v, locked_balance: 0, time: T0 + minute * MIN });
@@ -675,7 +675,7 @@ function nbtFiles(dataDir: string, bankVersion: string, balance: Map<string, big
   ];
   chunked(path.join(bank, 'Bank_data', 'bankAccounts'), accounts, 1); // eleven files, so chunk_10 sorts wrong as text
 
-  // ponytail: the company meta element is not in DATA_SOURCES.md; nextCompanyId is a guess the reader ignores.
+  // ponytail: the company meta element is not documented by the mod; nextCompanyId is a guess the reader ignores.
   chunked(path.join(bank, 'Companies', 'meta'), [comp({ nextCompanyId: int(COMPANY.id + 1) })], 1);
   chunked(path.join(bank, 'Companies', 'companies'), [comp({ companyId: int(COMPANY.id), name: str(COMPANY.name), bankAccountNr: int(COMPANY.account) })], 1);
 
@@ -688,7 +688,7 @@ function nbtFiles(dataDir: string, bankVersion: string, balance: Map<string, big
 }
 
 /**
- * One transfer per class of the cross-server check (DESIGN_SPEC 8.6), on top of the three plain deposits above. slave: the
+ * One transfer per class of the cross-server check, on top of the three plain deposits above. slave: the
  * index in SLAVES whose journal holds the rows (mining-1 is copied at minute 157, nether-hub 9 hours before the master).
  * The flagged ones (lost, twice, created, parked) are on players and at times that join no other finding into an incident.
  */
@@ -744,7 +744,7 @@ export const TRANSFER_CASES: { id: string; class: string; slave: number | null; 
 ];
 
 /**
- * NoteFlow per save (DESIGN_SPEC 8.7): minute after T0, source, player, item, a signed note count. One row of each source
+ * NoteFlow per save: minute after T0, source, player, item, a signed note count. One row of each source
  * the mods write, $100 notes among them, plus a row of an item that is no money and one of a source no mod writes.
  */
 type Flow = [minute: number, source: string, player: Name, item: number, amount: number, villager?: number];

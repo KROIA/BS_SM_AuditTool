@@ -255,7 +255,7 @@ const hours = (ms: number) => `${ms < 0 ? '-' : '+'}${String(Math.floor(Math.abs
 
 /**
  * The bank's audit log into the audit table, after the flags and the ledger: its local times are placed by matching
- * FLAG entries to flag rows and ADMIN entries to ledger rows (DATA_SOURCES.md, "Files").
+ * FLAG entries to flag rows and ADMIN entries to ledger rows.
  */
 function auditLog(db: DatabaseSync, dataDir: string, warnings: string[]): SaveSource {
   const log = readAuditLog(dataDir);

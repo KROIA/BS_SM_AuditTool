@@ -2,7 +2,7 @@
 export interface Screen {
   id: string;
   label: string;
-  /** The question the screen answers (DESIGN_SPEC section 6). */
+  /** The question the screen answers. */
   question: string;
   icon: string;
 }

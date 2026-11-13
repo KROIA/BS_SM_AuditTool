@@ -1,4 +1,4 @@
-// The banknote count (DESIGN_SPEC 8.7) on the invented network and on the old 2.1.2 save: which log rows count, NoteFlow
+// The banknote count on the invented network and on the old 2.1.2 save: which log rows count, NoteFlow
 // valued by denomination, the totals per account and player, the range and server filter, and what a save cannot show.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

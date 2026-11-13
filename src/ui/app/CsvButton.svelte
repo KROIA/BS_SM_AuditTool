@@ -1,5 +1,5 @@
 <script lang="ts">
-  // "Export CSV" beside a table's heading (DESIGN_SPEC 9): the whole data set behind the table, not only the rows on screen.
+  // "Export CSV" beside a table's heading: the whole data set behind the table, not only the rows on screen.
   // make() gives the columns and rows; main.ts asks where to save and writes the file, never into a save.
   import { csv, csvName, type Table } from '../../shared/csv.ts';
   import { saveText } from './state.svelte.ts';

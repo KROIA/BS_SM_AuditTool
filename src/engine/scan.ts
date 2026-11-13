@@ -1,4 +1,4 @@
-// The region scan (DESIGN_SPEC 6.7): on request only, in the background. A pool of worker threads reads the region files of
+// The region scan: on request only, in the background. A pool of worker threads reads the region files of
 // the loaded saves, one file per task (save/region.ts), and the finds go into each save's cache. Stop keeps the files done;
 // starting again continues with the rest, and a file whose size or time changed since is read again. A save that is removed
 // or read in again drops its scan with its cache file.

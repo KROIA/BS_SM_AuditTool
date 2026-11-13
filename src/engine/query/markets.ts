@@ -52,7 +52,7 @@ function minuteWhere(item: number, s: Scope) {
   return { where: `market = :m ${s.from !== null ? 'AND time >= :from' : ''} ${s.to !== null ? 'AND time <= :to' : ''}`, params };
 }
 
-/** DESIGN_SPEC 8.1 median: the middle value, or the two middle values averaged and cut off. */
+/** The median: the middle value, or the two middle values averaged and cut off. */
 const middle = (a: bigint, b: bigint | undefined) => (b === undefined ? a : (a + b) / 2n);
 
 export function markets(scope: Scope): MarketRow[] {
@@ -72,7 +72,7 @@ export function markets(scope: Scope): MarketRow[] {
   return [...rows.values()].sort((a, b) => (b.swing ?? -1) - (a.swing ?? -1) || b.orders - a.orders || a.item - b.item);
 }
 
-/** The usual price (DESIGN_SPEC 8.1): the median open of the 1-minute candles in the scope, else the median price of the orders given. */
+/** The usual price: the median open of the 1-minute candles in the scope, else the median price of the orders given. */
 function usual(db: DatabaseSync, item: number, scope: Scope, list: OrderRow[]): bigint | null {
   const m = minuteWhere(item, scope);
   const n = Number(all(db, `SELECT count(*) AS n FROM candle WHERE ${m.where}`, m.params)[0]!.n);
@@ -83,7 +83,7 @@ function usual(db: DatabaseSync, item: number, scope: Scope, list: OrderRow[]): 
   return median(list.map((o) => o.price));
 }
 
-/** The median of whole numbers (DESIGN_SPEC 8.1); null for none. */
+/** The median of whole numbers; null for none. */
 export function median(values: bigint[]): bigint | null {
   if (values.length === 0) return null;
   const p = BigInt64Array.from(values).sort();
@@ -103,7 +103,7 @@ export function usualPrice(item: number): bigint | null {
 const DAY = 1440, FEW = 60;
 const atCache = new WeakMap<DatabaseSync, Map<string, bigint | null>>();
 /**
- * The usual price of a market at a moment (DESIGN_SPEC 8.1, AT-45): the median open of the last 1'440 one-minute candles
+ * The usual price of a market at a moment (AT-45): the median open of the last 1'440 one-minute candles
  * before the moment's hour, so it follows the market. Fewer than 60 candles before it: usualPrice (all data). Cached per
  * market and hour (null: too few candles); each hour is one read of at most 1'440 rows from the candle index (market, time, open).
  */

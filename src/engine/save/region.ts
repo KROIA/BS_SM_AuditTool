@@ -1,6 +1,6 @@
-// Reads Minecraft's Anvil region files (r.<x>.<z>.mca, DESIGN_SPEC 6.7) and finds money and valuables in the chunks:
+// Reads Minecraft's Anvil region files (r.<x>.<z>.mca) and finds money and valuables in the chunks:
 // block entities (chests, barrels, the BankSystem blocks) in region/, entities (dropped items, minecarts, villagers' offers)
-// in entities/. The files are untrusted (DESIGN_SPEC 4.4): every offset, length and size is checked, and a chunk that
+// in entities/. The files are untrusted: every offset, length and size is checked, and a chunk that
 // breaks one is counted and skipped, never fatal. Runs in the scan's worker threads (region-worker.ts).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -29,7 +29,7 @@ export interface ChunkCounts { chunks: number; damaged: number; lz4: number; too
  */
 export interface Find extends Found { x: number; y: number; z: number; place: string; source: 'block' | 'entity' | 'offer'; owner: string | null; account: number | null }
 
-const DISPLAY = 'banksystem:banksystem_display_block_entity'; // its stacks are icons, not items (DATA_SOURCES "Block entities")
+const DISPLAY = 'banksystem:banksystem_display_block_entity'; // its stacks are icons, not items
 const STOCKPILE = 'banksystem:money_stockpile_block_entity';
 const TERMINAL = 'banksystem:bank_terminal_block_entity';
 const UPLOAD = 'banksystem:bank_upload_block_entity';
@@ -116,7 +116,7 @@ export function findInChunk(nbt: NbtCompound, keep: (f: Found) => boolean, money
     const put = (where: Omit<Find, keyof Found>) => (f: Found) => { if (keep(f)) add({ ...where, ...f }); };
     const budget = { left: STACK_LIMITS.stacks };
     if (place === STOCKPILE) {
-      // Entries { id: short, amount: int }: notes by the master's item number (DATA_SOURCES "Block entities").
+      // Entries { id: short, amount: int }: notes by the master's item number.
       for (const e of list(be, 'items').filter(isCompound)) {
         const id = num(e, 'id'), amount = num(e, 'amount');
         if (id === undefined || amount === undefined || !Number.isInteger(amount) || amount <= 0) continue;

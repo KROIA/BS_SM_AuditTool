@@ -1,6 +1,6 @@
-// The check of value moved between servers (DESIGN_SPEC 8.6). Each slave's TransferJournal rows and the master's ledger
+// The check of value moved between servers. Each slave's TransferJournal rows and the master's ledger
 // rows and TRANSFER_PARKED flags with the same transfer id are paired by that id alone, never by time, and every id is put
-// into one class. What each step means is in DESIGN_SPEC 8.6, with the BankSystem lines it was read from.
+// into one class.
 import type { DatabaseSync } from 'node:sqlite';
 import type { SaveSummary, Scope, TransferClass, TransferItem, TransferRow, TransfersResult } from '../../shared/api.ts';
 import { loadedSaves, mainData, mainSave, saveData } from '../workspace.ts';
@@ -13,7 +13,7 @@ const MIN = 60_000;
 export const IN_FLIGHT = 10 * MIN;
 const FINAL = new Set(['CONFIRMED', 'DELIVERED', 'RETURNED', 'TIMED_OUT', 'FAILED']);
 const STEPS = new Set(['REQUESTED', ...FINAL]);
-/** Ledger kinds a master writes under a slave's transfer id, or under its own for a DROP (DESIGN_SPEC 8.6). */
+/** Ledger kinds a master writes under a slave's transfer id, or under its own for a DROP. */
 const SLAVE_KINDS = new Set(['DEPOSIT', 'WITHDRAW', 'WITHDRAW_REFUND', 'CONVERTER_DEPOSIT', 'CONVERTER_WITHDRAW', 'UPLOAD_DEPOSIT',
   'DOWNLOAD_WITHDRAW', 'CRAFT_CONSUME', 'CRAFT_OUTPUT', 'SHARE_TRADE', 'ACCOUNT_DELETE_PAYOUT', 'ACCOUNT_DELETE_LOSS']);
 const UUID_GLOB = '[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-*-*-*-*';
@@ -55,7 +55,7 @@ export interface Pair {
   money: ReadonlySet<number>;
 }
 
-/** DESIGN_SPEC 8.6: what was sent and received per item, and the class. Pure, so the tests can give it any pair. */
+/** What was sent and received per item, and the class. Pure, so the tests can give it any pair. */
 export function classify(p: Pair): { items: TransferItem[]; class: TransferClass; why: string } {
   const req = p.steps.find((s) => s.step === 'REQUESTED');
   const dir = req?.direction ?? p.steps.find((s) => s.direction)?.direction ?? null;
@@ -109,7 +109,7 @@ export function classify(p: Pair): { items: TransferItem[]; class: TransferClass
   const timedOut = has('TIMED_OUT');
   const settled = p.copy === null || start <= p.copy - IN_FLIGHT; // no longer in flight when the copies were taken
   const only = p.steps.length === 1 && !p.rows.length;
-  // Known gaps: the mods move value here without the rows that would pair it (DESIGN_SPEC 8.6). The un-debited craft
+  // Known gaps: the mods move value here without the rows that would pair it. The un-debited craft
   // balances in the journal's terms (nothing debited, nothing delivered), so it is checked before "ok".
   if (only && dir === 'FROM_MASTER' && req?.ledgerType === 17 && settled) {
     return result(sent, received, 'known-gap', 'Crafting handed out the result before the master refused to take the ingredients; they stay locked for an admin.');
