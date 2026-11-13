@@ -9,6 +9,8 @@ import path from 'node:path';
 import { buildFixtures } from '../fixtures/build.ts';
 import { folderEntries, writeZip } from '../fixtures/zip.ts';
 
+/** AUDIT_TOOL_EXE: an installed program to check instead of the portable zip (the install check of AT-50). */
+const installed = process.env.AUDIT_TOOL_EXE;
 const release = path.resolve('release');
 const portable = fs.readdirSync(release).find((f) => /-win\.zip$/.test(f));
 const fx = buildFixtures(path.resolve('test-results/fixtures-release'));
@@ -28,8 +30,9 @@ async function launch(name: string, open: string[]) {
 const figure = (label: string) => page.locator('.figure', { hasText: label }).locator('.fvalue');
 
 test.beforeAll(() => {
-  expect(portable, 'run npm run dist first').toBeTruthy();
   temp = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-release-'));
+  if (installed) return void (app = path.dirname(installed));
+  expect(portable, 'run npm run dist first').toBeTruthy();
   app = path.join(temp, 'app');
   fs.mkdirSync(app);
   const r = spawnSync('C:\\Windows\\System32\\tar.exe', ['-xf', path.join(release, portable!), '-C', app]);
@@ -49,7 +52,7 @@ test('the packaged program opens the network as folders: Overview figures, findi
   const where = await program.evaluate(({ app }) => ({ name: app.getName(), packaged: app.isPackaged, appData: app.getPath('appData'), exe: app.getPath('exe') }));
   console.log(`packaged ${where.packaged}, name "${where.name}", default data folder ${path.join(where.appData, where.name)}`);
   expect(where).toMatchObject({ name: 'audit-tool', packaged: true });
-  expect(where.exe.startsWith(temp)).toBe(true);
+  expect(where.exe.toLowerCase().startsWith((installed ? app : temp).toLowerCase())).toBe(true);
   await page.screenshot({ path: 'test-results/release-overview-dark.png' });
 
   await page.evaluate("location.hash = '#/findings'");
