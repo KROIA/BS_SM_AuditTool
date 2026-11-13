@@ -97,8 +97,8 @@ test.describe('with the invented network loaded', () => {
   });
 
   test('a screen that is not built yet says which milestone brings it', async () => {
-    await page.getByRole('link', { name: 'Money flow' }).click();
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Money flow');
+    await page.getByRole('link', { name: 'Case and report' }).click(); // Money flow is built since AT-40
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Case and report');
     await expect(page.locator('main')).toContainText('milestone M4');
     await page.screenshot({ path: 'test-results/soon-dark.png' });
     await page.getByRole('link', { name: 'Saves and servers' }).first().click();

@@ -568,6 +568,12 @@ export interface QueryApi {
    */
   banknotes(scope: Scope): BanknotesResult;
   /**
+   * Where the money of one incident went (DESIGN_SPEC 6.6, 8.10), for all its players (player null) or one. The time range
+   * does not apply; the server filter applies to orders and trade rows (trading elsewhere becomes "other-server").
+   * settings: the incidents are made from the findings, and the threshold of gaps on 2.1.2 is the balance rule's.
+   */
+  moneyFlow(scope: Scope, incidentId: string, player: string | null, settings: RuleSettings): MoneyFlow;
+  /**
    * What the players carry in their inventories and ender chests (DESIGN_SPEC 8.7), from the player files of the main
    * save and its loaded slaves: the state when each copy was taken, so no scope applies.
    */
@@ -763,6 +769,73 @@ export interface BanknotesResult {
   missing: string[];
 }
 
+/**
+ * One part of the money flow (DESIGN_SPEC 6.6, 8.10). side in: where money came from; out: where it is now. amount is raw
+ * and never negative. A part belongs to one player; the screen adds them up per kind or market.
+ * - start (in): the balance at the incident's start (the newest snapshot at or before it, else the first one after it).
+ * - market (in): the net trading result on one market, when it is a gain. Proven.
+ * - items (out): money kept as goods on a market that lost money: what the goods still held cost at their average buying
+ *   price, at most the loss. Proven; items.worth is what they are worth at the usual price, an estimate.
+ * - lost (out): the rest of a losing market's money: lost by buying high and selling low. Proven.
+ * - other-server (in or out): trading on servers outside the server filter, netted. Proven.
+ * - received, sent: transfers from or to the account `other`. Proven.
+ * - notes: notes handed out minus paid back in (DESIGN_SPEC 8.7); out when more went out. An estimate on 2.1.2.
+ * - appeared (in, 2.1.2): money that appeared without a log row, at most the notes then outside: probably notes paid in
+ *   through the ATM converter. added (in, 2.1.2): more than that: an admin action or another cause. Estimates.
+ * - admin: ADMIN_* rows. Proven. removed (out, 2.1.2): money that went without a log row (a negative gap above the
+ *   threshold); 2.1.2 logged no admin action. An estimate.
+ * - other: every other row (payouts, dividends, raw changes from an unknown source).
+ * - unexplained: what the check per account leaves open, below the threshold too; rows whose sign is unknown are in it.
+ * - now (out): the balance in the bank's files.
+ */
+export interface FlowPart {
+  kind: 'start' | 'market' | 'items' | 'lost' | 'other-server' | 'received' | 'sent' | 'notes' | 'appeared' | 'added' | 'admin' | 'removed' | 'other' | 'unexplained' | 'now';
+  side: 'in' | 'out';
+  amount: bigint;
+  basis: 'proven' | 'estimate';
+  /** Player UUID. */
+  player: string;
+  /** market, items, lost: the market's item. */
+  market: number | null;
+  /** received, sent: the other account. */
+  other: number | null;
+  /** In the incident's markets. */
+  incident: boolean;
+  /** items: volume kept (raw, x 100) and its worth at the usual price, an estimate (null: no usual price). */
+  items: { qty: bigint; worth: bigint | null } | null;
+  /** notes: handed out and paid back in, before netting. */
+  notes: { out: bigint; back: bigint } | null;
+  accounts: number[];
+  /** orders: order ids, as orders({ ids }) takes them. findings: the incident's findings about this part. */
+  records: { ledger: number[]; orders: number[]; findings: string[] };
+}
+
+/**
+ * Where the money of an incident's players went (DESIGN_SPEC 6.6, 8.10): per player and personal account, the balance at
+ * the incident's start plus every part in equals every part out, the balance now included. Closes by construction:
+ * "unexplained" takes the rest. From the incident's start to the copy; the time range does not apply.
+ */
+export interface MoneyFlow {
+  /** Why nothing can be shown; null when it ran. */
+  reason: string | null;
+  incident: Incident | null;
+  /** The incident's players with a personal account, for the switch. */
+  players: { uuid: string; name: string }[];
+  /** The player asked for, or null: all of them. */
+  player: string | null;
+  accounts: { account: number; player: string; from: number | null; start: bigint; now: bigint }[];
+  parts: FlowPart[];
+  /** Where the notes still outside are (estimates), for the chosen players as one: notes out minus notes paid in minus
+   *  "appeared", then in their own files, found elsewhere (any file but the incident players', owner unknown), not found.
+   *  With one player chosen, elsewhere and notFound are null: the notes found elsewhere are one pool for all players. */
+  notes: { outside: bigint; inFiles: bigint; elsewhere: bigint | null; notFound: bigint | null };
+  /** The copy: when the main save was last played. */
+  to: number | null;
+  /** The main save is 2.1.2: gaps stand in for what it did not log. */
+  legacy: boolean;
+  missing: string[];
+}
+
 export interface Overview {
   /** Money on all bank accounts over time (DESIGN_SPEC 8.1): per account the last snapshot at or before each point, summed. */
   money: Point[];
@@ -806,7 +879,7 @@ export interface AdminEvent {
   ledgerId: number | null;
 }
 
-export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers' | 'banknotes' | 'worldItems' | 'startScan' | 'stopScan' | 'scanStatus'> {
+export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers' | 'banknotes' | 'moneyFlow' | 'worldItems' | 'startScan' | 'stopScan' | 'scanStatus'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
   addSave(path: string): Workspace;

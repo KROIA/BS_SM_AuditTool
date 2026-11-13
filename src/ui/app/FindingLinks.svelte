@@ -33,4 +33,5 @@
   .links { display: flex; flex-direction: column; gap: 2px; margin: 12px -10px 0; }
   .link-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px; border-radius: 10px; }
   .dot { flex: none; width: 8px; height: 8px; margin-top: 7px; border-radius: 50%; }
+  .link { padding: 0; border: 0; background: none; font-size: 13px; font-weight: 500; color: var(--accent); }
 </style>

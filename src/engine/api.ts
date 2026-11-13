@@ -6,6 +6,7 @@ import { adminEvents } from './query/admin.ts';
 import { banknotes } from './query/banknotes.ts';
 import { check } from './query/check.ts';
 import { findings } from './query/findings.ts';
+import { moneyFlow } from './query/flow.ts';
 import { incidents } from './query/incidents.ts';
 import { candles, market, markets, traders } from './query/markets.ts';
 import { keyEvents, overview } from './query/overview.ts';
@@ -46,6 +47,7 @@ export const api: EngineApi = {
   keyEvents,
   transfers,
   banknotes,
+  moneyFlow,
   worldItems,
   startScan,
   stopScan,

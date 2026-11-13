@@ -183,7 +183,7 @@ function bump(m: number, start: number, peak: number, end: number, top: number):
 /** limit: SM-317 limit price (0 = market order); wanted: the volume asked for; status: 0 filled, 1 cancelled by the player, 2 by the server. */
 interface Order { id: number; item: number; player: Name; type: number; amount: bigint; price: bigint; time: number; finish: number; limit: bigint; wanted: bigint; status: number }
 
-function orders(price: Map<number, number[]>): Order[] {
+function orders(price: Map<number, number[]>, flow: boolean): Order[] {
   const list: Order[] = [];
   const add = (player: Name, item: number, minute: number, offsetMs: number, amount: bigint, type = 0) =>
     list.push({ id: 0, item, player, type, amount, price: BigInt(price.get(item)![minute]!), time: T0 + minute * MIN + offsetMs,
@@ -206,8 +206,28 @@ function orders(price: Map<number, number[]>): Order[] {
   // SM-317: Ombrelune wanted twice the gold at a higher limit and cancelled the rest; the server cancelled half of Mikko's last sale.
   Object.assign(list.find((o) => o.player === 'Ombrelune')!, { wanted: ORDER_END.goldWanted, limit: ORDER_END.goldLimit, status: 1 });
   Object.assign(list.findLast((o) => o.player === 'Mikko_82')!, { wanted: ORDER_END.wheatWanted, status: 2 });
+  if (!flow) return list;
+  // The money flow (AT-40): Tavrik buys coal and sells half of it back for less, so he keeps goods and loses money there.
+  // Numbered last so no other order's id moves; before the bank's last save (minute 130) so no row is newer than it.
+  // Ombrelune rides along on the pump: the far-price finding at its top names her too, so the incident has two players.
+  add('Ombrelune', ITEM.diamond, 21, 900, FLOW.ride);
+  add('Ombrelune', ITEM.diamond, 40, 900, -FLOW.ride);
+  add('Tavrik', ITEM.coal, 128, 300, FLOW.coalBought);
+  add('Tavrik', ITEM.coal, 129, 300, -FLOW.coalSold);
+  list.at(-1)!.price = (list.at(-1)!.price * 9n) / 10n;
+  list.slice(-4).forEach((o, i) => (o.id = list.length - 3 + i));
   return list;
 }
+
+/**
+ * Tavrik's money besides the pump, so his incident's money flow has every part (AT-40). Raw amounts. Coal bought and half
+ * sold back below its price; money from a deleted account (19); an admin adding money; a company payout; money that appears
+ * without a row, below the threshold; on 2.1.2 notes paid back through the converter (no row there).
+ */
+export const FLOW = {
+  ride: 1_000n, coalBought: 2_000_000n, coalSold: 1_000_000n, from: 19, received: 25_000_000n, adminAdd: 500_000_000n, payout: 2_000_000n, unexplained: 50_000n,
+  converter: 30_000_000n,
+} as const;
 
 /** SM-317 values of the two orders that did not simply fill. */
 export const ORDER_END = { goldWanted: 1600n, goldLimit: 1000n, wheatWanted: -12800n } as const;
@@ -254,7 +274,7 @@ export const PLACES = {
 /** A master ledger row with a transfer id. amount: what it did to the balance (signed); a DEPOSIT unless kind says else. */
 type RefRow = { id: string; account: number; amount: bigint; ts: number; player: Name; kind?: string; code?: number; item?: number; server?: string };
 
-function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers: RefRow[]) {
+function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers: RefRow[], flow: boolean) {
   const db = database(path.join(dataDir, 'BankSystem/Database/banksystem.db'),
     legacy ? [SQL.transactionLogLegacy, SQL.balanceHistory, SQL.payoutHistory] : [SQL.transactionLog, SQL.balanceHistory, SQL.suspicionFlag, SQL.payoutHistory]);
   const balance = new Map<string, bigint>(); // "account:item" -> raw
@@ -329,6 +349,18 @@ function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers
     row({ account_number: to, ...actor('Tavrik'), kind: 'TRANSFER', item_id: ITEM.money, amount, other_account: from, ts },
       { type_code: 3, source_kind: 'PLAYER', balance_after: b });
   } });
+  // The money flow (AT-40), Tavrik besides the pump (FLOW): money from a deleted account (its side of the log is gone), an
+  // admin adding money (2.1.2: no row), a company payout, a gain without a row below the threshold, on 2.1.2 the converter.
+  const tavrik = PLAYERS.Tavrik.account;
+  if (flow && !legacy) events.push({ ts: T0 + 56 * MIN, run: () => {
+    const ts = T0 + 56 * MIN;
+    row({ account_number: tavrik, kind: 'TRANSFER', item_id: ITEM.money, amount: FLOW.received, other_account: FLOW.from, ts },
+      { type_code: 3, source_kind: 'PLAYER', balance_after: change(tavrik, ITEM.money, FLOW.received, ts) });
+  } });
+  if (flow) simple('Tavrik', 'AdmiralNoor', 126, 'ADMIN_ADD', 8, FLOW.adminAdd, 'ADMIN', { note: 'event prize' });
+  if (flow && !legacy) simple('Tavrik', 'Tavrik', 127, 'PAYOUT', 20, FLOW.payout, 'SYSTEM', { other_account: COMPANY.account });
+  if (flow) events.push({ ts: T0 + 127 * MIN + 700, run: () => change(tavrik, ITEM.money, FLOW.unexplained, T0 + 127 * MIN + 700) });
+  if (flow && legacy) events.push({ ts: T0 + 85 * MIN + 500, run: () => change(tavrik, ITEM.money, FLOW.converter, T0 + 85 * MIN + 500) });
   // Rows of transfers with a slave carry the transfer id as their reference (current mods only).
   if (!legacy) for (const t of transfers) events.push({ ts: t.ts, run: () => {
     const after = change(t.account, t.item ?? ITEM.money, t.amount, t.ts);
@@ -796,9 +828,10 @@ export interface Fixtures {
   lastPlayed: Record<string, number>;
 }
 
-export function buildFixtures(root: string): Fixtures {
+/** flow: Tavrik's money besides the pump (FLOW), for the money flow's tests only, so no other test's figures move. */
+export function buildFixtures(root: string, flow = false): Fixtures {
   fs.rmSync(root, { recursive: true, force: true });
-  const price = prices(), list = orders(price);
+  const price = prices(), list = orders(price, flow);
   const rows: Fixtures['rows'] = {};
 
   // Deposits made on a slave. Each has journal rows on the slave and a ledger row on the master with the same id.
@@ -812,7 +845,7 @@ export function buildFixtures(root: string): Fixtures {
   const master = path.join(root, 'survival-main'), data = path.join(master, 'data');
   // BS-256: a row made for a slave's request names the slave. The one only on the master came from nether-hub.
   const masterBank = bankDatabase(data, false, list, [...transfers.map((t) => ({ ...t, server: SLAVES[t.slave]!.name })),
-    ...TRANSFER_CASES.flatMap((c) => c.master.map((r) => ({ ...r, server: SLAVES[c.slave ?? 1]!.name })))]);
+    ...TRANSFER_CASES.flatMap((c) => c.master.map((r) => ({ ...r, server: SLAVES[c.slave ?? 1]!.name })))], flow);
   rows.master = { ...marketDatabase(data, false, price, list), ...masterBank.counts };
   nbtFiles(data, '2.2.0', masterBank.balance, price);
   identity(data, { server_uid: MASTER_UID, role: 'MASTER', slave_id: '', master_uid: '', first_start_ms: T0 - 100 * 24 * 60 * MIN,
@@ -856,13 +889,14 @@ export function buildFixtures(root: string): Fixtures {
 
   // The old save: thin bank log, no trade rows, no flags, no diagnostics, no identity file.
   const legacy = path.join(root, 'old-world'), legacyData = path.join(legacy, 'data');
-  const legacyBank = bankDatabase(legacyData, true, list, []);
+  const legacyBank = bankDatabase(legacyData, true, list, [], flow);
   rows.legacy = { ...marketDatabase(legacyData, true, price, list), ...legacyBank.counts };
   nbtFiles(legacyData, '2.1.2', legacyBank.balance, price);
 
-  // When each copy was taken: the slaves shortly before the master, except nether-hub, copied 9 hours earlier.
+  // When each copy was taken: the slaves shortly before the master, except nether-hub, copied 9 hours earlier. The old
+  // save an hour after the master, so its copy, too, comes after everything it holds (AT-40: the flow runs up to it).
   const end = T0 + MINUTES * MIN + 2 * MIN;
-  const lastPlayed = { 'survival-main': end, 'mining-1': end - 5 * MIN, 'nether-hub': end - 9 * 60 * MIN, 'old-world': T0 - 20 * 24 * 60 * MIN };
+  const lastPlayed = { 'survival-main': end, 'mining-1': end - 5 * MIN, 'nether-hub': end - 9 * 60 * MIN, 'old-world': end + 60 * MIN };
   for (const dir of [master, ...slaves, legacy]) levelDat(dir, lastPlayed[path.basename(dir) as keyof typeof lastPlayed]);
   playerFiles(master, slaves, legacy);
   regionFiles(master);

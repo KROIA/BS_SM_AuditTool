@@ -3,6 +3,7 @@
   import { count } from '../../shared/fmt.ts';
   import Accounts from '../screens/Accounts.svelte';
   import Findings from '../screens/Findings.svelte';
+  import Flow from '../screens/Flow.svelte';
   import Markets from '../screens/Markets.svelte';
   import Overview from '../screens/Overview.svelte';
   import Players from '../screens/Players.svelte';
@@ -67,6 +68,8 @@
           <Markets selected={route[1] ? Number(route[1]) : null} />
         {:else if screen.id === 'findings'}
           <Findings selected={route[1] ? decodeURIComponent(route[1]) : null} />
+        {:else if screen.id === 'flow'}
+          <Flow selected={route[1] ? decodeURIComponent(route[1]) : null} />
         {:else}
           <Soon {screen} />
         {/if}
