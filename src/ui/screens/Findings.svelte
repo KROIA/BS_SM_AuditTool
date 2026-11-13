@@ -407,9 +407,11 @@
     <p class="note"><strong>Note:</strong> {m.note}</p>
   {/if}
   {#if form}
-    <form class="form" onsubmit={(e) => save(e, id)}>
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions: Escape closes the form from any control inside it -->
+    <form class="form" onsubmit={(e) => save(e, id)} onkeydown={(e) => e.key === 'Escape' && (form = null)}>
       <label>{form === 'dismiss' ? 'Why is it not a problem? (optional)' : 'Note'}
-        <textarea bind:value={draft} rows="3" maxlength="10000"></textarea></label>
+        <!-- svelte-ignore a11y_autofocus: the form replaces the button that opened it, so the focus would be lost -->
+        <textarea bind:value={draft} rows="3" maxlength="10000" autofocus></textarea></label>
       <div class="buttons">
         <button type="submit" class="btn primary">{form === 'dismiss' ? 'Mark as not a problem' : 'Save the note'}</button>
         <button type="button" class="btn" onclick={() => (form = null)}>Cancel</button>

@@ -162,6 +162,22 @@ export function cachedSummary(cacheFile: string, picked: string): SaveSummary | 
   }
 }
 
+/**
+ * A half-copied database is shorter than its header says, and SQLite then refuses the whole file. The tool's own copy is
+ * filled up with zero pages to the length in the header: the pages that are there read again, the rest count as lost.
+ */
+function padCut(copy: string) {
+  const head = Buffer.alloc(100), fd = fs.openSync(copy, 'r');
+  try {
+    if (fs.readSync(fd, head, 0, 100, 0) < 100 || head.toString('latin1', 0, 16) !== 'SQLite format 3\0') return;
+  } finally {
+    fs.closeSync(fd);
+  }
+  const size = (head.readUInt16BE(16) === 1 ? 65536 : head.readUInt16BE(16)) * head.readUInt32BE(28), has = fs.statSync(copy).size;
+  // ponytail: bounded to four times what is there, so a hostile header cannot fill the disk; a copy cut shorter stays refused
+  if (size > has && size <= Math.max(4 * has, 2 ** 20)) fs.truncateSync(copy, size); // grows the copy, zero-filled
+}
+
 interface Copied { rows: number; lostIds: number; newestLost: boolean; has: Set<string> }
 
 /** Copies one table in id ranges. Returns the rows read, the ids that could not be, and the columns the source has. */
@@ -319,6 +335,7 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
       report('Copying the databases', 0, 1);
       const copy = path.join(tmp, path.basename(file));
       for (const ext of ['', '-wal', '-journal']) if (isFile(file + ext)) fs.copyFileSync(file + ext, copy + ext);
+      padCut(copy);
       try {
         db.exec(`ATTACH ${sqlText(copy)} AS src`);
       } catch {

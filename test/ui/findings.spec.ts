@@ -63,6 +63,12 @@ test('a pin, a dismissal with its reason and a note survive a restart', async ()
   await item(PROFIT).click();
   await detail().getByRole('button', { name: 'Pin to the case' }).click();
   await expect(page.getByRole('link', { name: 'Case: 1 pinned' })).toBeVisible();
+  // From the keyboard: the form takes the focus, and Escape closes it without saving.
+  await detail().getByRole('button', { name: 'Add a note' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(detail().getByLabel('Note')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(detail().locator('form')).toHaveCount(0);
   await detail().getByRole('button', { name: 'Add a note' }).click();
   await detail().getByLabel('Note').fill('Sold the whole stock at once.');
   await detail().getByRole('button', { name: 'Save the note' }).click();

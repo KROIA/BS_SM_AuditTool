@@ -106,7 +106,11 @@ export function coverage(s: SaveSummary): { coverage: ScanCoverage; done: Set<st
 interface Job { queue: Task[]; workers: Set<Worker>; busy: Map<Worker, Task>; caches: Set<string>; names: [number, string][]; valuables: string[] }
 let job: Job | null = null;
 let stamp = 0;
-/** Changes whenever the scan's results do: the findings kept per settings are run again. */
+/**
+ * Changes when a scan ends, is stopped or is dropped: the findings kept per settings are run again. Not per file, because
+ * then every screen asking for findings during the scan would run the banknote rule again (AT-52: about 10 s); the screens
+ * ask again when the scan ends anyway.
+ */
 export const scanStamp = () => stamp;
 
 export function scanStatus(): ScanStatus {
@@ -159,7 +163,6 @@ function spawn(j: Job) {
     j.busy.delete(w);
     if (!j.caches.has(t.cache)) return; // the save was removed or read in again meanwhile
     write(t, a);
-    stamp++;
     progress(t.save.name);
   };
   w.on('message', (a: ScanAnswer) => {

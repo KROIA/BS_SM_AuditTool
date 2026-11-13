@@ -242,6 +242,15 @@ test('a damaged newest end is reported, even though nothing says how many rows i
   assert.equal(tables(save, 'market').find((t) => t.name === 'OrderHistory')!.newestLost, false);
 });
 
+test('a market database cut in half (a copy that stopped early) gives up the rows it still holds', () => {
+  const save = marketCopy('cut', (file) => fs.truncateSync(file, Math.floor(fs.statSync(file).size / 2)));
+  assert.equal(status(save)[1], 'market:damaged');
+  const candles = tables(save, 'market').find((t) => t.name === 'MarketPrice')!;
+  assert.ok(candles.rows > 0 && candles.lostIds > 0, `kept ${candles.rows}, lost ${candles.lostIds}`);
+  assert.equal(candles.rows + candles.lostIds, fx.rows.master!.MarketPrice!);
+  assert.match(save.warnings.join(' '), /could not be read/);
+});
+
 test('a file that is not a database is damaged, and a master without its market database says it is missing', () => {
   const dir = path.join(fx.root, 'broken');
   fs.cpSync(fx.master, dir, { recursive: true });
