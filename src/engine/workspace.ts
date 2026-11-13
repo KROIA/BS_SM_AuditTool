@@ -71,6 +71,8 @@ function readChoices(v: unknown): CaseChoices {
     cutoff: { kind: CUTS.includes(cut.kind as Cutoff['kind']) ? cut.kind as Cutoff['kind'] : 'day', at: typeof cut.at === 'number' && Number.isFinite(cut.at) ? cut.at : null },
     answers,
     order: Array.isArray(c.order) ? c.order.filter((id): id is string => typeof id === 'string' && id.length <= 500).slice(0, MARKS) : [],
+    style: c.style === 'tech' ? 'tech' : 'admin',
+    lang: c.lang === 'de' ? 'de' : 'en',
   };
 }
 const kept = (m: Mark) => m.pinned || m.dismissed || m.note.trim() !== '';

@@ -122,3 +122,48 @@ test('the 2.1.2 removal asks the admins; the answer, the cutoff and the order su
   await expect(cut(/^A time you pick/)).toContainText('4 Nov 2026, 11:30:00');
   await expect(section('Evidence').locator('.pin').first()).toContainText('Bought fast');
 });
+
+test('the report: style and language, exported as HTML and PDF through the save dialog, never into a save', async () => {
+  const out = path.resolve('test-results/reports');
+  fs.rmSync(out, { recursive: true, force: true });
+  fs.mkdirSync(out, { recursive: true });
+  // The save dialog answers with this path, in the main process.
+  const answer = (file: string) => program.evaluate(({ dialog }, f) => { dialog.showSaveDialog = (async () => ({ canceled: false, filePath: f })) as never; }, file);
+  const status = page.getByRole('status');
+  await go(`#/case/${encodeURIComponent(PUMP)}`);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Case: /);
+  await page.getByRole('group', { name: 'Report style' }).getByRole('button', { name: 'Technical' }).click();
+  await page.getByRole('group', { name: 'Report language' }).getByRole('button', { name: 'Deutsch' }).click();
+  await expect(page.getByText(/^Technical: the same/)).toBeVisible();
+
+  await answer(path.join(out, 'bericht.html'));
+  await page.getByRole('button', { name: 'Export the report' }).click();
+  await expect(status).toHaveText(`Saved to ${path.join(out, 'bericht.html')}`);
+  const html = fs.readFileSync(path.join(out, 'bericht.html'), 'utf8');
+  expect(html).toContain('<html lang="de">');
+  expect(html).toContain('Alle Befunde des Vorfalls');
+  expect(html).not.toMatch(/<script|http|src=/i);
+
+  await page.getByRole('group', { name: 'Report style' }).getByRole('button', { name: 'For admins' }).click();
+  await page.getByRole('group', { name: 'Report language' }).getByRole('button', { name: 'English' }).click();
+  await answer(path.join(out, 'report.pdf'));
+  await page.getByRole('button', { name: 'Export the report' }).click();
+  await expect(status).toHaveText(`Saved to ${path.join(out, 'report.pdf')}`);
+  expect(fs.readFileSync(path.join(out, 'report.pdf')).subarray(0, 5).toString()).toBe('%PDF-');
+
+  // Inside a loaded save folder: refused, nothing written.
+  await answer(path.join(fx.legacy, 'report.html'));
+  await page.getByRole('button', { name: 'Export the report' }).click();
+  await expect(status).toContainText('that folder belongs to a loaded save');
+  expect(fs.existsSync(path.join(fx.legacy, 'report.html'))).toBe(false);
+
+  for (const [theme, other] of [['dark', 'light'], ['light', 'dark']] as const) {
+    for (const width of [1440, 900]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.getByRole('heading', { level: 1 }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: `test-results/case-report-${theme}${width === 900 ? '-900' : ''}.png`, clip: { x: 0, y: 0, width, height: width === 900 ? 440 : 320 } });
+    }
+    await page.getByRole('button', { name: `Switch to the ${other} theme` }).click();
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+});

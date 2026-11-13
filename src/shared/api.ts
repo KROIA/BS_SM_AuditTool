@@ -492,8 +492,10 @@ export interface Mark {
 export interface Cutoff { kind: 'day' | 'first' | 'custom'; at: number | null }
 /** Did an admin remove money that left a 2.1.2 account without a log row? */
 export type Answer = 'yes' | 'unsure' | 'no';
-/** What the Case screen remembers. answers: by removal key (TakeBackRow.removed); order: pinned finding ids, the evidence order. */
-export interface CaseChoices { cutoff: Cutoff; answers: Record<string, Answer>; order: string[] }
+/** What the Case screen remembers. answers: by removal key (TakeBackRow.removed); order: pinned finding ids, the evidence order; style and lang: the report's. */
+export interface CaseChoices { cutoff: Cutoff; answers: Record<string, Answer>; order: string[]; style: ReportOptions['style']; lang: ReportOptions['lang'] }
+/** The report (DESIGN_SPEC 9): for admins or technical, English or German, the commands for this BankSystem version. */
+export interface ReportOptions { style: 'admin' | 'tech'; lang: 'en' | 'de'; version: '2.1.2' | '2.2.0' }
 
 /** The parts of case.json the screens use. */
 export interface CaseData {
@@ -985,6 +987,8 @@ export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player'
   mark(id: string, mark: Mark): CaseData;
   setRules(rules: RuleSettings): CaseData;
   setChoices(choices: CaseChoices): CaseData;
+  /** The report of one incident as one self-contained HTML page, with the stored cutoff, answers and evidence order (DESIGN_SPEC 9). */
+  report(incidentId: string, options: ReportOptions, settings: RuleSettings): string;
 }
 
 /** The same calls as the screens see them: every answer arrives later. */

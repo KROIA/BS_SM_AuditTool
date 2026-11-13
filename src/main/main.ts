@@ -1,7 +1,11 @@
 // The window process. It opens the window, shows the folder dialog and passes calls on to the engine.
 // It holds no logic of its own, and the screens get no file or system access (see preload.cts).
-import { app, BrowserWindow, dialog, ipcMain, Menu, utilityProcess, type UtilityProcess } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, session, utilityProcess, type UtilityProcess } from 'electron';
+import fs from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import type { Workspace } from '../shared/api.ts';
 
 const here = import.meta.dirname; // dist/node/main
 let win: BrowserWindow | null = null;
@@ -73,6 +77,68 @@ ipcMain.handle('pickFolder', async () => {
   const r = await dialog.showOpenDialog(win, { title: 'Open a save', properties: ['openDirectory'] });
   return r.canceled ? null : (r.filePaths[0] ?? null);
 });
+
+/** A path with links and junctions resolved; a file that does not exist yet by its folder. */
+function real(p: string): string {
+  try {
+    return realpathSync.native(p);
+  } catch {
+    const up = path.dirname(p);
+    return up === p ? p : path.join(real(up), path.basename(p));
+  }
+}
+/** True when target is the folder or inside it (Windows compares without case). */
+const within = (folder: string, target: string) => {
+  const rel = path.relative(real(folder), real(target));
+  return rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel); // a folder named "..x" inside still counts
+};
+
+/**
+ * The report as PDF: printed by a hidden window that runs no script, has no preload and a session of its own that refuses
+ * every request but the report's own file, so nothing in the page can load or reach anything.
+ */
+async function pdf(html: string): Promise<Buffer> {
+  const dir = await fs.mkdtemp(path.join(app.getPath('temp'), 'audit-report-'));
+  const file = path.join(dir, 'report.html');
+  const page = new BrowserWindow({ show: false, webPreferences: { javascript: false, sandbox: true, contextIsolation: true, nodeIntegration: false, session: session.fromPartition('report-print') } });
+  try {
+    await fs.writeFile(file, html);
+    const allowed = pathToFileURL(file).href.toLowerCase();
+    page.webContents.session.webRequest.onBeforeRequest((d, done) => done({ cancel: d.url.toLowerCase() !== allowed }));
+    page.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    page.webContents.on('will-navigate', (e) => e.preventDefault());
+    await page.loadFile(file);
+    return await page.webContents.printToPDF({ pageSize: 'A4', printBackground: true, preferCSSPageSize: true });
+  } finally {
+    page.destroy();
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+}
+
+/** Builds the report in the engine, asks where to save it and writes it. The extension picks the format: .pdf, else HTML. */
+async function exportReport(incidentId: unknown, options: unknown, settings: unknown): Promise<{ path: string } | { error: string } | null> {
+  if (!win) return null;
+  let html: string;
+  try {
+    html = (await callEngine('report', [incidentId, options, settings])) as string;
+  } catch (e) {
+    return { error: `The report could not be built: ${(e as Error).message}` };
+  }
+  const r = await dialog.showSaveDialog(win, { title: 'Export the report', defaultPath: 'report.html',
+    filters: [{ name: 'Web page (*.html)', extensions: ['html'] }, { name: 'PDF (*.pdf)', extensions: ['pdf'] }] });
+  if (r.canceled || !r.filePath) return null;
+  const target = path.resolve(r.filePath);
+  // The tool never writes into a save, not even a report.
+  const saves = ((await callEngine('workspace', [])) as Workspace).saves;
+  if (saves.some((s) => within(s.path, target))) return { error: 'The report was not saved: that folder belongs to a loaded save, and the tool never writes into a save. Pick another folder.' };
+  try {
+    await fs.writeFile(target, path.extname(target).toLowerCase() === '.pdf' ? await pdf(html) : html);
+  } catch (e) {
+    return { error: `The report could not be saved there: ${(e as NodeJS.ErrnoException).code === 'EBUSY' ? 'the file is open in another program.' : (e as Error).message}` };
+  }
+  return { path: target };
+}
+ipcMain.handle('exportReport', (_e, incidentId, options, settings) => exportReport(incidentId, options, settings));
 
 app.on('window-all-closed', () => app.quit());
 void app.whenReady().then(() => {

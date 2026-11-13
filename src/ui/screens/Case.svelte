@@ -1,12 +1,12 @@
 <script lang="ts">
   // Case and report (DESIGN_SPEC 6.8, 8.10): where the incident's money stands, the evidence, what each player may keep and
   // the command lines for the admins. The engine works the amounts out (query/takeback.ts); nothing here changes a save.
-  import type { Answer, Cutoff, Finding, Incident, ItemRow, Scope, TakeBack, TakeBackRow } from '../../shared/api.ts';
+  import type { Answer, CaseChoices, Cutoff, Finding, Incident, ItemRow, Scope, TakeBack, TakeBackRow } from '../../shared/api.ts';
   import { commands, itemList, type BankVersion } from '../../shared/commands.ts';
   import { describe, span } from '../../shared/finding.ts';
   import { count, items as quantity, money, moneyShort, time } from '../../shared/fmt.ts';
   import { incidentTitle } from '../../shared/incident.ts';
-  import { app, engine, setChoices, setMark } from '../app/state.svelte.ts';
+  import { app, engine, exportReport, setChoices, setMark } from '../app/state.svelte.ts';
   import { LEVEL_COLOR, words } from '../app/words.ts';
 
   let { selected }: { selected: string | null } = $props();
@@ -116,11 +116,47 @@
     await navigator.clipboard.writeText(text.join('\n'));
     copied = what;
   }
+
+  // ---- The report (DESIGN_SPEC 9): style and language are stored with the choices ----
+  const STYLE_NOTE = {
+    admin: 'For admins: about two pages in plain language: what happened, what to take back, the commands, where the banknotes are and what could not be checked.',
+    tech: 'Technical: the same, plus every finding with its rule, measured value and record ids, the coverage of each save, the warnings and the versions.',
+  };
+  const pick = (part: Partial<CaseChoices>) => setChoices({ ...$state.snapshot(app.choices), ...part });
+  let saving = $state(false), saved = $state<{ path: string } | { error: string } | null>(null);
+  async function save() {
+    if (!incidentId) return;
+    saving = true;
+    try {
+      saved = await exportReport(incidentId, { style: app.choices.style, lang: app.choices.lang, version: v });
+    } catch (e) {
+      saved = { error: `The report could not be exported: ${(e as Error).message}` };
+    } finally {
+      saving = false;
+    }
+  }
 </script>
 
-<div>
-  <h1 class="h1">{ready ? `Case: ${incidentTitle(ready.incident!, w.itemName)}` : 'Case and report'}</h1>
-  <p class="sub">Collect the evidence, decide what each player may keep, then hand the commands to the admins.</p>
+<div class="top">
+  <div style="flex: 1 1 320px; min-width: 0">
+    <h1 class="h1">{ready ? `Case: ${incidentTitle(ready.incident!, w.itemName)}` : 'Case and report'}</h1>
+    <p class="sub">Collect the evidence, decide what each player may keep, then hand the report to the admins.</p>
+  </div>
+  <div class="controls">
+  <div role="group" aria-label="Report style" class="seg">
+    {#each [['admin', 'For admins'], ['tech', 'Technical']] as const as [k, label] (k)}<button type="button" aria-pressed={app.choices.style === k} onclick={() => pick({ style: k })}>{label}</button>{/each}
+  </div>
+  <div role="group" aria-label="Report language" class="seg">
+    {#each [['en', 'English'], ['de', 'Deutsch']] as const as [k, label] (k)}<button type="button" aria-pressed={app.choices.lang === k} onclick={() => pick({ lang: k })}>{label}</button>{/each}
+  </div>
+  <button type="button" class="primary" disabled={!ready || ready.reason !== null || saving} onclick={save}>
+    <svg width="18" height="18" viewBox="0 0 24 24" class="icon" aria-hidden="true" style="stroke-width: 2"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>{saving ? 'Exporting…' : 'Export the report'}
+  </button>
+  </div>
+</div>
+<div class="note">
+  <p class="small">{STYLE_NOTE[app.choices.style]} Saved as a web page (HTML) or as PDF: pick the type in the save dialog.</p>
+  {#if saved}<p class="small" role="status" style="color: {'error' in saved ? 'var(--crit)' : 'var(--text2)'}">{'error' in saved ? saved.error : `Saved to ${saved.path}`}</p>{/if}
 </div>
 
 {#if list === null}
@@ -304,6 +340,13 @@
 {/if}
 
 <style>
+  .top { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+  .top .seg { background: var(--card); }
+  .primary { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 10px; font-weight: 600; background: var(--accent); color: var(--onaccent); }
+  .primary:disabled { opacity: 0.5; }
+  .note { display: flex; flex-direction: column; gap: 4px; margin-top: -12px; }
+  .note p { margin: 0; overflow-wrap: anywhere; }
   .choose { display: flex; align-items: center; gap: 12px; max-width: 720px; }
   select { flex: 1 1 auto; min-width: 0; height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line2); background: var(--card); color: var(--text); font: inherit; }
   .empty { margin: 0; padding: 24px; border-radius: 14px; border: 1px dashed var(--line2); color: var(--text2); }

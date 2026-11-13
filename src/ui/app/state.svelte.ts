@@ -1,9 +1,10 @@
 // What the whole program shares: the open screen, the theme, the loaded saves and what is being loaded.
-import { DEFAULT_RULES, type CaseChoices, type CaseData, type Incident, type Mark, type Progress, type RemoteEngine, type RuleSettings, type SaveSummary, type ScanStatus, type Scope, type Workspace } from '../../shared/api.ts';
+import { DEFAULT_RULES, type CaseChoices, type CaseData, type Incident, type Mark, type Progress, type RemoteEngine, type ReportOptions, type RuleSettings, type SaveSummary, type ScanStatus, type Scope, type Workspace } from '../../shared/api.ts';
 
 interface Bridge {
   call(method: string, ...args: unknown[]): Promise<unknown>;
   pickFolder(): Promise<string | null>;
+  exportReport(incidentId: string, options: ReportOptions, settings: RuleSettings): Promise<{ path: string } | { error: string } | null>;
   startupPaths(): Promise<string[]>;
   onProgress(listener: (p: Progress) => void): void;
   pathOf(file: File): string;
@@ -43,7 +44,7 @@ export const app = $state({
   rules: DEFAULT_RULES as RuleSettings,
   marks: {} as Record<string, Mark>,
   /** The Case screen's cutoff, answers and evidence order, from case.json. */
-  choices: { cutoff: { kind: 'day', at: null }, answers: {}, order: [] } as CaseChoices,
+  choices: { cutoff: { kind: 'day', at: null }, answers: {}, order: [], style: 'admin', lang: 'en' } as CaseChoices,
   /** "The incident" of the range menu and the Overview (ScopeMenus works it out); undefined while the rules run. */
   incident: undefined as Incident | null | undefined,
   /** How far the region scan got (DESIGN_SPEC 6.7); kept here so the bar lives on while other screens are open. */
@@ -61,6 +62,8 @@ function useCase(c: CaseData) {
 export const setMark = async (id: string, m: Mark) => useCase(await engine.mark(id, $state.snapshot(m)));
 export const setChoices = async (c: CaseChoices) => useCase(await engine.setChoices($state.snapshot(c)));
 export const setRules = async (r: RuleSettings) => useCase(await engine.setRules($state.snapshot(r)));
+/** Builds the report with the case's rules, asks where to save it and saves it (main.ts). null: the user cancelled. */
+export const exportReport = (incidentId: string, options: ReportOptions) => bridge.exportReport(incidentId, options, $state.snapshot(app.rules));
 /** The number of pins, for the case counter. */
 export const pins = () => Object.values(app.marks).filter((m) => m.pinned).length;
 

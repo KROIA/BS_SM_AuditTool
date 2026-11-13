@@ -1,6 +1,6 @@
 // Items, bank log rows and gaps in plain words, for every screen that shows them.
 import type { Gap, ItemCheck, ItemRow, LedgerRow, Level } from '../../shared/api.ts';
-import { KIND, span } from '../../shared/finding.ts';
+import { KIND, plainName, span } from '../../shared/finding.ts';
 import { at, count, items as quantity, money } from '../../shared/fmt.ts';
 
 export const tone = (raw: bigint) => (raw > 0n ? 'var(--up)' : raw < 0n ? 'var(--down)' : 'var(--text)');
@@ -28,9 +28,7 @@ export function words(itemRows: Map<number, ItemRow>) {
   /** "minecraft:iron_ingot" -> "Iron ingot" */
   function itemName(id: number): string {
     const name = itemRows.get(id)?.name;
-    if (!name) return 'Item ' + id;
-    const base = name.slice(name.indexOf(':') + 1).replaceAll('_', ' ');
-    return base.charAt(0).toUpperCase() + base.slice(1);
+    return name ? plainName(name) : 'Item ' + id;
   }
   const isMoney = (id: number) => itemRows.get(id)?.money ?? false;
   /** A balance or a change of any item: money as money, other items as a count with their name. */
@@ -56,11 +54,7 @@ export function words(itemRows: Map<number, ItemRow>) {
   };
 }
 
-/** "minecraft:shulker_box" -> "Shulker box" */
-export function plainName(id: string): string {
-  const base = id.slice(id.indexOf(':') + 1).replaceAll('_', ' ');
-  return base.charAt(0).toUpperCase() + base.slice(1);
-}
+export { plainName };
 /** Stacks found in the world (player files, region scan): value is raw money for the whole stack, null for a valuable. */
 interface Held { path: string[]; item: string; count: number; value: bigint | null }
 /** "1'408 notes of $1'000'000.00, 30 notes of $1.00, also 64 Diamond, partly in a shulker box" */

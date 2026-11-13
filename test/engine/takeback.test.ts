@@ -110,7 +110,7 @@ test('2.1.2: the admin removal is a question, its answer is stored and changes n
   const t = take(QUENBY), q = row(t.rows, PLAYERS.Quenby.account);
   assert.equal(t.legacy, true);
   assert.deepEqual(q.removed, [{ key: `${PLAYERS.Quenby.account}@${T0 + 61 * MIN}`, amount: 20_000_000n, from: T0 + 61 * MIN, to: T0 + 121 * MIN }]);
-  api.setChoices({ cutoff: DAY, answers: { [q.removed[0]!.key]: 'yes' }, order: [] });
+  api.setChoices({ cutoff: DAY, answers: { [q.removed[0]!.key]: 'yes' }, order: [], style: 'admin', lang: 'en' });
   assert.equal(api.caseData().choices.answers[q.removed[0]!.key], 'yes');
   assert.deepEqual(take(QUENBY), t);
 

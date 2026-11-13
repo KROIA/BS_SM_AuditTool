@@ -12,6 +12,7 @@ import { candles, market, markets, traders } from './query/markets.ts';
 import { links } from './query/links.ts';
 import { keyEvents, overview } from './query/overview.ts';
 import { items, ledger, orders, player, players } from './query/players.ts';
+import { report } from './query/report.ts';
 import { search } from './query/search.ts';
 import { sessions } from './query/sessions.ts';
 import { takeBack } from './query/takeback.ts';
@@ -53,6 +54,7 @@ export const api: EngineApi = {
   links,
   moneyFlow,
   takeBack,
+  report,
   worldItems,
   startScan,
   stopScan,
