@@ -1,11 +1,11 @@
 // Reads the player files of a world (playerdata/<uuid>.dat): what each player carries in the inventory and the ender
-// chest, into nested containers (shulker boxes, bundles). Money items are valued; every other stack is kept by name, and
+// chest, into nested containers (shulker boxes, bundles, mods' backpacks). Money items are valued; every other stack is kept by name, and
 // the query decides which of them are valuables (they need the master's market list, which a slave's save does not have).
 // The files are untrusted: a file that breaks a limit is skipped whole and counted, never fatal.
 import fs from 'node:fs';
 import path from 'node:path';
 import { readSmallFile } from './locate.ts';
-import { compound, isCompound, list, num, readNbt, str, type Nbt } from './nbt.ts';
+import { compound, isCompound, list, num, readNbt, str, type Nbt, type NbtCompound } from './nbt.ts';
 
 export const LIMITS = {
   fileBytes: 16 * 1024 * 1024,
@@ -46,22 +46,46 @@ const UUID_FILE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 /** One stack as the walker meets it; path: the containers it is in, outermost first. */
 export interface Found { path: string[]; item: string; count: number; plain: boolean; worth: bigint | null }
 
+/** The stack one container entry holds: a 1.20.5+ container lists { slot, item }, inventories, bundles and older containers the stack itself. */
+function stackIn(e: Nbt): { stack: NbtCompound; id: string; count: number } | undefined {
+  if (!isCompound(e)) return undefined;
+  const stack = str(e, 'id') === undefined ? compound(e, 'item') : e;
+  const id = str(stack, 'id'), count = num(stack, 'count') ?? num(stack, 'Count');
+  return stack && id && count !== undefined && Number.isInteger(count) && count > 0 ? { stack, id, count } : undefined;
+}
+
+/** A component a mod fills its own way: one outside vanilla's namespace, or vanilla's free-form data. */
+const modData = (name: string) => !name.startsWith('minecraft:') || name === 'minecraft:custom_data' || name === 'minecraft:block_entity_data';
+
 /**
- * Walks a list of stacks and the containers inside them (1.20.5+ components and the older tag layout) and calls add per
- * stack. budget: the stacks left for one file or container, shared between calls. Throws a sentence when a limit is broken.
+ * Stacks a mod keeps in data of its own (a backpack's inventory): every list entry shaped like a stack, outside the lists
+ * in skip (read already, so nothing counts twice). A stack found is not searched further here; walking it does that.
+ * ponytail: a mod's list of ghost stacks (a filter) counts as held too; tell them apart by name if one shows up.
+ */
+function modStacks(v: Nbt | undefined, skip: Nbt[][], out: Nbt[]): Nbt[] {
+  if (Array.isArray(v) && !skip.includes(v)) for (const e of v) stackIn(e) ? out.push(e) : modStacks(e, skip, out);
+  else if (isCompound(v)) for (const x of Object.values(v)) modStacks(x, skip, out);
+  return out;
+}
+
+/**
+ * Walks a list of stacks and the containers inside them (1.20.5+ components, the older tag layout and mods' own data)
+ * and calls add per stack. budget: the stacks left for one file or container, shared between calls. Throws a sentence
+ * when a limit is broken.
  */
 export function walkStacks(entries: Nbt[], at: string[], add: (s: Found) => void, budget = { left: LIMITS.stacks }): void {
-  for (const e of entries.filter(isCompound)) {
-    // A 1.20.5+ container lists { slot, item }; inventories, bundles and older containers list the stack itself.
-    const stack = str(e, 'id') === undefined ? compound(e, 'item') : e;
-    const id = str(stack, 'id'), count = num(stack, 'count') ?? num(stack, 'Count');
-    if (!id || count === undefined || !Number.isInteger(count) || count <= 0) continue;
+  for (const e of entries) {
+    const found = stackIn(e);
+    if (!found) continue;
     if (--budget.left < 0) throw new Error(`more than ${LIMITS.stacks} stacks`);
-    const item = id.slice(0, NAME), parts = compound(stack, 'components'), tag = compound(stack, 'tag');
+    const { stack, count } = found, item = found.id.slice(0, NAME), parts = compound(stack, 'components'), tag = compound(stack, 'tag');
     const plain = Object.keys(parts ?? {}).length === 0 && Object.keys(tag ?? {}).length === 0;
     add({ path: at, item, count, plain, worth: plain ? worthOf(item) : null });
-    const inner = [...list(parts, 'minecraft:container'), ...list(parts, 'minecraft:bundle_contents'), // 1.20.5+
-      ...list(compound(tag, 'BlockEntityTag'), 'Items'), ...list(tag, 'Items')]; // older: shulker boxes, bundles
+    const known = [list(parts, 'minecraft:container'), list(parts, 'minecraft:bundle_contents'), // 1.20.5+
+      list(compound(tag, 'BlockEntityTag'), 'Items'), list(tag, 'Items')]; // older: shulker boxes, bundles
+    const inner = known.flat();
+    for (const [name, v] of Object.entries(parts ?? {})) if (modData(name)) modStacks(v, known, inner);
+    modStacks(tag, known, inner); // older: a mod's data sits in the tag beside vanilla's
     if (!inner.length) continue;
     if (at.length >= LIMITS.depth) throw new Error(`containers nested deeper than ${LIMITS.depth} levels`);
     walkStacks(inner, [...at, item], add, budget);

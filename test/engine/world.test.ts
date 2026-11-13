@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { api } from '../../src/engine/api.ts';
-import { LIMITS, readPlayerFiles, worthOf } from '../../src/engine/save/players.ts';
+import { LIMITS, readPlayerFiles, walkStacks, worthOf } from '../../src/engine/save/players.ts';
 import { addSave, init } from '../../src/engine/workspace.ts';
 import { DEFAULT_RULES, type Scope } from '../../src/shared/api.ts';
 import { describe } from '../../src/shared/finding.ts';
@@ -53,6 +53,20 @@ test('the reader: inventory, ender chest, a shulker inside the ender chest, a bu
   const old = got.stacks.filter((s) => s.player === uuid('Brindle'));
   assert.deepEqual(old.map((s) => [s.place, s.path, s.item, s.count]).sort(),
     [['ender chest', ['minecraft:shulker_box'], 'banksystem:money1000', 3], ['ender chest', [], 'minecraft:shulker_box', 1], ['inventory', [], 'banksystem:money', 40]].sort());
+});
+
+test('mods\' containers: stacks in a mod\'s own component, in custom data and in an old tag are found once; vanilla text is not searched', () => {
+  const note = (n: number, more = {}) => ({ id: 'banksystem:money100', count: n, ...more });
+  const got: string[] = [];
+  walkStacks([
+    { id: 'travelersbackpack:standard', count: 1, components: { 'travelersbackpack:container': [{ slot: 0, item: note(3) },
+      { slot: 1, item: { id: 'somemod:pouch', count: 1, components: { 'minecraft:custom_data': { Inventory: { Items: [{ Slot: 0, ...note(2) }] } } } } }] } },
+    { id: 'minecraft:shulker_box', count: 1, components: { 'minecraft:container': [{ slot: 0, item: note(5) }], 'neoforge:attachments': { extra: [note(7)] } } },
+    { id: 'oldmod:bag', Count: 1, tag: { BlockEntityTag: { Items: [{ Slot: 0, id: 'banksystem:money100', Count: 11 }] }, Inventory: { Items: [{ Slot: 0, id: 'banksystem:money100', Count: 13 }] } } },
+    note(1, { components: { 'minecraft:lore': [{ text: 'x', hover_event: { action: 'show_item', ...note(1), components: { 'minecraft:container': [{ slot: 0, item: note(64) }] } } }] } }),
+  ], [], (s) => { if (s.item === 'banksystem:money100') got.push(`${s.path.join(' > ')}: ${s.count}`); });
+  assert.deepEqual(got.sort(), ['minecraft:shulker_box: 5', 'minecraft:shulker_box: 7', 'oldmod:bag: 11', 'oldmod:bag: 13',
+    'travelersbackpack:standard > somemod:pouch: 2', 'travelersbackpack:standard: 3', ': 1'].sort());
 });
 
 test('a file that breaks a limit or is not NBT is skipped whole and counted; one with tags of the wrong type gives nothing', () => {
