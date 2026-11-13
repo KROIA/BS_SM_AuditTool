@@ -15,7 +15,7 @@ const FINAL = new Set(['CONFIRMED', 'DELIVERED', 'RETURNED', 'TIMED_OUT', 'FAILE
 const STEPS = new Set(['REQUESTED', ...FINAL]);
 /** Ledger kinds a master writes under a slave's transfer id, or under its own for a DROP. */
 const SLAVE_KINDS = new Set(['DEPOSIT', 'WITHDRAW', 'WITHDRAW_REFUND', 'CONVERTER_DEPOSIT', 'CONVERTER_WITHDRAW', 'UPLOAD_DEPOSIT',
-  'DOWNLOAD_WITHDRAW', 'CRAFT_CONSUME', 'CRAFT_OUTPUT', 'SHARE_TRADE', 'ACCOUNT_DELETE_PAYOUT', 'ACCOUNT_DELETE_LOSS']);
+  'DOWNLOAD_WITHDRAW', 'CRAFT_CONSUME', 'CRAFT_OUTPUT', 'SHARE_TRADE', 'ACCOUNT_DELETE_PAYOUT', 'ACCOUNT_DELETE_LOSS', 'REFUND_LOST']);
 const UUID_GLOB = '[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-*-*-*-*';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const CLASSES: TransferClass[] = ['ok', 'parked', 'twice', 'lost', 'created', 'known-gap', 'data-gap', 'after-snapshot'];
@@ -39,7 +39,7 @@ const add = (m: Amounts, k: number | null, v: bigint) => m.set(k, (m.get(k) ?? 0
 interface Step { ts: number; step: string; direction: string | null; path: string | null; account: number | null; player: string | null;
   items: Map<number, bigint> | null | undefined; ledgerType: number | null; context: string | null }
 /** change: what the row did to the balance; null when the save does not say (UNKNOWN_LEGACY, a rejected slave code). */
-interface Row { id: number; ts: number; account: number; kind: string; item: number; amount: bigint; change: bigint | null }
+interface Row { id: number; ts: number; account: number; kind: string; item: number; amount: bigint; change: bigint | null; note?: string | null }
 interface Flag { id: number; ts: number; account: number }
 
 /** Both halves of one transfer id and what the saves around it say. */
@@ -122,6 +122,12 @@ export function classify(p: Pair): { items: TransferItem[]; class: TransferClass
   if (only && dir === 'TO_MASTER' && req?.context === null && settled) {
     return result(sent, received, 'known-gap', 'A deposit from outside the bank\'s own blocks that the master refused: whether the caller kept the value is not logged.');
   }
+  // BS-267: the master wrote down that notes it could not hand out were not booked back either. That is final, journal or not.
+  const refundLost = p.rows.find((r) => r.kind === 'REFUND_LOST');
+  if (refundLost) {
+    const reason = /refund lost \((.+?)\):/.exec(refundLost.note ?? '')?.[1];
+    return result(sent, received, 'lost', `Notes the master took from the account were not handed out, and their refund could not be booked back${reason ? ` (${reason})` : ''}: the value is gone.`);
+  }
   if (p.gap !== null) return result(sent, received, 'data-gap', p.gap);
   const final = p.steps.some((s) => FINAL.has(s.step));
   if (p.copy !== null && (start > p.copy || (!final && start > p.copy - IN_FLIGHT))) {
@@ -186,7 +192,8 @@ export function allTransfers(): TransferRow[] {
     const ref = String(r.ref), kind = String(r.kind);
     if (!UUID.test(ref) || (!journaled.has(ref) && !SLAVE_KINDS.has(kind))) continue;
     const amount = big(r.amount)!;
-    entry(ref).rows.push({ id: num(r.id)!, ts: num(r.ts)!, account: num(r.account)!, kind, item: num(r.item)!, amount, change: change(kind, amount, text(r.note), big(r.balance_after)) });
+    const note = text(r.note);
+    entry(ref).rows.push({ id: num(r.id)!, ts: num(r.ts)!, account: num(r.account)!, kind, item: num(r.item)!, amount, change: change(kind, amount, note, big(r.balance_after)), note });
   }
   for (const r of all(db, `SELECT id, ts, account, lower(ref) AS ref FROM flag WHERE flag_type = 6 AND ref IS NOT NULL ORDER BY ts, id`)) {
     const ref = String(r.ref);

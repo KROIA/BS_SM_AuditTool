@@ -150,4 +150,11 @@ test('classify: parking marks, known gaps and the drop cases', () => {
   assert.equal(of({ steps: [req('TO_MASTER', 'ASYNC_BANK', 400n, 1, 'terminal', 4), step('CONFIRMED')], rows: [row('DEPOSIT', 300n, 4)] }), 'lost');
   // A row whose sign the save does not give counts the journal's way.
   assert.equal(of({ steps: [req('TO_MASTER', 'ASYNC_BANK', 400n), step('CONFIRMED')], rows: [{ ...row('UNKNOWN_LEGACY', 400n), change: null }] }), 'ok');
+  // BS-267: notes the master did not hand out and could not book back. Lost with the bank's reason, journal or not; the
+  // marker changes no balance, so it is not sent a second time.
+  const refundLost = { ...row('REFUND_LOST', 0n), amount: 200n, note: 'banknotes not handed out, refund lost (refund deposit refused: FAILED): {money=2}' };
+  const r = classify({ steps: [drop('DELIVERED', 300n)], rows: [row('WITHDRAW', -500n), refundLost], flags: [], gap: null, copy, money: new Set([1, NOTE]) });
+  assert.deepEqual([r.class, r.items], ['lost', [{ item: null, sent: 500n, received: 300n }]]);
+  assert.match(r.why, /could not be booked back \(refund deposit refused: FAILED\): the value is gone/);
+  assert.equal(of({ rows: [row('WITHDRAW', -500n), refundLost], gap: 'not loaded' }), 'lost');
 });

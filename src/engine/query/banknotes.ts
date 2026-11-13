@@ -12,10 +12,12 @@ import { isSlaveOf } from './transfers.ts';
 /**
  * Money rows of these kinds move notes across the bank's counter (draft B4): WITHDRAW, DOWNLOAD_WITHDRAW, CRAFT_CONSUME,
  * ACCOUNT_DELETE_PAYOUT and SHARE_TRADE's withdraw side hand them out; DEPOSIT, UPLOAD_DEPOSIT, CRAFT_OUTPUT and
- * SHARE_TRADE's deposit side take them in; WITHDRAW_REFUND undoes a hand-out. CONVERTER_DEPOSIT is neither: NoteFlow's
+ * SHARE_TRADE's deposit side take them in; WITHDRAW_REFUND undoes a hand-out. REFUND_LOST (BS-267) undoes one too: the
+ * notes were never handed out, only their refund failed, so no balance changes. CONVERTER_DEPOSIT is neither: NoteFlow's
  * converter_in already counted those notes when they went into the converter.
  */
-const NOTE_KINDS = ['WITHDRAW', 'DOWNLOAD_WITHDRAW', 'CRAFT_CONSUME', 'ACCOUNT_DELETE_PAYOUT', 'SHARE_TRADE', 'DEPOSIT', 'UPLOAD_DEPOSIT', 'CRAFT_OUTPUT', 'WITHDRAW_REFUND'];
+const NOTE_KINDS = ['WITHDRAW', 'DOWNLOAD_WITHDRAW', 'CRAFT_CONSUME', 'ACCOUNT_DELETE_PAYOUT', 'SHARE_TRADE', 'DEPOSIT', 'UPLOAD_DEPOSIT', 'CRAFT_OUTPUT', 'WITHDRAW_REFUND', 'REFUND_LOST'];
+const UNDONE = new Set(['WITHDRAW_REFUND', 'REFUND_LOST']);
 const KINDS = new Set(NOTE_KINDS);
 /** The sources the mods write (NoteFlow); anything else is summed as "other". */
 const SOURCES = new Set(['banksystem:converter_in', 'banksystem:converter_out', 'banksystem:creative_create', 'banksystem:creative_destroy', 'banksystem:give',
@@ -32,6 +34,7 @@ const DELETED = /^user deleted: ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}
 export function noteChange(kind: string, amount: bigint, note: string | null, balanceAfter: bigint | null): bigint | null {
   if (kind === 'UNKNOWN_LEGACY') return null;
   if (!KINDS.has(kind) || (kind === 'DEPOSIT' && note?.startsWith('coin '))) return 0n;
+  if (kind === 'REFUND_LOST') return amount < 0n ? amount : -amount; // unsigned amount, no balance change
   return -change(kind, amount, note, balanceAfter)!; // every kind above has a known sign
 }
 
@@ -74,7 +77,7 @@ export function countNotes(scope: Scope): { result: BanknotesResult; moves: Note
     } else if (delta !== 0n) {
       const account = num(r.account)!, actor = text(r.actor);
       const player = kind === 'ACCOUNT_DELETE_PAYOUT' ? DELETED.exec(text(r.note) ?? '')?.[1] ?? owner.get(account) ?? null : actor && UUID.test(actor) ? actor : null;
-      moves.push({ id: num(r.id)!, ts, delta, account, player, refund: kind === 'WITHDRAW_REFUND', withdraw: kind === 'WITHDRAW', source: null });
+      moves.push({ id: num(r.id)!, ts, delta, account, player, refund: UNDONE.has(kind), withdraw: kind === 'WITHDRAW', source: null });
     }
   }
 

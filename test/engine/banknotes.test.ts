@@ -8,6 +8,7 @@ import { after, before, test } from 'node:test';
 import { api } from '../../src/engine/api.ts';
 import { noteChange } from '../../src/engine/query/banknotes.ts';
 import { noteWorth } from '../../src/engine/query/check.ts';
+import { change } from '../../src/engine/query/players.ts';
 import { addSave, init, mainData } from '../../src/engine/workspace.ts';
 import type { BanknoteGap, Scope } from '../../src/shared/api.ts';
 import { buildFixtures, ITEM, NOTE, PLAYERS, STRAY, T0, VOUCHER, type Fixtures } from '../fixtures/build.ts';
@@ -30,6 +31,9 @@ after(() => {
 test('which money rows of the log hand notes out (+), take them in (-), or neither (0); unknown direction is null', () => {
   for (const k of ['WITHDRAW', 'DOWNLOAD_WITHDRAW', 'CRAFT_CONSUME', 'ACCOUNT_DELETE_PAYOUT']) assert.equal(noteChange(k, 500n, null, null), 500n, k);
   for (const k of ['DEPOSIT', 'UPLOAD_DEPOSIT', 'CRAFT_OUTPUT', 'WITHDRAW_REFUND']) assert.equal(noteChange(k, 500n, null, null), -500n, k);
+  // REFUND_LOST (BS-267): the notes were never handed out, though no balance changes (players.ts change() gives 0).
+  assert.equal(noteChange('REFUND_LOST', 500n, null, null), -500n);
+  assert.equal(change('REFUND_LOST', 500n, null, null), 0n);
   // SHARE_TRADE is signed: negative when it withdrew.
   assert.equal(noteChange('SHARE_TRADE', -500n, null, null), 500n);
   assert.equal(noteChange('SHARE_TRADE', 500n, null, null), -500n);

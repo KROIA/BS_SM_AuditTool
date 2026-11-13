@@ -139,8 +139,9 @@ const IN = new Set(['DEPOSIT', 'WITHDRAW_REFUND', 'ADMIN_ADD', 'CONVERTER_DEPOSI
 /**
  * No change to free plus locked: an unlock moves locked money to free, an edit and a freeze change no balance, and the
  * share rows only count a company's issued shares (item 0, amount 1 share; ShareStamperBlockEntity.java:302-319).
+ * REFUND_LOST (BS-267) only marks notes whose refund could not be booked back: the WITHDRAW row already took the money.
  */
-const NONE = new Set(['ADMIN_UNLOCK', 'ADMIN_ACCOUNT_EDIT', 'ACCOUNT_FREEZE', 'SHARE_STAMP', 'SHARE_REDEEM']);
+const NONE = new Set(['ADMIN_UNLOCK', 'ADMIN_ACCOUNT_EDIT', 'ACCOUNT_FREEZE', 'SHARE_STAMP', 'SHARE_REDEEM', 'REFUND_LOST']);
 
 /** What a row did to its balance; null when the save does not say. TRANSFER_IN and _OUT are the kinds of 2.1.2. */
 export function change(kind: string, amount: bigint, note: string | null, balanceAfter: bigint | null): bigint | null {
