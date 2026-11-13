@@ -81,7 +81,7 @@
 <button type="button" class="btn" popovertarget="range-menu" style="anchor-name: --range" aria-label="Time range: {label}">
   <span class="dim"><Icon d={ICON.clock} /></span><span>{label}</span>
 </button>
-<div id="range-menu" class="menu" popover bind:this={rangeMenu} ontoggle={opened} style="position-anchor: --range" aria-label="Time range">
+<div id="range-menu" class="menu" popover bind:this={rangeMenu} onbeforetoggle={opened} style="position-anchor: --range" aria-label="Time range">
   {#each CHOICES as [r, text] (r)}
     <button type="button" class="choice" aria-pressed={app.range === r} disabled={r !== 'all' && end === null} onclick={() => choose(r)}>{text}</button>
   {/each}

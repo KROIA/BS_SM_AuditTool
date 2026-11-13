@@ -171,7 +171,7 @@
   });
   /** The list's sub line: what the log does not explain, else the money. */
   const listSub = (a: AccountListRow) =>
-    (a.unexplained ? `${moneyShort(a.unexplained)} not explained` : a.gaps ? `${count(a.gaps)} ${a.gaps === 1 ? 'gap' : 'gaps'} in items` : moneyShort(a.money))
+    (a.unexplained ? `${moneyShort(a.unexplained)} unexplained` : a.gaps ? `${count(a.gaps)} ${a.gaps === 1 ? 'gap' : 'gaps'} in items` : moneyShort(a.money))
     + (a.company ? ' · company' : '') + (a.frozen ? ' · frozen' : '');
 </script>
 
@@ -192,7 +192,7 @@
             <span class="badge" aria-hidden="true">{a.number}</span>
             <span class="who">
               <span class="ellipsis" style="font-weight: 500">{a.deleted ? 'Deleted account' : a.name}</span>
-              <span class="small">{listSub(a)}</span>
+              <span class="small ellipsis" title={listSub(a)}>{listSub(a)}</span>
             </span>
             {#if a.rating}<span class="dot" style="background: {LEVEL_COLOR[a.rating]}" title="How much the gaps say: {GAP_SAYS[a.rating].short}"></span>{/if}
           </a>
@@ -333,14 +333,14 @@
                   {#if e.gap}
                     {@const g = e.gap}
                     <tr class="gap">
-                      <td style="font-size: 13px; white-space: nowrap; color: var(--text2)">{gapWhen(g)}</td>
+                      <td style="font-size: 13px; color: var(--text2)">{gapWhen(g)}</td>
                       <td>
                         <span style="display: block; font-weight: 500; white-space: nowrap; color: var(--high)">{gapWhat(g)}</span>
                         <span class="small" style="display: block">{gapSub(g)}</span>
                       </td>
                       <td class="r" style="font-weight: 500; white-space: nowrap; color: var(--high)">{change(g.item, g.gap.difference)}</td>
                       <td class="r dim" style="white-space: nowrap">{value(g.item, g.gap.after)}</td>
-                      <td class="dim" style="white-space: nowrap">not recorded</td>
+                      <td class="dim">not recorded</td>
                       <td></td>
                     </tr>
                   {:else}
@@ -354,7 +354,7 @@
                       </td>
                       <td class="r" style="font-weight: 500; white-space: nowrap; color: {amountTone(r)}">{amount(r)}</td>
                       <td class="r dim" style="white-space: nowrap">{r.balanceAfter === null ? 'not recorded' : value(r.item, r.balanceAfter)}</td>
-                      <td class="dim" style="white-space: nowrap">{by(r)}</td>
+                      <td class="dim">{by(r)}</td>
                       <td class="mono" style="font-size: 12px; color: var(--text3)">{r.ref ?? ''}</td>
                     </tr>
                   {/if}
@@ -401,4 +401,5 @@
   .pills button[aria-pressed='true'] { border-color: var(--accent); background: var(--accent); color: var(--onaccent); }
   td { vertical-align: top; }
   tr.gap { background: color-mix(in srgb, var(--high) 10%, transparent); outline: 1px dashed var(--high); outline-offset: -1px; }
+  tr.gap td:first-child { padding-left: 8px; }
 </style>

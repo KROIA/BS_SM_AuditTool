@@ -26,7 +26,9 @@ test.describe('the invented network', () => {
     await page.getByRole('link', { name: 'Bank accounts', exact: true }).click();
     // 12 to 18 are gone from the bank's files and still have snapshots or log rows; 14 and 12 have gaps above $1'000.
     await expect(page.locator('aside .badge')).toHaveText(['14', '12', '41', '24', '11', '3', '27', '10', '7', '30', '13', '15', '16', '17', '18', '31', '32', '33']);
-    await expect(page.locator('aside .pick').first()).toContainText(/Deleted account\s*\$10'000\.00 not explained/);
+    await expect(page.locator('aside .pick').first()).toContainText(/Deleted account\s*\$10'000\.00 unexplained/);
+    const sub = page.locator('aside .pick').first().locator('.small');
+    expect(await sub.evaluate((e) => e.getBoundingClientRect().height)).toBeLessThan(30); // one line, even beside the dot
     await expect(page.locator('aside .pick .dot')).toHaveCount(2);
     await expect(page.locator('aside a[href="#/accounts/41"]')).toContainText(/Northreach Rail Co.\s*\$90'071.99B · company/);
     await expect(page.locator('aside a[href="#/accounts/31"]')).toContainText(/Old savings\s*\$0\.00 · frozen/);
@@ -63,7 +65,11 @@ test.describe('the invented network', () => {
     await page.getByRole('button', { name: 'Everything', exact: true }).click();
     await expect(rows).toHaveCount(2);
     await expect(page.locator('main')).toContainText('2 entries, newest first.');
+    // A row without a direction still shows its amount as money.
+    await expect(rows.nth(1).locator('td').nth(2)).toHaveText("$10'000.00");
     await page.setViewportSize({ width: 1440, height: 1500 });
+    const wrap = page.locator('table').locator('..');
+    expect(await wrap.evaluate((e) => e.scrollWidth - e.clientWidth)).toBe(0); // the table fits the card
     await page.screenshot({ path: 'test-results/accounts-check-dark.png', fullPage: true });
     await page.setViewportSize({ width: 1440, height: 900 });
 

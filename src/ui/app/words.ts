@@ -35,8 +35,8 @@ export function words(itemRows: Map<number, ItemRow>) {
       r.kind === 'TRADE_BUY' || r.kind === 'TRADE_SELL'
         ? `${r.kind === 'TRADE_BUY' ? 'Bought' : 'Sold'} ${quantity(r.amount < 0n ? -r.amount : r.amount)} ${itemName(r.item)}`
         : (KIND[r.kind] ?? r.kind),
-    /** A row's amount: the money side of a trade, else its change; the stored amount when the direction is unknown. */
-    amount: (r: LedgerRow) => (r.money ? change(r.money.item, r.money.change) : r.change === null ? quantity(r.amount) : change(r.item, r.change)),
+    /** A row's amount: the money side of a trade, else its change; the stored amount, unsigned, when the direction is unknown. */
+    amount: (r: LedgerRow) => (r.money ? change(r.money.item, r.money.change) : r.change === null ? value(r.item, r.amount) : change(r.item, r.change)),
     amountTone: (r: LedgerRow) => {
       const v = r.money?.change ?? r.change;
       return v === null ? 'var(--text3)' : tone(v);
