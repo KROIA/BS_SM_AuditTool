@@ -16,8 +16,9 @@
 .app[data-theme='light'] {
   --bg: #f5f6f8; --rail: #eceef1; --card: #ffffff; --raised: #eff1f4; --line: #e1e4e9; --line2: #c8cdd5;
   --text: #14171c; --text2: #48505b; --text3: #5d6570; --accent: #3b5bdb; --onaccent: #ffffff;
-  --up: #0b7a64; --down: #c92a3a; --crit: #c92a2a; --high: #b85c00; --med: #8a6d00; --low: #2b5fc7;
-  --buy: #2b5fc7; --sell: #b85c00;
+  /* crit, high/sell and med darker than at first: at least 4.5:1 for small text on every surface and on the level tags (AT-52, user 2026-11-13) */
+  --up: #0b7a64; --down: #c92a3a; --crit: #bd2828; --high: #9e4f00; --med: #7e6400; --low: #2b5fc7;
+  --buy: #2b5fc7; --sell: #9e4f00;
   color-scheme: light;
 }
 
