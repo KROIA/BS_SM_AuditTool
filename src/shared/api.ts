@@ -234,6 +234,8 @@ export interface PlayerDetail extends PlayerRow {
   /** Money on the accounts the player owns, from the bank's files (the state of the copy, not of the scope). */
   moneyNow: bigint;
   markets: MarketProfit[];
+  /** Of the orders counted in `orders`, the buys. */
+  buys: number;
   /** Money on the owned accounts over time: per account the last snapshot at or before each point, summed (DESIGN_SPEC 8.1). */
   money: Point[];
 }
@@ -570,8 +572,11 @@ export interface QueryApi {
   /** Sorted by profit, highest first. The Players screen puts them in the suspicion order (shared/incident.ts). */
   players(scope: Scope): PlayerRow[];
   player(uuid: string, scope: Scope): PlayerDetail | null;
-  /** Newest first. ids: order ids as a finding's records hold them (the mod's order id, else the row id). */
-  orders(filter: { player?: string; item?: number; ids?: number[] }, scope: Scope): OrderRow[];
+  /**
+   * Newest first. ids: order ids as a finding's records hold them (the mod's order id, else the row id). limit: only the
+   * newest this many (a big trader's full list is megabytes; AT-52).
+   */
+  orders(filter: { player?: string; item?: number; ids?: number[]; limit?: number }, scope: Scope): OrderRow[];
   /** Newest first. Rows of the accounts, or the rows with these ids. */
   ledger(filter: { accounts?: number[]; ids?: number[] }, scope: Scope): LedgerRow[];
   /**

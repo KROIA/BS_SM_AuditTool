@@ -60,6 +60,13 @@ test('the player list: every player, the ids the screen hides, amounts in full',
   expect(rows[0]![1]).toBe('a1b2c3d4-e5f6-4a7b-8c9d-000000000001');
   expect(rows.flat().some((c) => c.includes('$'))).toBe(false);
   expect(head!.some((h) => h.endsWith('($)'))).toBe(true);
+  // The first player's orders: all 60, although the screen holds only the latest 10 until "Show all" (AT-52).
+  await expect(page.locator('main')).toContainText('the latest 10 of 60');
+  await answer(path.join(out, 'orders.csv'));
+  await page.getByRole('button', { name: 'Export the orders as CSV' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'orders.csv' })).toHaveText('Saved as orders.csv');
+  expect(read(path.join(out, 'orders.csv')).length).toBe(61);
+  await expect(page.locator('tbody tr')).toHaveCount(10);
 });
 
 test('an account history: the filter applies, all rows, not only the first page', async () => {

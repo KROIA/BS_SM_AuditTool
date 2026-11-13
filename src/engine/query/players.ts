@@ -119,13 +119,14 @@ export function player(uuid: string, scope: Scope): PlayerDetail | null {
   const money = series(all(db, `SELECT s.account, s.item, s.time, s.balance + s.locked AS v FROM snapshot s JOIN account a ON a.number = s.account
     JOIN item i ON i.id = s.item AND i.money = 1 WHERE a.owner = :uuid ${scope.to !== null ? 'AND s.time <= :to' : ''} ORDER BY s.time, s.id`, params), scope);
 
-  return { ...row, accounts, moneyNow, money };
+  const buys = list.filter((o) => counts(o, scope) && o.amount > 0n).length;
+  return { ...row, accounts, moneyNow, buys, money };
 }
 
-export function orders(filter: { player?: string; item?: number; ids?: number[] }, scope: Scope): OrderRow[] {
+export function orders(filter: { player?: string; item?: number; ids?: number[]; limit?: number }, scope: Scope): OrderRow[] {
   const db = mainData();
   if (!db) return [];
-  return readOrders(db, filter, scope.to).filter((o) => counts(o, scope)).reverse();
+  return readOrders(db, filter, scope.to).filter((o) => counts(o, scope)).reverse().slice(0, filter.limit);
 }
 
 // ---- The bank's log ----

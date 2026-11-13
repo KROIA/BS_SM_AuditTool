@@ -62,6 +62,11 @@ test('the time range: purchases before it set the cost, sales inside it count', 
   const quiet = api.player(uuid('Tavrik'), { from: T0 + 140 * MIN, to: null, server: null })!;
   assert.deepEqual([quiet.orders, quiet.profit, quiet.markets, quiet.firstMs, quiet.lastMs], [0, 0n, [], null, null]);
   assert.deepEqual(api.orders({ player: uuid('Tavrik') }, { from: T0 + 140 * MIN, to: null, server: null }), []);
+  // The buys among the orders counted, and only the newest orders when the screen asks for a few (AT-52).
+  assert.deepEqual([sales.buys, buys.buys, quiet.buys], [0, 30, 0]);
+  const every = api.orders({ player: uuid('Tavrik') }, ALL);
+  assert.deepEqual(api.orders({ player: uuid('Tavrik'), limit: 10 }, ALL), every.slice(0, 10));
+  assert.equal(every.length, 60);
 });
 
 test('money for items never bought on the market is sold without a purchase, not profit', () => {

@@ -63,16 +63,19 @@
     return () => (stale = true);
   });
 
+  // Only the newest orders come with the player; all of them (megabytes for a big trader, AT-52) only for "Show all" and the CSV.
+  let round = 0;
   $effect(() => {
     const scope = $state.snapshot(app.scope), rules = $state.snapshot(app.rules), who = uuid;
     void app.saves.length;
     if (!who) return;
     let stale = false;
+    round++;
     void (async () => {
       const d = await engine.player(who, scope);
       const numbers = d?.accounts.map((a) => a.number) ?? [];
       const [o, b, s, c] = d
-        ? await Promise.all([engine.orders({ player: who }, scope), engine.ledger({ accounts: numbers }, scope), engine.sessions(who, scope), Promise.all(numbers.map((n) => engine.check(n, scope, rules)))])
+        ? await Promise.all([engine.orders({ player: who, limit: ROWS }, scope), engine.ledger({ accounts: numbers }, scope), engine.sessions(who, scope), Promise.all(numbers.map((n) => engine.check(n, scope, rules)))])
         : [[], [], [], []];
       if (stale) return;
       [detail, orders, bank, sessions, allOrders, allBank, allSessions, loadedFor] = [d, o, b, s, false, false, false, who];
@@ -80,6 +83,13 @@
     })();
     return () => (stale = true);
   });
+  /** Every order of the shown player in the range; asked for once per load. */
+  async function allOfThem(): Promise<OrderRow[]> {
+    if (!shown || orders.length >= shown.orders) return orders;
+    const mine = round, o = await engine.orders({ player: shown.uuid }, $state.snapshot(app.scope));
+    if (mine === round) orders = o;
+    return o;
+  }
 
   // The Banknotes and items tab asks only while it is open: the count and the world take a while on a large save.
   $effect(() => {
@@ -168,7 +178,7 @@
     if (!shown) return [];
     const s = shown, own = s.accounts.filter((a) => a.owner).map((a) => a.number);
     const without = s.markets.reduce((sum, m) => sum + m.soldWithoutPurchase, 0n);
-    const buys = orders.filter((o) => o.amount > 0n).length;
+    const buys = s.buys;
     return [
       { label: 'Realised trading profit', value: signed(s.profit), full: money(s.profit), fg: tone(s.profit),
         note: without > 0n ? `plus ${moneyShort(without)} sold without a purchase` : s.markets.length ? `on ${count(s.markets.length)} ${s.markets.length === 1 ? 'market' : 'markets'}` : 'no trades in this time range' },
@@ -445,9 +455,9 @@
           <section class="card">
             <div class="cardhead">
               <h2 class="h2 h3" style="flex: 1 1 auto">Orders</h2>
-              <CsvButton screen="players" table="orders" what="the orders" make={() => orderTable(orders, () => shown.name)} />
-              <span class="small">{orders.length > ROWS && !allOrders ? `the latest ${count(ROWS)} of ${count(orders.length)}` : `${count(orders.length)}, newest first`}</span>
-              {#if orders.length > ROWS}<button type="button" class="link" onclick={() => (allOrders = !allOrders)}>{allOrders ? 'Show fewer' : 'Show all'}</button>{/if}
+              <CsvButton screen="players" table="orders" what="the orders" make={async () => orderTable(await allOfThem(), () => shown.name)} />
+              <span class="small">{shown.orders > ROWS && !allOrders ? `the latest ${count(ROWS)} of ${count(shown.orders)}` : `${count(shown.orders)}, newest first`}</span>
+              {#if shown.orders > ROWS}<button type="button" class="link" onclick={async () => { if (!allOrders) await allOfThem(); allOrders = !allOrders; }}>{allOrders ? 'Show fewer' : 'Show all'}</button>{/if}
             </div>
             <div style="overflow-x: auto; margin-top: 12px">
               <table>
