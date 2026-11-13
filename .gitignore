@@ -8,3 +8,4 @@ local/
 # agent files (Claude Code): never committed
 .claude/
 CLAUDE.md
+/release/

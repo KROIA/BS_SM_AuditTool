@@ -59,7 +59,8 @@ test('both styles in both languages: self-contained, the figures and commands of
   assert.match(out.adminen!, /logged no admin action/);
   // Technical adds the findings with their record ids, the coverage, the warnings and the versions.
   assert.ok(!out.adminen!.includes('Every finding of the incident'));
-  for (const s of ['Every finding of the incident', 'Order ids', 'Coverage of the loaded saves', 'Warnings from loading', 'Audit Tool 0.']) assert.ok(out.techen!.includes(s), s);
+  for (const s of ['Every finding of the incident', 'Order ids', 'Coverage of the loaded saves', 'Warnings from loading']) assert.ok(out.techen!.includes(s), s);
+  assert.match(out.techen!, /Audit Tool \d+\.\d+\.\d+/);
   assert.match(out.techen!, /BankSystem (2\.1\.2|not recorded in this save)/);
   // 2.2.0 freezes the accounts by number around the lines.
   assert.ok(make({ version: '2.2.0' }).includes(`/banksystem freeze ${PLAYERS.Tavrik.account} on`));
