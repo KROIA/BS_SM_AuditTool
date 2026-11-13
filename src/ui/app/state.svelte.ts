@@ -1,5 +1,5 @@
 // What the whole program shares: the open screen, the theme, the loaded saves and what is being loaded.
-import type { Progress, RemoteEngine, SaveSummary, Scope, Workspace } from '../../shared/api.ts';
+import { DEFAULT_RULES, type CaseData, type Mark, type Progress, type RemoteEngine, type RuleSettings, type SaveSummary, type Scope, type Workspace } from '../../shared/api.ts';
 
 interface Bridge {
   call(method: string, ...args: unknown[]): Promise<unknown>;
@@ -39,7 +39,20 @@ export const app = $state({
   /** True while the engine reads a save; `loading` then says how far it is. */
   busy: false,
   loading: null as Progress | null,
+  /** The rule settings and the marks on findings, from case.json. Pass rules on with $state.snapshot. */
+  rules: DEFAULT_RULES as RuleSettings,
+  marks: {} as Record<string, Mark>,
 });
+
+function useCase(c: CaseData) {
+  app.rules = c.rules;
+  app.marks = c.marks;
+}
+/** Stores what the user marked on a finding; a mark with nothing left in it is removed. */
+export const setMark = async (id: string, m: Mark) => useCase(await engine.mark(id, $state.snapshot(m)));
+export const setRules = async (r: RuleSettings) => useCase(await engine.setRules($state.snapshot(r)));
+/** The number of pins, for the case counter. */
+export const pins = () => Object.values(app.marks).filter((m) => m.pinned).length;
 
 /** incident: the strongest incident's span, padded by 30 minutes on each side. */
 export type Range = 'all' | 'day' | 'week' | 'incident' | 'custom';
@@ -128,5 +141,6 @@ export function folderName(path: string): string {
 /** Brings back the saves of the last session, then opens the folders given on the command line. */
 export async function start() {
   await run(() => engine.workspace());
+  useCase(await engine.caseData());
   await addSaves(await bridge.startupPaths());
 }

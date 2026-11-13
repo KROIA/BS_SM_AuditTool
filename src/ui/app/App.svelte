@@ -2,6 +2,7 @@
   // The frame around every screen: left menu, top bar, and the screen itself.
   import { count } from '../../shared/fmt.ts';
   import Accounts from '../screens/Accounts.svelte';
+  import Findings from '../screens/Findings.svelte';
   import Markets from '../screens/Markets.svelte';
   import Players from '../screens/Players.svelte';
   import Saves from '../screens/Saves.svelte';
@@ -10,7 +11,7 @@
   import { ICON, SCREENS } from './nav.ts';
   import ScopeMenus from './ScopeMenus.svelte';
   import Search from './Search.svelte';
-  import { app, start, toggleTheme } from './state.svelte.ts';
+  import { app, pins, start, toggleTheme } from './state.svelte.ts';
 
   // An address is the screen and, for a player, an account or a market, what it shows: #/players/<uuid>
   const route = $derived(app.route.split('/'));
@@ -42,8 +43,7 @@
       <Search />
       <div style="flex: 1 1 0"></div>
       <ScopeMenus />
-      <!-- The case arrives with milestone M4; until then it is switched off. -->
-      <button type="button" class="btn" disabled><span style="color: var(--text3); display: flex"><Icon d={ICON.pin} /></span><span>Case</span><span style="color: var(--text3)">0 pinned</span></button>
+      <a class="btn" href="#/case" aria-label="Case: {count(pins())} pinned"><span style="color: var(--text3); display: flex"><Icon d={ICON.pin} /></span><span>Case</span><span style="color: var(--text3)">{count(pins())} pinned</span></a>
       <button type="button" class="btn" style="width: 40px; padding: 0; justify-content: center" onclick={toggleTheme} aria-label={app.theme === 'dark' ? 'Switch to the light theme' : 'Switch to the dark theme'}>
         <Icon d={app.theme === 'dark' ? ICON.sun : ICON.moon} />
       </button>
@@ -62,6 +62,8 @@
           <Accounts selected={route[1] ? Number(route[1]) : null} />
         {:else if screen.id === 'markets'}
           <Markets selected={route[1] ? Number(route[1]) : null} />
+        {:else if screen.id === 'findings'}
+          <Findings selected={route[1] ? decodeURIComponent(route[1]) : null} />
         {:else}
           <Soon {screen} />
         {/if}

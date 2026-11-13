@@ -10,12 +10,15 @@ import { candles, market, markets, traders } from './query/markets.ts';
 import { items, ledger, orders, player, players } from './query/players.ts';
 import { search } from './query/search.ts';
 import { sessions } from './query/sessions.ts';
-import { addSave, removeSave, workspace } from './workspace.ts';
+import { addSave, caseData, mark, removeSave, setRules, workspace } from './workspace.ts';
 
 export const api: EngineApi = {
   workspace,
   addSave,
   removeSave,
+  caseData,
+  mark,
+  setRules,
   items,
   players,
   player,

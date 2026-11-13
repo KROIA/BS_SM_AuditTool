@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { Progress, SaveSummary, Workspace } from '../shared/api.ts';
+import { DEFAULT_RULES, type CaseData, type Mark, type Progress, type RuleSettings, type SaveSummary, type Workspace } from '../shared/api.ts';
 import { cachedSummary, importSave } from './save/import.ts';
 import { findDataDir } from './save/locate.ts';
 
@@ -21,9 +21,80 @@ const isSame = (s: SaveSummary, picked: string) => cacheFile(s.path) === cacheFi
 /** The save that holds the bank and market data: the master, or a single server. */
 export const mainSave = () => saves.find(hasBankOrMarket);
 
-function remember() {
-  fs.writeFileSync(caseFile(), JSON.stringify({ version: 1, saves: saves.map((s) => s.path) }, null, 2));
+// ---- case.json: the save folders, the rule settings and the marks on findings (DESIGN_SPEC 4.5)
+
+/** case.json is small; anything above this was not written by the tool. */
+export const CASE_LIMIT = 8 * 1024 * 1024;
+const MARKS = 10_000, TEXT = 10_000;
+interface Case { saves: string[]; rules: RuleSettings; marks: Record<string, Mark> }
+let kase: Case | null = null;
+
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+/** A threshold like its default: a boolean, a positive number, or a whole number kept as decimal text (raw money and items). */
+function threshold(def: unknown, v: unknown): unknown {
+  if (typeof def === 'boolean') return typeof v === 'boolean' ? v : def;
+  if (typeof def === 'number') return typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= 1e12 ? v : def;
+  return typeof v === 'string' && /^\d{1,20}$/.test(v) ? BigInt(v) : def;
 }
+function readRules(v: unknown): RuleSettings {
+  const stored = isObject(v) ? v : {};
+  return Object.fromEntries(Object.entries(DEFAULT_RULES).map(([rule, def]) => {
+    const s = isObject(stored[rule]) ? stored[rule] : {};
+    return [rule, Object.fromEntries(Object.entries(def).map(([k, d]) => [k, threshold(d, s[k])]))];
+  })) as unknown as RuleSettings;
+}
+const str = (v: unknown, max = TEXT) => (typeof v === 'string' ? v.slice(0, max) : '');
+function readMarks(v: unknown): Record<string, Mark> {
+  const out: Record<string, Mark> = {};
+  for (const [id, m] of Object.entries(isObject(v) ? v : {}).slice(0, MARKS)) {
+    if (id.length > 500 || id === '__proto__' || !isObject(m)) continue;
+    const mark: Mark = { title: str(m.title, 500), start: typeof m.start === 'number' && Number.isFinite(m.start) ? m.start : 0,
+      pinned: m.pinned === true, dismissed: m.dismissed === true, reason: str(m.reason), note: str(m.note) };
+    if (kept(mark)) out[id] = mark;
+  }
+  return out;
+}
+const kept = (m: Mark) => m.pinned || m.dismissed || m.note.trim() !== '';
+
+/** Read once per workspace. A file that is too large or not JSON is kept as case.json.broken and the case starts empty. */
+function theCase(): Case {
+  if (kase) return kase;
+  let raw: unknown = {};
+  try {
+    if (fs.statSync(caseFile()).size > CASE_LIMIT) throw new Error('too large');
+    raw = JSON.parse(fs.readFileSync(caseFile(), 'utf8'));
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') fs.copyFileSync(caseFile(), caseFile() + '.broken');
+  }
+  const c = isObject(raw) ? raw : {};
+  return (kase = { saves: Array.isArray(c.saves) ? c.saves.filter((p): p is string => typeof p === 'string').slice(0, 100) : [], rules: readRules(c.rules), marks: readMarks(c.marks) });
+}
+
+/** Written to a temporary file first and then renamed, so a crash never leaves half a case.json. */
+function remember() {
+  const c = theCase();
+  c.saves = saves.map((s) => s.path);
+  const text = JSON.stringify({ version: 2, ...c }, (_k, v: unknown) => (typeof v === 'bigint' ? String(v) : v), 2);
+  fs.writeFileSync(caseFile() + '.tmp', text);
+  fs.renameSync(caseFile() + '.tmp', caseFile());
+}
+
+export const caseData = (): CaseData => ({ rules: theCase().rules, marks: theCase().marks });
+export function mark(id: string, m: Mark): CaseData {
+  const marks = theCase().marks;
+  const clean = readMarks({ [String(id)]: m })[String(id)];
+  if (clean) marks[String(id)] = clean;
+  else delete marks[String(id)];
+  remember();
+  return caseData();
+}
+export function setRules(rules: RuleSettings): CaseData {
+  theCase().rules = readRules(JSON.parse(JSON.stringify(rules, (_k, v: unknown) => (typeof v === 'bigint' ? String(v) : v))));
+  remember();
+  return caseData();
+}
+/** Ids of the findings marked as not a problem. */
+export const dismissedIds = () => new Set(Object.entries(theCase().marks).flatMap(([id, m]) => (m.dismissed ? [id] : [])));
 
 function load(picked: string): SaveSummary {
   const cache = cacheFile(picked);
@@ -65,20 +136,14 @@ export function init(dir: string, onProgress: (p: Progress) => void = () => {}) 
   root = dir;
   report = onProgress;
   saves = [];
+  kase = null;
   fs.mkdirSync(path.join(root, 'cache'), { recursive: true });
 }
 
 /** The saves of the last session. A save whose folder is gone or unreadable is dropped from the list. */
 export function workspace(): Workspace {
   if (saves.length === 0) {
-    let paths: unknown = [];
-    try {
-      paths = (JSON.parse(fs.readFileSync(caseFile(), 'utf8')) as { saves?: unknown }).saves;
-    } catch {
-      // no case yet
-    }
-    for (const p of Array.isArray(paths) ? paths : []) {
-      if (typeof p !== 'string') continue;
+    for (const p of theCase().saves) {
       try {
         saves.push(load(p));
       } catch {

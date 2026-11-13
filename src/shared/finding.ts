@@ -1,0 +1,222 @@
+// A finding in plain words (DESIGN_SPEC 8.2): its title, summary, facts and rule, for the Findings screen and the report.
+// Every number goes through fmt.ts. The facts each rule fills are listed in engine/query/findings.ts.
+import type { Finding, RuleId, RuleSettings } from './api.ts';
+import { count, items, money, moneyShort, time } from './fmt.ts';
+
+/** What the screens know about items: the name ("Diamond") and whether it is money. */
+export interface ItemWords { itemName: (id: number) => string; isMoney: (id: number) => boolean }
+
+/** The bank log's kinds in words. */
+export const KIND: Record<string, string> = {
+  DEPOSIT: 'Deposit', WITHDRAW: 'Withdrawal', TRANSFER: 'Transfer', WITHDRAW_REFUND: 'Withdrawal returned to the account',
+  ADMIN_SET: 'Set by an admin', ADMIN_ADD: 'Added by an admin', ADMIN_REMOVE: 'Removed by an admin', ADMIN_UNLOCK: 'Locked money released by an admin',
+  ADMIN_ACCOUNT_EDIT: 'Account changed by an admin', BANK_CLOSED: 'Item slot closed', CONVERTER_DEPOSIT: 'Paid in through a converter',
+  CONVERTER_WITHDRAW: 'Paid out through a converter', UPLOAD_DEPOSIT: 'Paid in through an upload block', DOWNLOAD_WITHDRAW: 'Paid out through a download block',
+  CRAFT_CONSUME: 'Used for crafting', CRAFT_OUTPUT: 'Made by crafting', STARTING_BALANCE: 'Starting balance', PAYOUT: 'Company payout', DIVIDEND: 'Dividend',
+  SHARE_STAMP: 'Shares stamped', SHARE_REDEEM: 'Shares redeemed', SHARE_TRADE: 'Shares traded', ACCOUNT_DELETE_PAYOUT: 'Paid out when the account was deleted',
+  ACCOUNT_FREEZE: 'Account frozen or unfrozen', ADMIN_DISALLOW_ITEM: 'Item disallowed by an admin', ACCOUNT_DELETE_LOSS: 'Lost when the account was deleted',
+  RAW_CHANGE: 'Balance changed outside the bank', EXTERNAL_BIND: 'External account bound', EXTERNAL_UNBIND: 'External account unbound',
+  TRANSFER_IN: 'Transfer', TRANSFER_OUT: 'Transfer', UNKNOWN_LEGACY: 'Change of an unknown kind',
+};
+
+export const RULE_NAME: Record<RuleId, string> = {
+  'round-trip': 'Quick round trip', 'order-rate': 'Order rate', 'hour-profit': 'Profit per hour', 'far-price': 'Price far from usual',
+  'price-spike': 'Price spike', 'balance': 'Balance not explained', 'order-ledger': 'Order and bank log disagree', 'bank-flag': 'Bank mod flag',
+  'last-save': 'Log rows after the last bank save', 'market-alert': 'StockMarket alert', 'transfer': 'Cross-server transfer', 'banknotes': 'Banknote count',
+};
+
+/** A factor or a number of seconds with up to two decimals: 2, 3.07 */
+export const times = (v: number) => items(BigInt(Math.round(v * 100)));
+
+/** The rule with its thresholds in one sentence. */
+export function ruleText(rule: RuleId, s: RuleSettings): string {
+  switch (rule) {
+    case 'round-trip': return `Flags a buy followed by a sale on the same market at more than ${times(s[rule].times)} times the price within ${count(s[rule].seconds)} seconds, when no other player traded on that market in between.`;
+    case 'order-rate': return `Flags more than ${count(s[rule].orders)} orders by one player inside one second.`;
+    case 'hour-profit': return `Flags a player whose realised trading profit inside one clock hour is above ${money(s[rule].money)}.`;
+    case 'far-price': return `Flags an order whose price is more than ${times(s[rule].times)} times above or below the market's usual price.`;
+    case 'price-spike': return `Flags a one-minute candle whose high is more than ${times(s[rule].times)} times its low. Candles at the price floor are skipped: from there any move is a huge multiple.`;
+    case 'balance': return `Compares each change between two balance snapshots with the trades and log entries in that time, and flags a difference above ${money(s[rule].money)}, or ${items(s[rule].items)} for other items.`;
+    case 'order-ledger': return 'Flags an order whose rows in the bank log do not add up to its volume, or that has no row at all.';
+    case 'bank-flag': return 'Shows the flags the bank mod raised itself on the server, with the thresholds the server used.';
+    case 'last-save': return 'Flags log rows newer than the bank\'s last save: if the server crashed before the next save, what they did may have been undone.';
+    case 'market-alert': return 'The market mod keeps its alerts in memory and the server log only; no save holds them.';
+    case 'transfer': return 'Compares what left the master with what arrived on each slave. It comes with milestone M3.';
+    case 'banknotes': return 'Counts the banknotes withdrawn against those paid in and found in the world. It comes with milestone M3.';
+  }
+}
+
+export const SOURCE: Record<Finding['source'], string> = { 'tool': 'Found by this tool', 'bank mod': 'Raised by the bank mod on the server', 'market mod': 'Raised by the market mod on the server' };
+export function basis(f: Finding): string {
+  if (f.rule === 'balance') return 'Amount proven, cause is a guess';
+  return { 'proven': 'Proven from the data', 'estimate': 'Estimate', 'hint': 'A hint, not proof', 'as raised': 'As the mod raised it' }[f.basis];
+}
+
+/** Who a finding is about, for the list: up to three names, else the market or the account. */
+export function about(f: Finding, w: ItemWords): string {
+  if (f.rule !== 'price-spike' && f.players.length) return f.players.length <= 3 ? f.players.map((p) => p.name).join(', ') : `${count(f.players.length)} players`;
+  if (f.markets.length) return f.markets.length === 1 ? `${w.itemName(f.markets[0]!)} market` : `${count(f.markets.length)} markets`;
+  if (f.accounts.length) return f.accounts.length === 1 ? `Account ${f.accounts[0]}` : `${count(f.accounts.length)} accounts`;
+  return 'The bank';
+}
+
+/** When: one moment, or from to (the end without its date when it is the same day). */
+export function span(start: number, end: number): string {
+  const [a, b] = [time(start), time(end)];
+  if (end <= start || a === b) return a;
+  return a.split(', ')[0] === b.split(', ')[0] ? `${a} to ${b.split(', ')[1]}` : `${a} to ${b}`;
+}
+
+const FLAG: Record<number, string> = {
+  1: 'Banknotes from someone else', 2: 'Large banknote withdrawal', 3: 'Wealth jump', 4: 'Transfer to a new account', 5: 'Money supply growth',
+  6: 'Transfer parked', 7: 'External binding suspended', 8: 'More shares than issued', 9: 'Shares created',
+};
+/** The bank mod's rule for a flag type, with the server's thresholds (whole money units in its settings.json). */
+export function flagRule(type: number, bank: Record<string, number | boolean>): string {
+  const m = (key: string) => (typeof bank[key] === 'number' ? money(BigInt(Math.round((bank[key] as number) * 100))) : 'the server\'s amount');
+  const n = (key: string) => (typeof bank[key] === 'number' ? times(bank[key] as number) : '?');
+  switch (type) {
+    case 1: return `A rule of the bank mod: a banknote deposit of ${m('LAUNDERING_MIN_AMOUNT')} or more by a player whose own withdrawals in the ${n('LAUNDERING_WINDOW_HOURS')} hours before were smaller.`;
+    case 2: return `A rule of the bank mod: banknote withdrawals by one player that add up to ${m('LARGE_NOTE_WITHDRAWAL_AMOUNT')} or more in one burst.`;
+    case 3: return `A rule of the bank mod: wealth that grows by more than ${m('WEALTH_JUMP_AMOUNT')} and more than ${n('WEALTH_JUMP_PERCENT')}% within one hour.`;
+    case 4: return `A rule of the bank mod: a transfer, payout or dividend of ${m('NEW_ACCOUNT_TRANSFER_AMOUNT')} or more to an account younger than ${n('NEW_ACCOUNT_AGE_HOURS')} hours.`;
+    case 5: return `A rule of the bank mod: all money in the bank grows by ${n('MONEY_SUPPLY_GROWTH_PERCENT')}% and ${m('MONEY_SUPPLY_GROWTH_AMOUNT')} against a snapshot at least one hour old.`;
+    case 6: return 'A rule of the bank mod: money handed out to a slave server whose outcome the master does not know.';
+    case 7: return 'A rule of the bank mod: a binding to an external account was suspended at start-up.';
+    case 8: return 'A rule of the bank mod: more shares deposited than the company issued.';
+    case 9: return 'A rule of the bank mod: shares made by /give or in creative mode.';
+    default: return `A rule of the bank mod that this version of the tool does not know (type ${type}).`;
+  }
+}
+
+export interface FindingWords {
+  title: string;
+  summary: string;
+  facts: [string, string][];
+  /** The rule's name: for a bank flag the flag's. */
+  rule: string;
+  measured: string;
+}
+
+/** Title, summary, facts and measured value of a finding. */
+export function describe(f: Finding, w: ItemWords): FindingWords {
+  const x = f.facts;
+  const b = (k: string) => (typeof x[k] === 'bigint' ? x[k] : BigInt(Number(x[k] ?? 0)));
+  const n = (k: string) => Number(x[k] ?? 0);
+  const item = (id: number | undefined) => (id === undefined ? 'item' : w.itemName(id).toLowerCase());
+  const market = item(f.markets[0]);
+  const who = f.players.map((p) => p.name).join(' and ') || 'A player';
+  const value = (id: number, raw: bigint) => (w.isMoney(id) ? money(raw) : `${items(raw)} ${item(id)}`);
+  const v = f.measured.value;
+  const plural = (k: number, one: string, many: string) => `${count(k)} ${k === 1 ? one : many}`;
+
+  switch (f.rule) {
+    case 'round-trip': return {
+      rule: RULE_NAME[f.rule], measured: `${times(v as number)} times the price, ${times(n('seconds'))} seconds apart`,
+      title: `Bought and sold again at ${times(v as number)} times the price within ${times(n('seconds'))} seconds`,
+      summary: `${who} bought ${items(b('bought'))} ${market} at ${money(b('buyPrice'))} and sold ${items(b('sold'))} ${times(n('seconds'))} seconds later at ${money(b('sellPrice'))}. `
+        + 'No other player traded on this market in between, so only the market\'s own price bot can have moved the price.'
+        + (n('rounds') > 1 ? ` The same pattern shows ${count(n('rounds'))} times.` : ''),
+      facts: [['Bought', `${items(b('bought'))} at ${money(b('buyPrice'))}`], ['Sold', `${items(b('sold'))} at ${money(b('sellPrice'))}`],
+        ['Time between', `${times(n('seconds'))} seconds`], ['Profit from this round', money(b('profit'))], ['Rounds like this', count(n('rounds'))]],
+    };
+    case 'order-rate': {
+      const gap = n('medianGapMs');
+      return {
+        rule: RULE_NAME[f.rule], measured: `${plural(v as number, 'order', 'orders')} in one second`,
+        title: `${count(n('orders'))} orders with ${count(gap)} ms between them`,
+        summary: `${who} placed ${plural(n('orders'), 'order', 'orders')} with typically ${count(gap)} ms between them, up to ${count(n('busiestSecond'))} inside one second. `
+          + (gap < 50 ? 'One game tick lasts 50 ms, so several orders arrived inside every tick. Nobody clicks this fast: this points to a script or a changed game client.'
+            : 'That is faster than a person usually clicks.'),
+        facts: [['Orders', count(n('orders'))], ['Typical gap', `${count(gap)} ms`], ['Busiest second', plural(n('busiestSecond'), 'order', 'orders')],
+          ['Markets', f.markets.map((m) => w.itemName(m)).join(', ') || 'none']],
+      };
+    }
+    case 'hour-profit': return {
+      rule: RULE_NAME[f.rule], measured: `${money(v as bigint)} in one hour`,
+      title: `${moneyShort(b('profit'))} trading profit within one hour`,
+      summary: `${who} made ${money(b('profit'))} of realised trading profit in the hour from ${time(n('hour'))}. All other players together made ${money(b('others'))} in that hour.`
+        + (n('hours') > 1 ? ` ${count(n('hours'))} hours close together were above the threshold, ${money(b('total'))} in all.` : ''),
+      facts: [['Profit in that hour', money(b('profit'))], ['All other players that hour', money(b('others'))], ['Hours above the threshold', count(n('hours'))],
+        ['Profit in those hours', money(b('total'))]],
+    };
+    case 'far-price': {
+      const above = b('price') > b('usual'), side = above ? 'above' : 'below';
+      return {
+        rule: RULE_NAME[f.rule], measured: `${times(v as number)} times ${side} the usual price`,
+        title: `${n('orders') === 1 ? 'An order' : `${count(n('orders'))} orders`} at up to ${times(v as number)} times ${side} the usual price`,
+        summary: `${who} placed ${plural(n('orders'), 'order', 'orders')} on the ${market} market at prices far from its usual price of ${money(b('usual'))}. `
+          + `The furthest was at ${money(b('price'))}, ${times(v as number)} times ${side} it.`,
+        facts: [['Usual price', money(b('usual'))], ['Furthest price', money(b('price'))], ['Orders', count(n('orders'))]],
+      };
+    }
+    case 'price-spike': {
+      const traders = f.players.map((p) => p.name);
+      return {
+        rule: RULE_NAME[f.rule], measured: `${times(v as number)} times from low to high`,
+        title: `The ${market} price swung between ${money(b('low'))} and ${money(b('high'))} inside one minute`,
+        summary: `In the minute from ${time(n('time'))} the ${market} price moved between ${money(b('low'))} and ${money(b('high'))}`
+          + (x.usual === null ? '. ' : `; its usual price is ${money(b('usual'))}. `)
+          + (n('minutes') > 1 ? `${count(n('minutes'))} minutes close together swung like this. ` : '')
+          + (traders.length ? `${traders.length <= 3 ? traders.join(', ') : `${count(traders.length)} players`} traded on this market at the time. They are named, not blamed: the price bot moves prices too.`
+            : 'No player order falls into these minutes.'),
+        facts: [['Lowest price', money(b('low'))], ['Highest price', money(b('high'))], ['Usual price', x.usual === null ? 'unknown' : money(b('usual'))],
+          ['Minutes', count(n('minutes'))]],
+      };
+    }
+    case 'balance': {
+      const id = n('item'), diff = b('difference'), rose = diff > 0n, size = rose ? diff : -diff;
+      const short = w.isMoney(id) ? moneyShort(size) : `${items(size)} ${item(id)}`;
+      const labels = (x.labels as string[] | null) ?? [];
+      const why = { low: 'This save was written by BankSystem 2.1.2, which did not log trades or admin actions, so gaps like this are expected there.',
+        medium: 'In the mod version this server ran, several paths still change a balance without a log entry, such as an admin setting a balance by hand, so this may be one of them.',
+        high: 'From this point on the bank logs nearly every change, so this points to tampering or a bug. Merged player aliases and changes on an external currency mod\'s side are the remaining harmless causes.',
+      }[String(x.rating) as 'low' | 'medium' | 'high'] ?? '';
+      return {
+        rule: RULE_NAME[f.rule], measured: `${value(id, size)} not explained`,
+        title: `A balance ${rose ? 'rose' : 'fell'} by ${short} and the log has no entry for it`,
+        summary: `Between the snapshots of ${time(f.start)} and ${time(f.end)}, account ${f.accounts[0]} ${rose ? 'gained' : 'lost'} ${value(id, size)} more than its trades and log entries explain. ${why}`
+          + (labels.length ? ` The gap holds rows the log gives no direction for: ${labels.map((k) => (KIND[k] ?? k).toLowerCase()).join(', ')}.` : ''),
+        facts: [['Account', String(f.accounts[0] ?? '')], ['Not explained', (rose ? '+' : '-') + value(id, size)],
+          ['How much this says', { low: 'Little: old save', medium: 'Some: the log has known holes', high: 'Much: the log is complete' }[String(x.rating) as 'low'] ?? String(x.rating)]],
+      };
+    }
+    case 'order-ledger': {
+      const logged = b('logged');
+      return {
+        rule: RULE_NAME[f.rule], measured: `${items(v as bigint)} ${market} apart`,
+        title: n('orders') === 1 ? 'An order and the bank log disagree' : `${count(n('orders'))} orders and the bank log disagree`,
+        summary: `The order furthest off filled ${items(b('volume'))} ${market}, ${logged === 0n ? 'and the bank log has no row for it' : `and the bank log has ${items(logged)} for it`}. `
+          + 'Either the bank did not write the trade, or its rows were lost.',
+        facts: [['Orders', count(n('orders'))], ['Filled (furthest off)', `${items(b('volume'))} ${market}`], ['In the bank log', `${items(logged)} ${market}`]],
+      };
+    }
+    case 'bank-flag': {
+      const type = n('flagType'), amount = b('amount');
+      const shown = f.measured.unit === 'money' ? money(amount) : `${items(amount)} ${f.measured.unit}`;
+      const short = f.measured.unit === 'money' ? moneyShort(amount) : shown;
+      const title: Record<number, string> = {
+        1: `Paid in ${short} of banknotes this player did not withdraw`, 2: `${short} withdrawn as banknotes in one burst`, 3: `Wealth grew by ${short} within one hour`,
+        4: `${short} paid into an account younger than a day`, 5: `The money in the bank grew by ${short}`, 6: 'A transfer to a slave server with an unknown outcome',
+        7: 'A binding to an external account was suspended', 8: `${shown} more than the company issued`, 9: `${shown} made outside the game's rules`,
+      };
+      return {
+        rule: FLAG[type] ?? `Bank flag type ${type}`, measured: shown + (f.measured.threshold === null ? '' : `, the server's limit is ${money(f.measured.threshold as bigint)}`),
+        title: title[type] ?? `A flag of type ${type} by the bank mod`,
+        summary: 'The bank mod raised this itself while the server was running.'
+          + (x.origin === 'audit log' ? ` The database lost its row; only the bank's audit log still has it${x.approximateTime ? ', and its time may be off by whole hours' : ''}.` : '')
+          + (f.acknowledged ? ' An admin has acknowledged it.' : ''),
+        facts: [['Flag', FLAG[type] ?? `type ${type}`], ['Amount', shown], ...(x.ref ? [['Reference', String(x.ref)] as [string, string]] : []),
+          ...(x.details ? [['Details', String(x.details)] as [string, string]] : []), ['Acknowledged', f.acknowledged === null ? 'unknown' : f.acknowledged ? 'yes' : 'no']],
+      };
+    }
+    case 'last-save': return {
+      rule: RULE_NAME[f.rule], measured: plural(n('rows'), 'row', 'rows'),
+      title: `${plural(n('rows'), 'log row', 'log rows')} after the bank last saved`,
+      summary: `The bank last saved its data at ${time(n('lastSave'))}, and ${plural(n('rows'), 'log row is', 'log rows are')} newer than that. `
+        + 'If the server crashed before the next save, what these rows did may have been undone while the rows stay. Check the accounts they name.',
+      facts: [['Bank last saved', time(n('lastSave'))], ['Rows after it', count(n('rows'))], ['Accounts', count(f.accounts.length)]],
+    };
+    default: return { rule: RULE_NAME[f.rule], measured: count(v), title: RULE_NAME[f.rule], summary: '', facts: [] };
+  }
+}

@@ -1,6 +1,6 @@
 <script lang="ts">
   // The time range and the server filter of the top bar. Both set app.scope, which every screen passes to its questions.
-  import { DEFAULT_RULES, type Incident } from '../../shared/api.ts';
+  import type { Incident } from '../../shared/api.ts';
   import { time } from '../../shared/fmt.ts';
   import { incidentTitle } from '../../shared/incident.ts';
   import Icon from './Icon.svelte';
@@ -35,16 +35,19 @@
   const end = $derived(newest());
   const CHOICES: [Range, string][] = [['all', 'Everything'], ['day', 'Last 24 hours'], ['week', 'Last 7 days']];
 
-  // The strongest incident over all the data of the filtered server (highest level, then largest profit).
-  // ponytail: the default rules until the rule settings have a screen (Findings, detection rules).
+  // The strongest incident over all the data of the filtered server (highest level, then largest profit) that still has
+  // a finding not marked as "not a problem".
   let strongest = $state<{ incident: Incident; title: string } | null>(null);
   $effect(() => {
-    const server = app.scope.server;
+    const server = app.scope.server, rules = $state.snapshot(app.rules), marks = app.marks;
     void app.saves;
-    void Promise.all([engine.incidents({ from: null, to: null, server }, DEFAULT_RULES), engine.items()]).then(([r, i]) => {
-      const top = r.incidents[0];
+    let stale = false;
+    void Promise.all([engine.incidents({ from: null, to: null, server }, rules), engine.items()]).then(([r, i]) => {
+      if (stale) return;
+      const top = r.incidents.find((x) => x.findings.some((id) => !marks[id]?.dismissed));
       strongest = top ? { incident: top, title: incidentTitle(top, words(new Map(i.map((x) => [x.id, x]))).itemName) } : null;
     });
+    return () => (stale = true);
   });
 
   function choose(r: Range) {

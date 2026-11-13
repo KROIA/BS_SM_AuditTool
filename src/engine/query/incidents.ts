@@ -1,6 +1,6 @@
 // Incidents (DESIGN_SPEC 8.5) and the suspicion order of the players (8.3), both made from the findings.
 import type { Finding, Incident, IncidentsResult, Level, RuleSettings, Scope } from '../../shared/api.ts';
-import { mainData } from '../workspace.ts';
+import { caseData, dismissedIds, mainData } from '../workspace.ts';
 import { findings, RANK, shown, state } from './findings.ts';
 import { sales, type Sale } from './sessions.ts';
 
@@ -48,13 +48,15 @@ const union = <T extends number | string>(v: T[]) => [...new Set(v)].sort((a, b)
 
 export function incidents(scope: Scope, settings: RuleSettings): IncidentsResult {
   const db = mainData();
-  if (!db) return { incidents: [], others: [] };
+  const marked = Object.keys(caseData().marks);
+  if (!db) return { incidents: [], others: [], orphans: marked };
   const st = state(db);
+  const every = findings(ALL, settings).findings, raised = new Set(every.map((f) => f.id));
   const sold = new Map<string, Sale[]>();
   const salesOf = (p: string) => sold.get(p) ?? sold.set(p, sales(st.byPlayer.get(p) ?? [])).get(p)!;
   const alone = new Set<Finding>();
   const out: Incident[] = [];
-  for (const g of join(findings(ALL, settings).findings, st.owner)) {
+  for (const g of join(every, st.owner)) {
     if (g.list.length === 1) {
       alone.add(g.list[0]!);
       continue;
@@ -72,13 +74,13 @@ export function incidents(scope: Scope, settings: RuleSettings): IncidentsResult
     if (shown(i, scope)) out.push(i);
   }
   out.sort((a, b) => RANK[a.level] - RANK[b.level] || (b.profit > a.profit ? 1 : b.profit < a.profit ? -1 : 0) || a.start - b.start);
-  return { incidents: out, others: findings(scope, settings).findings.filter((f) => alone.has(f)) };
+  return { incidents: out, others: findings(scope, settings).findings.filter((f) => alone.has(f)), orphans: marked.filter((id) => !raised.has(id)) };
 }
 
 const WEIGHT: Record<Level, number> = { critical: 8, high: 4, medium: 2, low: 1 };
 
-/** Each player's place in the suspicion order (DESIGN_SPEC 8.3): 8, 4, 2, 1 per open finding by its level. Dismissed findings and price spikes do not count. */
-export function suspicion(list: Finding[], dismissed: ReadonlySet<string> = new Set()): Map<string, number> {
+/** Each player's place in the suspicion order (DESIGN_SPEC 8.3): 8, 4, 2, 1 per open finding by its level. Dismissed findings (by default those of the case) and price spikes do not count. */
+export function suspicion(list: Finding[], dismissed: ReadonlySet<string> = dismissedIds()): Map<string, number> {
   const out = new Map<string, number>();
   for (const f of list) if (!dismissed.has(f.id)) for (const p of blamed(f)) out.set(p.uuid, (out.get(p.uuid) ?? 0) + WEIGHT[f.level]);
   return out;

@@ -392,6 +392,30 @@ export interface IncidentsResult {
   incidents: Incident[];
   /** Findings not in an incident with another finding, sorted like findings(). */
   others: Finding[];
+  /** Ids the case has marks for that no rule raises with these settings (a threshold changed, a rule is off). */
+  orphans: string[];
+}
+
+/**
+ * What the user marked on one finding, kept in case.json. title and start are copied from the finding when it is marked,
+ * so the mark can still be shown when a changed threshold no longer raises the finding.
+ */
+export interface Mark {
+  title: string;
+  start: number;
+  /** Pinned as evidence for the case. */
+  pinned: boolean;
+  /** Marked as not a problem, with an optional reason. */
+  dismissed: boolean;
+  reason: string;
+  note: string;
+}
+
+/** The parts of case.json the screens use. */
+export interface CaseData {
+  rules: RuleSettings;
+  /** By finding id. */
+  marks: Record<string, Mark>;
 }
 
 export interface SearchResult {
@@ -412,10 +436,10 @@ export interface QueryApi {
   /** Sorted by profit, highest first (by suspicion from M2 on). */
   players(scope: Scope): PlayerRow[];
   player(uuid: string, scope: Scope): PlayerDetail | null;
-  /** Newest first. */
-  orders(filter: { player?: string; item?: number }, scope: Scope): OrderRow[];
-  /** Newest first. */
-  ledger(filter: { accounts: number[] }, scope: Scope): LedgerRow[];
+  /** Newest first. ids: order ids as a finding's records hold them (the mod's order id, else the row id). */
+  orders(filter: { player?: string; item?: number; ids?: number[] }, scope: Scope): OrderRow[];
+  /** Newest first. Rows of the accounts, or the rows with these ids. */
+  ledger(filter: { accounts?: number[]; ids?: number[] }, scope: Scope): LedgerRow[];
   /** Sorted by money, highest first (by the unexplained amount from M2 on). */
   accounts(scope: Scope): AccountRow[];
   account(number: number, scope: Scope): AccountDetail | null;
@@ -479,6 +503,11 @@ export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player'
   addSave(path: string): Workspace;
   removeSave(path: string): Workspace;
   selfCheck(): EngineCheck;
+  /** The marks and rule settings of case.json; the defaults when it has none or cannot be read. */
+  caseData(): CaseData;
+  /** Sets the marks of one finding; a mark with nothing pinned, dismissed or noted is removed. */
+  mark(id: string, mark: Mark): CaseData;
+  setRules(rules: RuleSettings): CaseData;
 }
 
 /** The same calls as the screens see them: every answer arrives later. */

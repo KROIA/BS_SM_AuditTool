@@ -12,11 +12,12 @@ const inTime = (ms: number, s: Scope) => (s.from === null || ms >= s.from) && (s
 const TYPE = ['market', 'limit', 'intermarket'] as const;
 
 /** Orders up to `to`, oldest first; the time range's start and the server filter are left to the caller. */
-export function readOrders(db: DatabaseSync, filter: { player?: string; item?: number; orderId?: number }, to: number | null): OrderRow[] {
+export function readOrders(db: DatabaseSync, filter: { player?: string; item?: number; orderId?: number; ids?: number[] }, to: number | null): OrderRow[] {
   const where = ['1'];
   const params: Record<string, SQLInputValue> = {};
   // An order's id is the mod's order_id; old rows have none and go by their row id.
   if (filter.orderId !== undefined) (where.push('(o.order_id = :oid OR (o.order_id IS NULL AND o.id = :oid))'), (params.oid = filter.orderId));
+  if (filter.ids !== undefined) (where.push('coalesce(o.order_id, o.id) IN (SELECT value FROM json_each(:ids))'), (params.ids = JSON.stringify(filter.ids)));
   if (filter.player !== undefined) (where.push('o.player = :player'), (params.player = filter.player));
   if (filter.item !== undefined) (where.push('o.item = :item'), (params.item = filter.item));
   if (to !== null) (where.push('o.time <= :to'), (params.to = to));
@@ -118,7 +119,7 @@ export function player(uuid: string, scope: Scope): PlayerDetail | null {
   return { ...row, accounts, moneyNow, money };
 }
 
-export function orders(filter: { player?: string; item?: number }, scope: Scope): OrderRow[] {
+export function orders(filter: { player?: string; item?: number; ids?: number[] }, scope: Scope): OrderRow[] {
   const db = mainData();
   if (!db) return [];
   return readOrders(db, filter, scope.to).filter((o) => counts(o, scope)).reverse();
@@ -154,14 +155,15 @@ export function change(kind: string, amount: bigint, note: string | null, balanc
   return null; // UNKNOWN_LEGACY and kinds this version of the tool does not know
 }
 
-export function ledger(filter: { accounts: number[] }, scope: Scope): LedgerRow[] {
+export function ledger(filter: { accounts?: number[]; ids?: number[] }, scope: Scope): LedgerRow[] {
   const db = mainData();
-  if (!db || filter.accounts.length === 0) return [];
+  const [column, list] = filter.ids ? ['id', filter.ids] : ['account', filter.accounts ?? []];
+  if (!db || list.length === 0) return [];
   const nameOf = names(db);
-  const params: Record<string, SQLInputValue> = { accounts: JSON.stringify(filter.accounts) };
+  const params: Record<string, SQLInputValue> = { list: JSON.stringify(list) };
   if (scope.from !== null) params.from = scope.from;
   if (scope.to !== null) params.to = scope.to;
-  return all(db, `SELECT * FROM ledger WHERE account IN (SELECT value FROM json_each(:accounts))
+  return all(db, `SELECT * FROM ledger WHERE ${column} IN (SELECT value FROM json_each(:list))
     ${scope.from !== null ? 'AND ts >= :from' : ''} ${scope.to !== null ? 'AND ts <= :to' : ''} ORDER BY ts DESC, id DESC`, params).map((r) => {
     const kind = String(r.kind), amount = big(r.amount)!, note = text(r.note), balanceAfter = big(r.balance_after);
     const actor = text(r.actor);
