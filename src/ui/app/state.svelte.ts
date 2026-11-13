@@ -76,7 +76,8 @@ export function setRange(range: Range, from: number | null = null, to: number | 
 }
 
 addEventListener('hashchange', () => (app.route = routeFromHash()));
-bridge.onProgress((p) => (app.loading = p));
+// The region scan reports on the same channel (Progress.scan); its bar is AT-37, and it must not take over the import's.
+bridge.onProgress((p) => { if (!p.scan) app.loading = p; });
 
 export function toggleTheme() {
   app.theme = app.theme === 'dark' ? 'light' : 'dark';

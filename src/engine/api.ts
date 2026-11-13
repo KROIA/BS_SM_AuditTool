@@ -14,6 +14,7 @@ import { search } from './query/search.ts';
 import { sessions } from './query/sessions.ts';
 import { transfers } from './query/transfers.ts';
 import { worldItems } from './query/world.ts';
+import { scanStatus, startScan, stopScan } from './scan.ts';
 import { addSave, caseData, mark, removeSave, setRules, workspace } from './workspace.ts';
 
 export const api: EngineApi = {
@@ -46,6 +47,9 @@ export const api: EngineApi = {
   transfers,
   banknotes,
   worldItems,
+  startScan,
+  stopScan,
+  scanStatus,
   selfCheck() {
     const db = new DatabaseSync(':memory:');
     try {

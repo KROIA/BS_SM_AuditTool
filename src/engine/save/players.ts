@@ -43,32 +43,42 @@ export interface PlayerFiles { files: { uuid: string; ok: boolean }[]; stacks: S
 
 const UUID_FILE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.dat$/i;
 
+/** One stack as the walker meets it; path: the containers it is in, outermost first. */
+export interface Found { path: string[]; item: string; count: number; plain: boolean; worth: bigint | null }
+
+/**
+ * Walks a list of stacks and the containers inside them (1.20.5+ components and the older tag layout) and calls add per
+ * stack. budget: the stacks left for one file or container, shared between calls. Throws a sentence when a limit is broken.
+ */
+export function walkStacks(entries: Nbt[], at: string[], add: (s: Found) => void, budget = { left: LIMITS.stacks }): void {
+  for (const e of entries.filter(isCompound)) {
+    // A 1.20.5+ container lists { slot, item }; inventories, bundles and older containers list the stack itself.
+    const stack = str(e, 'id') === undefined ? compound(e, 'item') : e;
+    const id = str(stack, 'id'), count = num(stack, 'count') ?? num(stack, 'Count');
+    if (!id || count === undefined || !Number.isInteger(count) || count <= 0) continue;
+    if (--budget.left < 0) throw new Error(`more than ${LIMITS.stacks} stacks`);
+    const item = id.slice(0, NAME), parts = compound(stack, 'components'), tag = compound(stack, 'tag');
+    const plain = Object.keys(parts ?? {}).length === 0 && Object.keys(tag ?? {}).length === 0;
+    add({ path: at, item, count, plain, worth: plain ? worthOf(item) : null });
+    const inner = [...list(parts, 'minecraft:container'), ...list(parts, 'minecraft:bundle_contents'), // 1.20.5+
+      ...list(compound(tag, 'BlockEntityTag'), 'Items'), ...list(tag, 'Items')]; // older: shulker boxes, bundles
+    if (!inner.length) continue;
+    if (at.length >= LIMITS.depth) throw new Error(`containers nested deeper than ${LIMITS.depth} levels`);
+    walkStacks(inner, [...at, item], add, budget);
+  }
+}
+
 /** One player file's stacks; throws a sentence when a limit is broken. */
 export function readPlayer(nbt: { [k: string]: Nbt }, player: string): Stack[] {
   const out = new Map<string, Stack>();
-  let walked = 0;
-  const walk = (entries: Nbt[], place: Place, at: string[]) => {
-    for (const e of entries.filter(isCompound)) {
-      // A 1.20.5+ container lists { slot, item }; inventories, bundles and older containers list the stack itself.
-      const stack = str(e, 'id') === undefined ? compound(e, 'item') : e;
-      const id = str(stack, 'id'), count = num(stack, 'count') ?? num(stack, 'Count');
-      if (!id || count === undefined || !Number.isInteger(count) || count <= 0) continue;
-      if (++walked > LIMITS.stacks) throw new Error(`more than ${LIMITS.stacks} stacks`);
-      const item = id.slice(0, NAME), parts = compound(stack, 'components'), tag = compound(stack, 'tag');
-      const plain = Object.keys(parts ?? {}).length === 0 && Object.keys(tag ?? {}).length === 0;
-      const worth = plain ? worthOf(item) : null;
-      const key = JSON.stringify([place, at, item, plain]);
-      const s = out.get(key) ?? out.set(key, { player, place, path: at, item, count: 0, plain, worth }).get(key)!;
-      s.count += count;
-      const inner = [...list(parts, 'minecraft:container'), ...list(parts, 'minecraft:bundle_contents'), // 1.20.5+
-        ...list(compound(tag, 'BlockEntityTag'), 'Items'), ...list(tag, 'Items')]; // older: shulker boxes, bundles
-      if (!inner.length) continue;
-      if (at.length >= LIMITS.depth) throw new Error(`containers nested deeper than ${LIMITS.depth} levels`);
-      walk(inner, place, [...at, item]);
-    }
+  const budget = { left: LIMITS.stacks };
+  const at = (place: Place) => (f: Found) => {
+    const key = JSON.stringify([place, f.path, f.item, f.plain]);
+    const s = out.get(key) ?? out.set(key, { player, place, ...f, count: 0 }).get(key)!;
+    s.count += f.count;
   };
-  walk(list(nbt, 'Inventory'), 'inventory', []);
-  walk(list(nbt, 'EnderItems'), 'ender chest', []);
+  walkStacks(list(nbt, 'Inventory'), [], at('inventory'), budget);
+  walkStacks(list(nbt, 'EnderItems'), [], at('ender chest'), budget);
   return [...out.values()];
 }
 

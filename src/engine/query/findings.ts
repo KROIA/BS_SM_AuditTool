@@ -15,9 +15,11 @@
 //                or percent), text; for a pump open (the minute's candle open, null without one), percent (null without a candle)
 //   transfer     transferId, class (lost, twice, created, parked), direction, path, item (null: money), sent, received (of that
 //                item), itemsOff (items that differ), steps, why
-//   banknotes    outstanding (the note count, corrected on 2.1.2), found (in player files), difference (found - outstanding),
-//                inventory, enderChest, putBack, missing and unreadable (names of players without a readable file), unnamed
-//                (how many UUIDs without a file or a name), without (saves)
+//   banknotes    outstanding (the note count, corrected on 2.1.2), found (in player files and the region scan), difference
+//                (found - outstanding), inventory, enderChest, blocks (in blocks and entities), offers (in villagers' offers, not in
+//                found), putBack, appeared (money that could be notes paid back through the converter, 2.1.2), missing and
+//                unreadable (names of players without a readable file), unnamed (how many UUIDs without a file or a name),
+//                without (saves), scan (the coverage's state), scanFiles, scanFilesTotal, chunksUnread, lz4, filesUnread
 import type { DatabaseSync } from 'node:sqlite';
 import type { Fact, Finding, FindingsResult, Level, OrderRow, RuleId, RuleSettings, RuleStatus, Scope, TransferItem } from '../../shared/api.ts';
 import { mainData, mainSave } from '../workspace.ts';
@@ -29,6 +31,7 @@ import { sales } from './sessions.ts';
 import { allTransfers, noTransfers } from './transfers.ts';
 import { worldItems } from './world.ts';
 import { banknotes } from './banknotes.ts';
+import { scanStamp } from '../scan.ts';
 
 const MIN = 60_000, HOUR = 3_600_000;
 /** Hits of one rule on the same subject less than this apart form one finding (DESIGN_SPEC 8.2, repeated hits). */
@@ -366,8 +369,8 @@ const RULES: { [K in keyof RuleSettings]: Rule<K> } = {
 
   'banknotes': {
     applies: () => banknotes(EVER).reason ?? worldItems().reason,
-    // The notes the log says are outside the bank against those found in the player files (DESIGN_SPEC 8.7). An estimate:
-    // notes in chests and other blocks are only seen by the region scan, and players without a file are not counted.
+    // The notes the log says are outside the bank against those found in the player files and by the region scan
+    // (DESIGN_SPEC 8.7). An estimate: the scan may not have run, and players without a file are not counted.
     run: (db, s) => {
       const count = banknotes(EVER), world = worldItems();
       const diff = world.notes - count.outstanding;
@@ -376,11 +379,14 @@ const RULES: { [K in keyof RuleSettings]: Rule<K> } = {
       const span = all(db, 'SELECT min(ts) AS a, max(ts) AS b FROM ledger WHERE ts > 0')[0]!;
       const end = main.lastPlayedMs ?? num(span.b) ?? 0, start = Math.min(num(span.a) ?? end, end);
       const named = (l: { name: string }[]) => l.map((p) => p.name);
+      const scan = world.scan, u = scan.unreadable;
       return [{
         ...blank('banknotes', 'count'), basis: 'estimate', level: level('medium', abs(diff), s.money), start, end,
         measured: { value: abs(diff), threshold: s.money, unit: 'money' },
         facts: { outstanding: count.outstanding, found: world.notes, difference: diff, inventory: world.inventory, enderChest: world.enderChest,
-          putBack: count.putBack, missing: named(world.missing), unnamed: world.unnamed, unreadable: named(world.unreadable), without: world.without },
+          blocks: world.blocks, offers: world.offers, putBack: count.putBack, appeared: count.appeared.reduce((a, g) => a + g.amount, 0n),
+          missing: named(world.missing), unnamed: world.unnamed, unreadable: named(world.unreadable), without: world.without,
+          scan: scan.state, scanFiles: scan.files, scanFilesTotal: scan.filesTotal, chunksUnread: u.damaged + u.lz4 + u.tooLarge, lz4: u.lz4, filesUnread: u.files },
       }];
     },
   },
@@ -428,7 +434,8 @@ export function findings(scope: Scope, settings: RuleSettings): FindingsResult {
         rules.push({ rule, on: s.on, found: null, notApplicable: reason });
         continue;
       }
-      const key = JSON.stringify(s, (_k, v: unknown) => (typeof v === 'bigint' ? String(v) : v));
+      // The banknote rule reads the region scan, which can change while the tool runs.
+      const key = JSON.stringify(s, (_k, v: unknown) => (typeof v === 'bigint' ? String(v) : v)) + (rule === 'banknotes' ? ':' + scanStamp() : '');
       let kept = st.kept.get(rule);
       if (kept?.key !== key) st.kept.set(rule, (kept = { key, list: r.run(db, s as never, st) }));
       rules.push({ rule, on: true, found: kept.list.length, notApplicable: null });

@@ -127,6 +127,11 @@ const gap = (g: RawGap, rating: (from: number) => Rating): Gap => ({ from: g.fro
 
 export const moneyItems = (db: DatabaseSync) => new Set(all(db, 'SELECT id FROM item WHERE money = 1').map((r) => num(r.id)!));
 /**
+ * Items that have a market on this save: in the market list (MarketManager), or with prices in the market database. The
+ * real November copy has no market list the tool reads, only prices, so both count (AT-36).
+ */
+export const marketItems = (db: DatabaseSync) => new Set(all(db, 'SELECT item AS i FROM market UNION SELECT market FROM candle_hour').map((r) => num(r.i)!));
+/**
  * Every money item and what one of it is worth, raw (BS MoneyItem*.java, worth()): the base item 100, banksystem:money<N>
  * N x 100, banksystem:money_cent<N> N.
  */

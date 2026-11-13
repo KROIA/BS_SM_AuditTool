@@ -7,15 +7,19 @@ import { DatabaseSync } from 'node:sqlite';
 import { DEFAULT_RULES, type CaseData, type Mark, type Progress, type RuleSettings, type SaveSummary, type Workspace } from '../shared/api.ts';
 import { cachedSummary, importSave } from './save/import.ts';
 import { findDataDir } from './save/locate.ts';
+import { dropScan, resetScan } from './scan.ts';
 
 let root = ''; // the workspace folder: case.json and cache/
 let saves: SaveSummary[] = [];
 let report: (p: Progress) => void = () => {};
+/** Sends progress to whoever listens (the window); the region scan reports through it too. */
+export const tell = (p: Progress) => report(p);
 /** The cache databases opened read-only, by cache file. Closed whenever the loaded saves change. */
 const opened = new Map<string, DatabaseSync>();
 
 const caseFile = () => path.join(root, 'case.json');
-const cacheFile = (picked: string) => path.join(root, 'cache', crypto.createHash('sha1').update(path.resolve(picked).toLowerCase()).digest('hex').slice(0, 16) + '.db');
+/** The cache database of a save folder, however it was spelled. */
+export const cacheFile = (picked: string) => path.join(root, 'cache', crypto.createHash('sha1').update(path.resolve(picked).toLowerCase()).digest('hex').slice(0, 16) + '.db');
 const hasBankOrMarket = (s: SaveSummary) => s.sources.some((x) => (x.id === 'bank' || x.id === 'market') && x.status !== 'none' && x.status !== 'missing');
 /** The same folder, however it was spelled. Compared through the cache file, which is what two spellings would share. */
 const isSame = (s: SaveSummary, picked: string) => cacheFile(s.path) === cacheFile(picked);
@@ -99,7 +103,10 @@ export const dismissedIds = () => new Set(Object.entries(theCase().marks).flatMa
 
 function load(picked: string): SaveSummary {
   const cache = cacheFile(picked);
-  return cachedSummary(cache, picked) ?? importSave(picked, cache, (step, done, total) => report({ save: path.basename(picked), step, done, total }));
+  const cached = cachedSummary(cache, picked);
+  if (cached) return cached;
+  dropScan(picked); // the cache is rebuilt, and the scan's results with it
+  return importSave(picked, cache, (step, done, total) => report({ save: path.basename(picked), step, done, total }));
 }
 
 function closeMaster() {
@@ -133,6 +140,7 @@ const state = (): Workspace => ({ saves, warnings: networkWarnings() });
 
 /** Sets where the workspace lives and who hears about progress. Called once, before anything else. */
 export function init(dir: string, onProgress: (p: Progress) => void = () => {}) {
+  resetScan();
   closeMaster();
   root = dir;
   report = onProgress;
@@ -174,6 +182,7 @@ export function addSave(chosen: string): Workspace {
 export function removeSave(picked: string): Workspace {
   closeMaster();
   saves = saves.filter((s) => !isSame(s, picked));
+  dropScan(picked);
   fs.rmSync(cacheFile(picked), { force: true });
   remember();
   return state();

@@ -72,12 +72,38 @@ export interface Workspace {
   warnings: string[];
 }
 
-/** Sent while a save is being read. */
+/** Sent while a save is being read, and by the region scan after each file (with scan set; done and total count files). */
 export interface Progress {
   save: string;
   step: string;
   done: number;
   total: number;
+  scan?: ScanStatus;
+}
+
+/**
+ * How much of the region files the scan has read (DESIGN_SPEC 6.7). Files and bytes are those on disk now; a file is done
+ * when the scan read it at its current size and time, so a changed file counts as not done.
+ */
+export interface ScanCoverage {
+  state: 'no region files' | 'not run' | 'partial' | 'complete';
+  files: number;
+  filesTotal: number;
+  bytes: number;
+  bytesTotal: number;
+  /** Chunks read in the files done. */
+  chunks: number;
+  /** What could not be read in the files done: whole files, and chunks damaged, packed with LZ4 (not read) or too large. */
+  unreadable: { files: number; damaged: number; lz4: number; tooLarge: number };
+  /** Finds not kept because the save reached the row limit of the cache. */
+  dropped: number;
+}
+export interface ScanStatus extends ScanCoverage {
+  running: boolean;
+  /** Raw money in plain notes the scan found in blocks and entities so far (offers left out). */
+  notes: bigint;
+  /** Per loaded save, in the order they were added. */
+  saves: ({ save: string } & ScanCoverage)[];
 }
 
 /**
@@ -546,6 +572,14 @@ export interface QueryApi {
    * save and its loaded slaves: the state when each copy was taken, so no scope applies.
    */
   worldItems(): WorldItemsResult;
+  /**
+   * Starts the region scan in the background (DESIGN_SPEC 6.7) for the loaded save at this path, or all loaded saves:
+   * every region file not done yet. Progress arrives as Progress with scan set. Does nothing while a scan runs.
+   */
+  startScan(save?: string): ScanStatus;
+  /** Stops the scan; the files done are kept, and startScan continues with the rest. */
+  stopScan(): ScanStatus;
+  scanStatus(): ScanStatus;
 }
 
 /** Stacks of one item at one place of one player file, added up. */
@@ -573,16 +607,46 @@ export interface WorldPlayer {
   /** Plain stacks of items that have a market on the main save. */
   valuables: WorldStack[];
 }
+/** Notes and valuables the region scan found at one place: a block, or an entity's position. */
+export interface WorldPlace {
+  server: string;
+  dimension: string;
+  x: number;
+  y: number;
+  z: number;
+  /** The block entity's or entity's id: minecraft:chest, banksystem:money_stockpile_block_entity, minecraft:villager. */
+  place: string;
+  /** offer: a villager's or trader's offers, prices and not notes that exist. */
+  source: 'block' | 'entity' | 'offer';
+  /** "chest at the overworld, -884 28 -1'024" */
+  where: string;
+  /** Whose inventory at a bank terminal; null elsewhere. */
+  player: { uuid: string; name: string } | null;
+  /** The account an upload or download block is bound to; null elsewhere. */
+  account: number | null;
+  /** Raw money in plain notes. */
+  notes: bigint;
+  stacks: Omit<WorldStack, 'server' | 'place'>[];
+  valuables: Omit<WorldStack, 'server' | 'place'>[];
+}
 export interface WorldItemsResult {
   /** Why nothing can be counted (no master loaded, no player files); null when the count ran. */
   reason: string | null;
-  /** Raw money in notes found, in all and per place. */
+  /** Raw money in notes found, in all and per place; blocks: in blocks and entities, from the region scan. */
   notes: bigint;
   inventory: bigint;
   enderChest: bigint;
+  blocks: bigint;
+  /** Raw money in notes in villagers' and traders' offers: prices, not notes that exist, so not in notes. */
+  offers: bigint;
+  /** Places the region scan found notes or valuables at, most notes first; at most 2'000, placesCut says how many more. */
+  places: WorldPlace[];
+  placesCut: number;
+  /** How far the region scan got. */
+  scan: ScanStatus;
   /** Players whose files were read and who carry notes or valuables, most notes first. */
   players: WorldPlayer[];
-  /** Money items with extra components (renamed, ...): the bank refuses them, so they are not counted. */
+  /** Money items with extra components (renamed, ...): the bank refuses them, so they are not counted. Player files and scan. */
   altered: { stacks: number; count: number };
   /** Players who traded or used the bank but have no readable player file in any loaded save; only those with a name. */
   missing: { uuid: string; name: string }[];
@@ -742,7 +806,7 @@ export interface AdminEvent {
   ledgerId: number | null;
 }
 
-export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers' | 'banknotes' | 'worldItems'> {
+export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers' | 'banknotes' | 'worldItems' | 'startScan' | 'stopScan' | 'scanStatus'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
   addSave(path: string): Workspace;

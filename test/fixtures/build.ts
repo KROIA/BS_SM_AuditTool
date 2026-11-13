@@ -4,12 +4,13 @@
 //
 // The table definitions are copied from the mods (BankSystem 3835d933, StockMarket 898aac66):
 // common/src/main/resources/sql/*.sql, BankSystem data/DiagnosticsDatabase.java, StockMarket data/OrderOriginLog.java.
-// The NBT files follow .claude/DATA_SOURCES.md, "Exact NBT layouts". Player files and region files are not written yet.
+// The NBT files follow .claude/DATA_SOURCES.md, "Exact NBT layouts". Region files hold the cases of the region scan (AT-36).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
-import { byte, comp, float, int, list as nbtList, long, nbtFile, short, str, uuid, type Tag } from './nbt.ts';
+import zlib from 'node:zlib';
+import { byte, comp, double, float, int, ints, list as nbtList, long, nbtFile, short, str, uuid, type Tag } from './nbt.ts';
 
 const MIN = 60_000;
 /** The first minute of the scenario: 4 Nov 2026, 10:00 UTC. */
@@ -502,6 +503,100 @@ function playerFiles(master: string, slaves: string[], legacy: string) {
   playerFile(legacy, 'Tavrik', playerNbt([note(100000, 5)], []));
 }
 
+// ---- Region files (AT-36): Anvil files as Minecraft 1.21 writes them, with the cases the scan must handle.
+
+/** A chunk's sectors: [4-byte length][1-byte packing][data]; length overrides the true one to break the format. */
+interface RegionChunk { index: number; body: Buffer; length?: number }
+/** One region file: the 8 KiB header of offsets and sector counts, then each chunk in whole 4 KiB sectors. */
+export function regionFile(file: string, chunks: RegionChunk[]) {
+  const header = Buffer.alloc(8192), parts: Buffer[] = [header];
+  let sector = 2;
+  for (const c of chunks) {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(c.length ?? c.body.length);
+    const sectors = Math.ceil((4 + c.body.length) / 4096);
+    header.writeUInt32BE(((sector << 8) | sectors) >>> 0, c.index * 4);
+    parts.push(Buffer.concat([len, c.body], sectors * 4096));
+    sector += sectors;
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, Buffer.concat(parts));
+}
+/** A chunk's NBT packed: 1 gzip, 2 zlib, 3 none; 128 + packing keeps it in an .mcc file (written by the caller). */
+export const packed = (type: number, root: Record<string, Tag>) => {
+  const raw = nbtFile(root, false), p = type & 127;
+  return Buffer.concat([Buffer.from([type]), type & 128 ? Buffer.alloc(0) : p === 1 ? zlib.gzipSync(raw) : p === 2 ? zlib.deflateSync(raw) : raw]);
+};
+const block = (id: string, x: number, y: number, z: number, more: Record<string, Tag>) => comp({ id: str(id), x: int(x), y: int(y), z: int(z), ...more });
+const mob = (id: string, x: number, y: number, z: number, more: Record<string, Tag>) =>
+  comp({ id: str(id), Pos: nbtList([double(x), double(y), double(z)]), ...more });
+const stacks = (list: Stack[]) => nbtList(list.map((s) => comp(s)));
+export const chunkRoot = (blocks: Tag[]) => ({ DataVersion: int(3955), Status: str('minecraft:full'), block_entities: nbtList(blocks) });
+
+/**
+ * What the region scan finds on the master, raw money. blocks: plain notes in blocks and entities (the chest 2'000'000,
+ * the shulker in the barrel 500'000, the stockpile 350'000, the terminal 100'000, the upload block 20'000, the download
+ * block 3'000, the hopper in the .mcc chunk 70'000, the old chunk 1'000, the dropped note 100'000, the chest minecart
+ * 50'000, the nether chest 100'000). offers: the villager's offers, prices and not counted.
+ */
+export const SCAN = {
+  blocks: 3_294_000n, offers: 32_000n, chest: { x: -884, y: 28, z: -1024 },
+  /** The master's files: overworld region and entities, the nether, the empty end file, a mod's dimension. */
+  files: 5,
+  /** Chunks read; the damaged ones are the broken zlib and the length past its sector. */
+  chunks: { read: 6, damaged: 2, lz4: 1 },
+} as const;
+
+function regionFiles(world: string) {
+  const at = SCAN.chest;
+  const renamed = stackOf('banksystem:money1000', 1, { 'minecraft:custom_name': str('"Lucky note"') });
+  // Chunk -56 -64 of region -2 -2 (index 8): a chest, a barrel with a shulker box, and the BankSystem blocks.
+  const main = chunkRoot([
+    block('minecraft:chest', at.x, at.y, at.z, { Items: slots([note(1000, 20), stackOf('minecraft:diamond', 64), stackOf('minecraft:dirt', 64), renamed]) }),
+    block('minecraft:barrel', -880, 64, -1020, { Items: slots([shulkerOf([note(100, 50)])]) }),
+    block('banksystem:money_stockpile_block_entity', -878, 64, -1018, { sum: int(535), facing: str('north'), items: nbtList([
+      comp({ id: short(NOTE), amount: int(30), gridSpacesPerItemType: int(1), usesGridSpaces: int(1) }),
+      comp({ id: short(ITEM.money), amount: int(500), gridSpacesPerItemType: int(1), usesGridSpaces: int(2) }),
+      comp({ id: short(99), amount: int(5), gridSpacesPerItemType: int(1), usesGridSpaces: int(1) })]) }),
+    block('banksystem:banksystem_display_block_entity', -877, 65, -1018, { // icons only: never counted
+      ovSlots: nbtList([comp({ stack: comp(note(1000000, 1)) })]), Items: slots([note(1000000, 9)]) }),
+    block('banksystem:bank_terminal_block_entity', -876, 64, -1018, { banksystem: comp({ PlayerData: nbtList([comp({
+      PlayerID: uuid(uuidText(PLAYERS.Quenby.n)), SelectedBankAccount: int(PLAYERS.Quenby.account),
+      Inventory: comp({ Slots: nbtList([comp({ Slot: int(0), ItemStack: comp(note(100, 10)) })]) }) })]) }) }),
+    block('banksystem:bank_upload_block_entity', -875, 64, -1018, { Items: stacks([note(50, 4)]), BankAccountNumber: int(PLAYERS.Mikko_82.account), SendingEnabled: byte(true) }),
+    block('banksystem:bank_download_block_entity', -874, 64, -1018, { I: stacks([note(10, 3)]), A: int(PLAYERS.Mikko_82.account), P: byte(false),
+      Items: stacks([note(1000000, 1)]) }), // the layout before the upgrade: read only when I is missing
+  ]);
+  const junk = (type: number) => Buffer.concat([Buffer.from([type]), Buffer.from('this is not packed NBT data at all')]);
+  regionFile(path.join(world, 'region', 'r.-2.-2.mca'), [
+    { index: 8, body: packed(2, main) },
+    { index: 9, body: junk(2) }, // zlib that is not zlib: damaged
+    { index: 10, body: junk(4) }, // LZ4: not read
+    { index: 11, body: packed(2, chunkRoot([block('minecraft:chest', -850, 64, -1020, { Items: slots([note(1000, 99)]) })])), length: 3 * 4096 }, // a length past its sector
+    { index: 12, body: packed(130, {}) }, // kept in c.-52.-64.mcc
+    // Not loaded since before 1.18: Level.TileEntities, stacks with Count; packed with gzip.
+    { index: 13, body: packed(1, { Level: comp({ TileEntities: nbtList([comp({ id: str('minecraft:chest'), x: int(-820), y: int(40), z: int(-1010),
+      Items: nbtList([comp({ Slot: byte(0), id: str('banksystem:money5'), Count: byte(2) })]) })]) }) }) },
+  ]);
+  fs.writeFileSync(path.join(world, 'region', 'c.-52.-64.mcc'),
+    zlib.deflateSync(nbtFile(chunkRoot([block('minecraft:hopper', -830, 64, -1020, { Items: slots([note(100, 7)]) })]), false)));
+  // Entities of the same chunk: a villager with notes in its offers, a dropped note, a chest minecart with a rider.
+  regionFile(path.join(world, 'entities', 'r.-2.-2.mca'), [{ index: 8, body: packed(2, { DataVersion: int(3955), Position: ints([-56, -64]), Entities: nbtList([
+    mob('minecraft:villager', -880.5, 64, -1010.3, { Inventory: stacks([stackOf('minecraft:wheat', 5)]), Offers: comp({ Recipes: nbtList([
+      comp({ buy: comp(stackOf('minecraft:emerald', 1)), sell: comp(note(10, 2)), maxUses: int(12), uses: int(0) }),
+      comp({ buy: comp(note(100, 3)), sell: comp(stackOf('minecraft:wheat', 1)), maxUses: int(12), uses: int(3) })]) }) }),
+    mob('minecraft:item', -870.2, 63, -1015.9, { Item: comp(note(1000, 1)), Age: short(100) }),
+    mob('minecraft:chest_minecart', -860.5, 64, -1012.5, { Items: slots([note(100, 5)]),
+      Passengers: nbtList([mob('minecraft:armor_stand', -860.5, 65, -1012.5, { HandItems: stacks([stackOf('minecraft:diamond', 3)]) })]) }),
+  ]) }) }]);
+  regionFile(path.join(world, 'DIM-1', 'region', 'r.0.0.mca'), [{ index: 0, body: packed(3, chunkRoot([block('minecraft:chest', 10, 70, 20, { Items: slots([note(1000, 1)]) })])) }]);
+  fs.mkdirSync(path.join(world, 'DIM1', 'region'), { recursive: true });
+  fs.writeFileSync(path.join(world, 'DIM1', 'region', 'r.0.0.mca'), ''); // Minecraft leaves empty files behind
+  // A mod's dimension: a barrel with 1'024 diamonds and no notes.
+  regionFile(path.join(world, 'dimensions', 'vaultmod', 'deep_vault', 'region', 'r.0.0.mca'), [{ index: 0, body: packed(2, chunkRoot([
+    block('minecraft:barrel', 5, 30, 5, { Items: slots(Array.from({ length: 16 }, () => stackOf('minecraft:diamond', 64))) })])) }]);
+}
+
 /**
  * The bank's and the market's NBT files, with balances equal to what the bank database ends with.
  * For the old save the same layouts are written: what 2.1.2 kept in NBT is not verified.
@@ -770,6 +865,7 @@ export function buildFixtures(root: string): Fixtures {
   const lastPlayed = { 'survival-main': end, 'mining-1': end - 5 * MIN, 'nether-hub': end - 9 * 60 * MIN, 'old-world': T0 - 20 * 24 * 60 * MIN };
   for (const dir of [master, ...slaves, legacy]) levelDat(dir, lastPlayed[path.basename(dir) as keyof typeof lastPlayed]);
   playerFiles(master, slaves, legacy);
+  regionFiles(master);
 
   const exported = path.join(root, 'exports', EXPORT.folder);
   fs.cpSync(data, path.join(exported, 'data'), { recursive: true });

@@ -12,7 +12,7 @@ import { findDataDir, readIdentity, readLevel, readManifest } from './locate.ts'
 import { readPlayerFiles } from './players.ts';
 
 /** Raise when the layout of the cache changes: caches written by an older version are rebuilt. */
-export const CACHE_VERSION = 11;
+export const CACHE_VERSION = 12;
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -38,10 +38,18 @@ CREATE TABLE item (id INTEGER PRIMARY KEY, name TEXT NOT NULL, money INTEGER NOT
 CREATE TABLE market (item INTEGER PRIMARY KEY, price INTEGER, default_price INTEGER, maintenance INTEGER NOT NULL);
 CREATE TABLE player_file (uuid TEXT PRIMARY KEY, ok INTEGER NOT NULL);
 CREATE TABLE world_item (id INTEGER PRIMARY KEY, player TEXT NOT NULL, place TEXT NOT NULL, path TEXT NOT NULL, item TEXT NOT NULL, item_id INTEGER, count INTEGER NOT NULL, plain INTEGER NOT NULL, worth INTEGER);
+CREATE TABLE scan_file (file TEXT PRIMARY KEY, dimension TEXT NOT NULL, size INTEGER NOT NULL, mtime INTEGER NOT NULL, chunks INTEGER NOT NULL, damaged INTEGER NOT NULL,
+  lz4 INTEGER NOT NULL, too_large INTEGER NOT NULL, error TEXT, dropped INTEGER NOT NULL, notes TEXT NOT NULL);
+CREATE TABLE scan_item (id INTEGER PRIMARY KEY, file TEXT NOT NULL, dimension TEXT NOT NULL, x INTEGER NOT NULL, y INTEGER NOT NULL, z INTEGER NOT NULL, place TEXT NOT NULL,
+  source TEXT NOT NULL, owner TEXT, account INTEGER, path TEXT NOT NULL, item TEXT NOT NULL, count INTEGER NOT NULL, plain INTEGER NOT NULL, worth INTEGER);
+CREATE INDEX scan_item_file ON scan_item (file);
 `;
 // player_file: every playerdata/<uuid>.dat of the world, ok 0 when it could not be read. world_item: stacks in the
 // inventories and ender chests, added up per place; path is a JSON list of the containers around them, outermost first;
 // item_id is this save's number for a plain stack (null on a slave, which has no item list); worth is one piece of plain money, raw.
+// scan_file, scan_item: the region scan (engine/scan.ts), written later and only on request. scan_file: one row per region file
+// done (path relative to the world, size and mtime when read, chunk counts, error when the file could not be opened, finds
+// dropped at the row limit, notes: plain notes found outside offers, raw, as decimal text). scan_item: finds added up per place.
 // open is in the candle index so that the usual price (the median open) is read from the index alone: 0.3 s less per market on a real save.
 const INDEXES = `
 CREATE INDEX candle_market_time ON candle (market, time, open);

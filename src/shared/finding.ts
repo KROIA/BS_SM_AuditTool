@@ -296,17 +296,33 @@ export function describe(f: Finding, w: ItemWords): FindingWords {
       const names = (k: string) => (x[k] as string[] | null) ?? [];
       const listed = (l: string[]) => (l.length <= 5 ? l.join(', ') : `${l.slice(0, 5).join(', ')} and ${count(l.length - 5)} more`);
       const missing = names('missing'), without = names('without');
+      const files = n('scanFiles'), total = n('scanFilesTotal'), unread = n('chunksUnread'), lz4 = n('lz4'), filesUnread = n('filesUnread');
+      // What was looked at follows the region scan's coverage (DESIGN_SPEC 8.7).
+      const looked = {
+        'complete': 'Looked at: player files, ender chests and every region file (chests and other blocks, dropped items and other entities).',
+        'partial': `Looked at: player files, ender chests and ${count(files)} of ${count(total)} region files; the region scan was stopped or the world changed since, so notes in the rest of the world are not counted.`,
+        'no region files': 'Looked at: player files and ender chests only; the loaded saves have no region files, so notes in chests and other blocks are not counted.',
+      }[String(x.scan)] ?? 'Looked at: player files and ender chests only; the region scan has not been run, so notes in chests and other blocks are not counted.';
+      const unreadable = (unread ? ` ${plural(unread, 'chunk', 'chunks')} could not be read${lz4 ? ` (${count(lz4)} packed with LZ4, which the tool does not read)` : ''}` : '')
+        + (filesUnread ? `${unread ? ' and' : ''} ${plural(filesUnread, 'region file', 'region files')} not at all` : '');
+      // Money that appeared on accounts without a log row could be notes paid back through the ATM converter (2.1.2 logged none).
+      const back = b('appeared') < (v as bigint) ? b('appeared') : (v as bigint);
       return {
         rule: RULE_NAME[f.rule], measured: `${money(v as bigint)} ${more ? 'more' : 'fewer'} found than expected`,
         title: more ? `${size} more in banknotes found than the bank handed out` : `${size} of banknotes the bank handed out were not found`,
-        summary: `The bank's log says ${money(b('outstanding'))} in banknotes should be outside the bank; the players carry ${money(b('found'))}. `
-          + 'Looked at: player files and ender chests only; the region scan has not been run, so notes in chests and other blocks are not counted.'
+        summary: `The bank's log says ${money(b('outstanding'))} in banknotes should be outside the bank; ${money(b('found'))} was found. ` + looked
+          + (unreadable ? `${unreadable}; what they hold is not counted.` : '')
+          + (!more && back > 0n ? ` Of the ${money(v as bigint)} not found, ${back === v ? 'all' : `up to ${money(back)}`} may have been paid back through the ATM converter: that much appeared on accounts without a log row.` : '')
+          + (b('offers') ? ` Villagers' offers name ${money(b('offers'))} in notes; those are prices, not notes, and are not counted.` : '')
           + (missing.length ? ` ${plural(missing.length, 'player who traded or used the bank has', 'players who traded or used the bank have')} no readable player file: ${listed(missing)}.` : '')
           + (n('unnamed') ? ` ${plural(n('unnamed'), 'other id that placed orders or used the bank has', 'other ids that placed orders or used the bank have')} no player file and no name in the save; they may never have joined.` : '')
           + (without.length ? ` ${without.length === 1 ? 'The save' : 'The saves'} ${listed(without.map((s) => `"${s}"`))} ${without.length === 1 ? 'has' : 'have'} no player files.` : '')
           + (more ? ' More notes than were handed out points to notes made outside the bank.' : ''),
         facts: [['Should be outside the bank', money(b('outstanding'))], ['Found in inventories', money(b('inventory'))], ['Found in ender chests', money(b('enderChest'))],
+          ['Found in blocks and entities', x.scan === 'complete' || x.scan === 'partial' ? money(b('blocks')) : 'region scan not run'],
+          ['Region scan', x.scan === 'partial' ? `${count(files)} of ${count(total)} files` : x.scan === 'complete' ? 'complete' : String(x.scan ?? 'not run')],
           ['Difference', (more ? '+' : '-') + money(v as bigint)], ...(b('putBack') ? [['Taken off for 2.1.2 put-backs', money(b('putBack'))] as [string, string]] : []),
+          ...(!more && back > 0n ? [['Could be notes paid back through the converter', money(back)] as [string, string]] : []),
           ['Players without a file', missing.length ? listed(missing) : 'none']],
       };
     }

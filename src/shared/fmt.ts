@@ -11,6 +11,10 @@ export function count(n: bigint | number): string {
   return (v < 0n ? '-' : '') + group(abs(v).toString());
 }
 
+const DIMENSION: Record<string, string> = { 'minecraft:overworld': 'the overworld', 'minecraft:the_nether': 'the Nether', 'minecraft:the_end': 'the End' };
+/** A place in a world: "at the overworld, -230 70 -920"; a dimension of another mod by its id. */
+export const at = (dimension: string, x: number, y: number, z: number) => `at ${DIMENSION[dimension] ?? dimension}, ${count(x)} ${count(y)} ${count(z)}`;
+
 const UNITS: [number, string][] = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M']];
 /**
  * A count shortened for headlines: 390'669 stays, 2'597'241'136'171'946 -> 2'597.24T. For market volumes, which the
