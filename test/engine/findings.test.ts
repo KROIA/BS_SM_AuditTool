@@ -137,12 +137,13 @@ test('ledger rows after the last bank save: one hint with the newer rows only', 
   assert.ok(f!.start > LAST_SAVE);
 });
 
-test('old save: the rules without data say why, the rules still not built are listed', () => {
+test('old save: the rules without data say why', () => {
   open(fx.legacy);
   const r = api.findings(ALL, DEFAULT_RULES);
   const why = Object.fromEntries(r.rules.map((s) => [s.rule, s.notApplicable === null ? s.found : 'n/a']));
+  // banknotes runs (AT-35): Tavrik's notes in his player file match the corrected count.
   assert.deepEqual(why, { 'round-trip': 0, 'order-rate': 3, 'hour-profit': 1, 'far-price': 2, 'price-spike': 1, 'balance': 5,
-    'order-ledger': 'n/a', 'bank-flag': 'n/a', 'last-save': 'n/a', 'market-alert': 'n/a', 'transfer': 'n/a', 'banknotes': 'n/a' });
+    'order-ledger': 'n/a', 'bank-flag': 'n/a', 'last-save': 'n/a', 'market-alert': 'n/a', 'transfer': 'n/a', 'banknotes': 0 });
   assert.ok(r.rules.every((s) => s.notApplicable === null || s.notApplicable.length > 10));
   assert.equal(r.bankSettings.LAUNDERING_MIN_AMOUNT, 1_000_000); // no settings file: the mod's defaults
 });
@@ -189,6 +190,7 @@ test('fixed run: every finding on the current and the old save', () => {
     `high balance:${CHECK.set}:${ITEM.money}@${at(30)}`,
     'high market-alert:2', // SM-316: Tavrik's profit alert, more than ten times the server's threshold
     'high bank-flag:2',
+    'medium banknotes:count', // AT-35: $174'722 of notes the count expects are in no player file; spans the whole log, so it sorts first
     `medium order-ledger:${brindle}@${T0 + 301_200}`,
     `medium balance:${CHECK.gain}:${ITEM.money}@${at(10)}`,
     `medium order-rate:${tavrik}@${at(21)}`,

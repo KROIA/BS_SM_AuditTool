@@ -95,7 +95,8 @@ test('a slave is named after its slave id and is expected to have only the journ
   assert.deepEqual(rowsOf(save, 'bankDiag'), { TransferJournal: 29, NoteFlow: NOTE_FLOW['mining-1'].length, Meta: 2 }); // 4 of the plain deposits, 25 of the transfer cases
   assert.deepEqual([save.players, save.accounts, save.bankVersion], [0, 0, null]);
   assert.equal(save.lastPlayedMs, fx.lastPlayed['mining-1']);
-  assert.deepEqual(save.warnings, []);
+  // Its playerdata holds a cut-off file and one that is no NBT (test/engine/world.test.ts).
+  assert.deepEqual(save.warnings, ['2 player files could not be read (damaged, not NBT, too large or nested too deep). What those players carry is not counted.']);
 });
 
 test('an old 2.1.2 save: recognised as such, role assumed, and no complaint about files that version never wrote', () => {

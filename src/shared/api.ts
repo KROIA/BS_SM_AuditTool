@@ -358,6 +358,7 @@ export interface RuleSettings {
   'last-save': { on: boolean };
   'market-alert': { on: boolean };
   'transfer': { on: boolean };
+  'banknotes': { on: boolean; money: bigint };
 }
 export const DEFAULT_RULES: RuleSettings = {
   'round-trip': { on: true, times: 2, seconds: 30 },
@@ -371,6 +372,7 @@ export const DEFAULT_RULES: RuleSettings = {
   'last-save': { on: true },
   'market-alert': { on: true },
   'transfer': { on: true },
+  'banknotes': { on: true, money: 10_000_000n },
 };
 
 /** One value of a finding's facts. Which keys a rule fills is listed at the rule in engine/query/findings.ts. */
@@ -539,6 +541,59 @@ export interface QueryApi {
    * log rows made there (and rows without an origin) and that server's NoteFlow.
    */
   banknotes(scope: Scope): BanknotesResult;
+  /**
+   * What the players carry in their inventories and ender chests (DESIGN_SPEC 8.7), from the player files of the main
+   * save and its loaded slaves: the state when each copy was taken, so no scope applies.
+   */
+  worldItems(): WorldItemsResult;
+}
+
+/** Stacks of one item at one place of one player file, added up. */
+export interface WorldStack {
+  /** The save's name. */
+  server: string;
+  place: 'inventory' | 'ender chest';
+  /** The containers it is in, outermost first (item ids such as minecraft:shulker_box); empty when loose. */
+  path: string[];
+  item: string;
+  /** The main save's number for the item; null when its item list does not know it. */
+  itemId: number | null;
+  count: number;
+  /** Raw money: notes valued by their denomination; null for anything that is not money the bank takes. */
+  value: bigint | null;
+}
+export interface WorldPlayer {
+  player: { uuid: string; name: string };
+  /** Raw money in notes per place and in all. */
+  inventory: bigint;
+  enderChest: bigint;
+  notes: bigint;
+  /** The money stacks. */
+  stacks: WorldStack[];
+  /** Plain stacks of items that have a market on the main save. */
+  valuables: WorldStack[];
+}
+export interface WorldItemsResult {
+  /** Why nothing can be counted (no master loaded, no player files); null when the count ran. */
+  reason: string | null;
+  /** Raw money in notes found, in all and per place. */
+  notes: bigint;
+  inventory: bigint;
+  enderChest: bigint;
+  /** Players whose files were read and who carry notes or valuables, most notes first. */
+  players: WorldPlayer[];
+  /** Money items with extra components (renamed, ...): the bank refuses them, so they are not counted. */
+  altered: { stacks: number; count: number };
+  /** Players who traded or used the bank but have no readable player file in any loaded save; only those with a name. */
+  missing: { uuid: string; name: string }[];
+  /** UUIDs that traded or used the bank without a file and without a name anywhere in the save (never joined as a player). */
+  unnamed: number;
+  /** Players whose only files could not be read (a subset of missing). */
+  unreadable: { uuid: string; name: string }[];
+  /** Player files read. */
+  files: number;
+  /** Names of the loaded saves that have no player files (an audit export, a world without playerdata). */
+  without: string[];
 }
 
 /** The classes of DESIGN_SPEC 8.6. */
@@ -687,7 +742,7 @@ export interface AdminEvent {
   ledgerId: number | null;
 }
 
-export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers' | 'banknotes'> {
+export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers' | 'banknotes' | 'worldItems'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
   addSave(path: string): Workspace;

@@ -134,6 +134,7 @@
     'far-price': [['times', 'Times from the usual price, more than', 'number']],
     'price-spike': [['times', 'High to low within a minute, more than', 'number']],
     'balance': [['money', 'Money, above $', 'money'], ['items', 'Other items, above', 'items']],
+    'banknotes': [['money', 'Off by more than $', 'money']],
   };
   let problems = $state<Record<string, string>>({});
   const shownValue = (v: unknown, kind: Field[2]) => (kind === 'number' ? times(v as number) : kind === 'money' ? fmtAmount(v as bigint) : quantity(v as bigint));

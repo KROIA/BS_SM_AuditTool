@@ -5,13 +5,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { SaveSource, SaveSummary, SaveTable } from '../../shared/api.ts';
-import { time } from '../../shared/fmt.ts';
+import { count, time } from '../../shared/fmt.ts';
 import { placeInTime, readAuditLog } from './audit.ts';
 import { readBankAudit, readFiles, readUserCache } from './files.ts';
 import { findDataDir, readIdentity, readLevel, readManifest } from './locate.ts';
+import { readPlayerFiles } from './players.ts';
 
 /** Raise when the layout of the cache changes: caches written by an older version are rebuilt. */
-export const CACHE_VERSION = 10;
+export const CACHE_VERSION = 11;
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -33,9 +34,14 @@ CREATE TABLE player (uuid TEXT PRIMARY KEY, name TEXT NOT NULL, bank_admin INTEG
 CREATE TABLE account (number INTEGER PRIMARY KEY, name TEXT NOT NULL, frozen INTEGER NOT NULL, created_ms INTEGER, owner TEXT, company TEXT);
 CREATE TABLE account_user (account INTEGER NOT NULL, uuid TEXT NOT NULL, permissions INTEGER NOT NULL, PRIMARY KEY (account, uuid)) WITHOUT ROWID;
 CREATE TABLE balance (account INTEGER NOT NULL, item INTEGER NOT NULL, balance INTEGER NOT NULL, locked INTEGER NOT NULL, PRIMARY KEY (account, item)) WITHOUT ROWID;
-CREATE TABLE item (id INTEGER PRIMARY KEY, name TEXT NOT NULL, money INTEGER NOT NULL);
+CREATE TABLE item (id INTEGER PRIMARY KEY, name TEXT NOT NULL, money INTEGER NOT NULL, plain INTEGER NOT NULL);
 CREATE TABLE market (item INTEGER PRIMARY KEY, price INTEGER, default_price INTEGER, maintenance INTEGER NOT NULL);
+CREATE TABLE player_file (uuid TEXT PRIMARY KEY, ok INTEGER NOT NULL);
+CREATE TABLE world_item (id INTEGER PRIMARY KEY, player TEXT NOT NULL, place TEXT NOT NULL, path TEXT NOT NULL, item TEXT NOT NULL, item_id INTEGER, count INTEGER NOT NULL, plain INTEGER NOT NULL, worth INTEGER);
 `;
+// player_file: every playerdata/<uuid>.dat of the world, ok 0 when it could not be read. world_item: stacks in the
+// inventories and ender chests, added up per place; path is a JSON list of the containers around them, outermost first;
+// item_id is this save's number for a plain stack (null on a slave, which has no item list); worth is one piece of plain money, raw.
 // open is in the candle index so that the usual price (the median open) is read from the index alone: 0.3 s less per market on a real save.
 const INDEXES = `
 CREATE INDEX candle_market_time ON candle (market, time, open);
@@ -103,7 +109,7 @@ const FINGERPRINT_FILES = [
   ...Object.values(FILES).flatMap((f) => [f, f + '-wal', f + '-journal']),
   'ModUtilities/server_identity.json', 'BankSystem/ItemIDs.nbt', 'BankSystem/Meta_data.nbt', 'BankSystem/settings.json', '../level.dat', '../manifest.json', '../../usercache.json',
 ];
-const FINGERPRINT_DIRS = ['BankSystem/audit', 'BankSystem/Bank_data', 'BankSystem/Companies', 'StockMarket/MarketManager'];
+const FINGERPRINT_DIRS = ['BankSystem/audit', 'BankSystem/Bank_data', 'BankSystem/Companies', 'StockMarket/MarketManager', '../playerdata'];
 const CHUNK = 200_000; // ids per insert; a failing insert is halved until the damage is fenced in
 const SMALLEST = 64;
 
@@ -360,12 +366,24 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
     add('account', files.accounts.map((a) => ({ number: a.number, name: a.name, frozen: +a.frozen, created_ms: a.createdMs, owner: a.owner, company: a.company })));
     add('account_user', files.accounts.flatMap((a) => a.users.map((u) => ({ account: a.number, uuid: u.uuid, permissions: u.permissions }))));
     add('balance', files.accounts.flatMap((a) => a.balances.map((b) => ({ account: a.number, item: b.item, balance: b.balance, locked: b.locked }))));
-    add('item', files.items.map((i) => ({ id: i.id, name: i.name, money: +i.money })));
+    add('item', files.items.map((i) => ({ id: i.id, name: i.name, money: +i.money, plain: +i.plain })));
     add('market', files.markets.map((m) => ({ item: m.item, price: m.price, default_price: m.defaultPrice, maintenance: +m.maintenance })));
     // An alert names the market by the number it had then: an old number goes to the one that replaced it.
     db.prepare(`UPDATE trade_alert SET item = (SELECT json_extract(value, '$[1]') FROM json_each(:map) WHERE json_extract(value, '$[0]') = trade_alert.item)
       WHERE item IN (SELECT json_extract(value, '$[0]') FROM json_each(:map))`).run({ map: JSON.stringify(files.aliases) });
     db.exec('COMMIT');
+
+    // What the players carry: the world's player files (only a world folder has them; an audit export does not).
+    report('Reading the player files', 0, 1);
+    const carried = path.basename(dataDir) === 'data' ? readPlayerFiles(path.join(path.dirname(dataDir), 'playerdata')) : null;
+    if (carried) {
+      const numberOf = new Map(files.items.filter((i) => i.plain).map((i) => [i.name, i.id]));
+      db.exec('BEGIN');
+      add('player_file', carried.files.map((f) => ({ uuid: f.uuid, ok: +f.ok })));
+      const st = db.prepare('INSERT INTO world_item (player, place, path, item, item_id, count, plain, worth) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+      for (const s of carried.stacks) st.run(s.player, s.place, JSON.stringify(s.path), s.item, s.plain ? numberOf.get(s.item) ?? null : null, s.count, +s.plain, s.worth);
+      db.exec('COMMIT');
+    }
 
     report('Preparing the data for quick searching', 0, 1);
     db.exec(INDEXES);
@@ -392,6 +410,13 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
       return { id, status: expected ? 'missing' : 'none', bytes: 0, tables: [] };
     });
     sources.push(auditLog(db, dataDir, warnings));
+    if (carried?.bad) {
+      warnings.push(`${count(carried.bad)} player ${carried.bad === 1 ? 'file' : 'files'} could not be read (damaged, not NBT, too large or nested too deep). ` +
+        `What ${carried.bad === 1 ? 'that player carries' : 'those players carry'} is not counted.`);
+    }
+    if (carried?.skipped) {
+      warnings.push(`This world holds more items than the tool reads from player files. ${count(carried.skipped)} player ${carried.skipped === 1 ? 'file was' : 'files were'} left out.`);
+    }
     if (sources.some((s) => s.status === 'damaged')) {
       warnings.push('A part of this save could not be read and is left out. This is common when the copy was taken while the server was running.');
     }

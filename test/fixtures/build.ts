@@ -456,6 +456,52 @@ function levelDat(world: string, lastPlayed: number) {
   }) }));
 }
 
+// ---- Player files (playerdata/<uuid>.dat): stacks as Minecraft 1.21 writes them, one file in the older layout.
+type Stack = Record<string, Tag>;
+export const stackOf = (id: string, count: number, components?: Stack): Stack => ({ id: str(id), count: int(count), ...(components ? { components: comp(components) } : {}) });
+export const shulkerOf = (inner: Stack[]): Stack =>
+  stackOf('minecraft:shulker_box', 1, { 'minecraft:container': nbtList(inner.map((s, i) => comp({ slot: int(i), item: comp(s) }))) });
+const bundleOf = (inner: Stack[]): Stack => stackOf('minecraft:bundle', 1, { 'minecraft:bundle_contents': nbtList(inner.map((s) => comp(s))) });
+const note = (dollars: number, count: number) => stackOf(`banksystem:money${dollars}`, count);
+const slots = (stacks: Stack[]) => nbtList(stacks.map((s, i) => comp({ Slot: byte(i % 100), ...s })));
+/** A player file with the two lists the tool reads, beside a few it does not. */
+export const playerNbt = (inventory: Stack[], ender: Stack[]) =>
+  nbtFile({ DataVersion: int(3955), Health: float(20), Inventory: slots(inventory), EnderItems: slots(ender), SelectedItemSlot: int(0) });
+const playerFile = (world: string, who: Name, file: Buffer, ext = '.dat') => {
+  fs.mkdirSync(path.join(world, 'playerdata'), { recursive: true });
+  fs.writeFileSync(path.join(world, 'playerdata', uuidText(PLAYERS[who].n) + ext), file);
+};
+/**
+ * What the player files hold, raw money. The master's count says 98'096'200 should be outside the bank; the files hold
+ * 80'624'000, so 17'472'200 are not found. Tavrik (only a .dat_old) and Ombrelune (a damaged file on mining-1) have none.
+ */
+export const WORLD = {
+  found: 80_624_000n, inventory: 324_000n, enderChest: 80_300_000n,
+  legacy: 50_000_000n, // old-world: Tavrik's five $100'000 notes, the corrected count of that save
+} as const;
+
+function playerFiles(master: string, slaves: string[], legacy: string) {
+  // Quenby: a shulker of notes in the ender chest, a bundle in the inventory, a renamed note the bank would refuse, diamonds.
+  playerFile(master, 'Quenby', playerNbt(
+    [bundleOf([note(100, 30)]), stackOf('banksystem:money1000', 1, { 'minecraft:custom_name': str('"Lucky note"') }), stackOf('minecraft:diamond', 64)],
+    [shulkerOf([note(100000, 6), stackOf('minecraft:dirt', 12)]), note(100000, 1)]));
+  playerFile(master, 'Mikko_82', playerNbt([stackOf('minecraft:dirt', 64), stackOf('minecraft:wheat', 32)], []));
+  playerFile(master, 'AdmiralNoor', playerNbt([note(100, 2)], []));
+  // Brindle: the layout before 1.20.5 (Count as a byte, a shulker's items under tag.BlockEntityTag.Items).
+  const old = (id: string, count: number, tag?: Stack) => ({ id: str(id), Count: byte(count), ...(tag ? { tag: comp(tag) } : {}) });
+  playerFile(master, 'Brindle', nbtFile({ DataVersion: int(3465), Inventory: slots([old('banksystem:money', 40)]),
+    EnderItems: slots([old('minecraft:shulker_box', 1, { BlockEntityTag: comp({ Items: slots([old('banksystem:money1000', 3)]) }) })]) }));
+  playerFile(master, 'Tavrik', playerNbt([note(100000, 50)], []), '.dat_old'); // a backup Minecraft keeps: not read
+  fs.writeFileSync(path.join(master, 'playerdata', 'notes.dat'), playerNbt([note(100000, 50)], [])); // no UUID name: not read
+  // mining-1: Mikko_82's ender chest there; Quenby's file cut off, Ombrelune's not NBT at all.
+  playerFile(slaves[0]!, 'Mikko_82', playerNbt([], [note(100000, 1)]));
+  const cut = playerNbt([note(100000, 9)], []);
+  playerFile(slaves[0]!, 'Quenby', cut.subarray(0, cut.length >> 1));
+  playerFile(slaves[0]!, 'Ombrelune', Buffer.from('not a player file'));
+  // nether-hub keeps no player files (its copy was taken without them).
+  playerFile(legacy, 'Tavrik', playerNbt([note(100000, 5)], []));
+}
+
 /**
  * The bank's and the market's NBT files, with balances equal to what the bank database ends with.
  * For the old save the same layouts are written: what 2.1.2 kept in NBT is not verified.
@@ -723,6 +769,7 @@ export function buildFixtures(root: string): Fixtures {
   const end = T0 + MINUTES * MIN + 2 * MIN;
   const lastPlayed = { 'survival-main': end, 'mining-1': end - 5 * MIN, 'nether-hub': end - 9 * 60 * MIN, 'old-world': T0 - 20 * 24 * 60 * MIN };
   for (const dir of [master, ...slaves, legacy]) levelDat(dir, lastPlayed[path.basename(dir) as keyof typeof lastPlayed]);
+  playerFiles(master, slaves, legacy);
 
   const exported = path.join(root, 'exports', EXPORT.folder);
   fs.cpSync(data, path.join(exported, 'data'), { recursive: true });

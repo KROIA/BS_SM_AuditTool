@@ -4,6 +4,7 @@
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
 import type { Gap, ItemCheck, Rating, RuleSettings, Scope } from '../../shared/api.ts';
 import { mainData, mainSave } from '../workspace.ts';
+import { worthOf } from '../save/players.ts';
 import { all, big, num, text } from './db.ts';
 import { change } from './players.ts';
 
@@ -133,8 +134,8 @@ export const moneyItems = (db: DatabaseSync) => new Set(all(db, 'SELECT id FROM 
 export function noteWorth(db: DatabaseSync): Map<number, bigint> {
   const out = new Map([...moneyItems(db)].map((id) => [id, 100n]));
   for (const r of all(db, `SELECT id, name FROM item WHERE name GLOB 'banksystem:money*'`)) {
-    const m = /^banksystem:money(_cent)?(\d{1,7})$/.exec(String(r.name));
-    if (m) out.set(num(r.id)!, BigInt(m[2]!) * (m[1] ? 1n : 100n));
+    const name = String(r.name), w = worthOf(name);
+    if (w !== null && name !== 'banksystem:money') out.set(num(r.id)!, w); // the plain base item is in moneyItems; one with components is no money
   }
   return out;
 }

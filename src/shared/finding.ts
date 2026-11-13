@@ -42,7 +42,7 @@ export function ruleText(rule: RuleId, s: RuleSettings): string {
     case 'last-save': return 'Flags log rows newer than the bank\'s last save: if the server crashed before the next save, what they did may have been undone.';
     case 'market-alert': return 'Shows the alerts the market mod raised itself on the server: a large profit within a time window, and the two pump-and-dump patterns, with the thresholds the server used then.';
     case 'transfer': return 'Pairs each transfer between the master and a slave by its id, and flags one that was lost, arrived twice, came from nothing, or was left for an admin.';
-    case 'banknotes': return 'Counts the banknotes withdrawn against those paid in and found in the world. It needs the world scan, which is not built yet.';
+    case 'banknotes': return `Compares the money in banknotes the bank handed out and did not get back with the notes found in the players' inventories and ender chests, and flags a difference above ${money(s[rule].money)}. Notes in chests and other blocks are not counted until the region scan has run.`;
   }
 }
 
@@ -289,6 +289,25 @@ export function describe(f: Finding, w: ItemWords): FindingWords {
           + (others > 0 ? ` ${plural(others, 'other item differs', 'other items differ')} too.` : ''),
         facts: [['Transfer id', String(x.transferId)], ['Sent', unit(b('sent'))], ['Arrived', unit(b('received'))],
           ['Journal steps', ((x.steps as string[] | null) ?? []).join(', ') || 'none'], ['Bank log rows', count(f.records.ledger.length)]],
+      };
+    }
+    case 'banknotes': {
+      const diff = b('difference'), more = diff > 0n, size = moneyShort(v as bigint);
+      const names = (k: string) => (x[k] as string[] | null) ?? [];
+      const listed = (l: string[]) => (l.length <= 5 ? l.join(', ') : `${l.slice(0, 5).join(', ')} and ${count(l.length - 5)} more`);
+      const missing = names('missing'), without = names('without');
+      return {
+        rule: RULE_NAME[f.rule], measured: `${money(v as bigint)} ${more ? 'more' : 'fewer'} found than expected`,
+        title: more ? `${size} more in banknotes found than the bank handed out` : `${size} of banknotes the bank handed out were not found`,
+        summary: `The bank's log says ${money(b('outstanding'))} in banknotes should be outside the bank; the players carry ${money(b('found'))}. `
+          + 'Looked at: player files and ender chests only; the region scan has not been run, so notes in chests and other blocks are not counted.'
+          + (missing.length ? ` ${plural(missing.length, 'player who traded or used the bank has', 'players who traded or used the bank have')} no readable player file: ${listed(missing)}.` : '')
+          + (n('unnamed') ? ` ${plural(n('unnamed'), 'other id that placed orders or used the bank has', 'other ids that placed orders or used the bank have')} no player file and no name in the save; they may never have joined.` : '')
+          + (without.length ? ` ${without.length === 1 ? 'The save' : 'The saves'} ${listed(without.map((s) => `"${s}"`))} ${without.length === 1 ? 'has' : 'have'} no player files.` : '')
+          + (more ? ' More notes than were handed out points to notes made outside the bank.' : ''),
+        facts: [['Should be outside the bank', money(b('outstanding'))], ['Found in inventories', money(b('inventory'))], ['Found in ender chests', money(b('enderChest'))],
+          ['Difference', (more ? '+' : '-') + money(v as bigint)], ...(b('putBack') ? [['Taken off for 2.1.2 put-backs', money(b('putBack'))] as [string, string]] : []),
+          ['Players without a file', missing.length ? listed(missing) : 'none']],
       };
     }
     default: return { rule: RULE_NAME[f.rule], measured: count(v), title: RULE_NAME[f.rule], summary: '', facts: [] };

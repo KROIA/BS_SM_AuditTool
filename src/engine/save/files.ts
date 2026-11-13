@@ -82,7 +82,8 @@ export interface AccountFile {
   users: { uuid: string; permissions: number }[];
   balances: { item: number; balance: bigint; locked: bigint }[];
 }
-export interface ItemFile { id: number; name: string; money: boolean }
+/** plain: an ItemIDs entry without components, the number a plain stack of that item id has (not a name digest, not an old alias). */
+export interface ItemFile { id: number; name: string; money: boolean; plain: boolean }
 export interface MarketFile { item: number; price: bigint | null; defaultPrice: bigint | null; maintenance: boolean }
 /** aliases: every old item number with the number it ends at. */
 export interface SaveFiles { players: PlayerFile[]; accounts: AccountFile[]; items: ItemFile[]; markets: MarketFile[]; bankVersion: string | null; aliases: [number, number][] }
@@ -105,8 +106,8 @@ export function readFiles(dataDir: string): SaveFiles {
       const id = itemId(e), stack = compound(e, 'itemStack'), name = str(stack, 'id');
       if (id === undefined || !name) continue;
       // Money is whichever number stands for banksystem:money without extra components; it differs between worlds.
-      const money = name === 'banksystem:money' && Object.keys(compound(stack, 'components') ?? {}).length === 0;
-      items.set(id, { id, name, money });
+      const plain = Object.keys(compound(stack, 'components') ?? {}).length === 0;
+      items.set(id, { id, name, money: name === 'banksystem:money' && plain, plain });
     }
   } catch {
     // no item names: the screens then show "item 6"
@@ -117,7 +118,7 @@ export function readFiles(dataDir: string): SaveFiles {
     bankVersion = str(root, 'version') ?? null;
     for (const d of list(root, 'itemIDShortNameDigest').filter(isCompound)) { // names of items whose mod is gone
       const id = num(d, 's'), name = str(d, 'n');
-      if (id !== undefined && name && !items.has(id)) items.set(id, { id, name, money: false });
+      if (id !== undefined && name && !items.has(id)) items.set(id, { id, name, money: false, plain: false });
     }
   } catch {
     // version stays unknown
@@ -125,7 +126,7 @@ export function readFiles(dataDir: string): SaveFiles {
   const resolve = (id: number) => { for (let i = 0; i < 8 && alias.has(id); i++) id = alias.get(id)!; return id; };
   for (const [from, to] of alias) { // an old number keeps the name and the role of the number it points to
     const target = items.get(resolve(to));
-    if (target && !items.has(from)) items.set(from, { ...target, id: from });
+    if (target && !items.has(from)) items.set(from, { ...target, id: from, plain: false }); // plain: the current number is the one a stack resolves to
   }
 
   const players = new Map<string, PlayerFile>();

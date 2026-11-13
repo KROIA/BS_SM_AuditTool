@@ -15,6 +15,9 @@
 //                or percent), text; for a pump open (the minute's candle open, null without one), percent (null without a candle)
 //   transfer     transferId, class (lost, twice, created, parked), direction, path, item (null: money), sent, received (of that
 //                item), itemsOff (items that differ), steps, why
+//   banknotes    outstanding (the note count, corrected on 2.1.2), found (in player files), difference (found - outstanding),
+//                inventory, enderChest, putBack, missing and unreadable (names of players without a readable file), unnamed
+//                (how many UUIDs without a file or a name), without (saves)
 import type { DatabaseSync } from 'node:sqlite';
 import type { Fact, Finding, FindingsResult, Level, OrderRow, RuleId, RuleSettings, RuleStatus, Scope, TransferItem } from '../../shared/api.ts';
 import { mainData, mainSave } from '../workspace.ts';
@@ -24,6 +27,8 @@ import { median, usualPrice } from './markets.ts';
 import { readOrders } from './players.ts';
 import { sales } from './sessions.ts';
 import { allTransfers, noTransfers } from './transfers.ts';
+import { worldItems } from './world.ts';
+import { banknotes } from './banknotes.ts';
 
 const MIN = 60_000, HOUR = 3_600_000;
 /** Hits of one rule on the same subject less than this apart form one finding (DESIGN_SPEC 8.2, repeated hits). */
@@ -358,7 +363,29 @@ const RULES: { [K in keyof RuleSettings]: Rule<K> } = {
       };
     }),
   },
+
+  'banknotes': {
+    applies: () => banknotes(EVER).reason ?? worldItems().reason,
+    // The notes the log says are outside the bank against those found in the player files (DESIGN_SPEC 8.7). An estimate:
+    // notes in chests and other blocks are only seen by the region scan, and players without a file are not counted.
+    run: (db, s) => {
+      const count = banknotes(EVER), world = worldItems();
+      const diff = world.notes - count.outstanding;
+      if (abs(diff) <= s.money) return [];
+      const main = mainSave()!;
+      const span = all(db, 'SELECT min(ts) AS a, max(ts) AS b FROM ledger WHERE ts > 0')[0]!;
+      const end = main.lastPlayedMs ?? num(span.b) ?? 0, start = Math.min(num(span.a) ?? end, end);
+      const named = (l: { name: string }[]) => l.map((p) => p.name);
+      return [{
+        ...blank('banknotes', 'count'), basis: 'estimate', level: level('medium', abs(diff), s.money), start, end,
+        measured: { value: abs(diff), threshold: s.money, unit: 'money' },
+        facts: { outstanding: count.outstanding, found: world.notes, difference: diff, inventory: world.inventory, enderChest: world.enderChest,
+          putBack: count.putBack, missing: named(world.missing), unnamed: world.unnamed, unreadable: named(world.unreadable), without: world.without },
+      }];
+    },
+  },
 };
+const EVER: Scope = { from: null, to: null, server: null };
 const FLAGGED = new Set(['lost', 'twice', 'created', 'parked']);
 
 /** bank_last_save_ms is decimal text in the bank's diagnostics Meta; null when missing or not a number. */
@@ -379,11 +406,6 @@ export function orderIds(v: string | null): number[] {
   if (v === null || !/^\s*\d{1,15}(\s*,\s*\d{1,15}){0,999}\s*$/.test(v)) return [];
   return [...new Set(v.split(',').map((x) => Number(x.trim())))];
 }
-
-/** Rules that need data the tool does not read yet. */
-const NOT_AVAILABLE: [RuleId, string][] = [
-  ['banknotes', 'It compares the note count with the notes found in the world, and the world scan is not built yet.'],
-];
 
 /** Overlaps the time range, and under a server filter was placed there or has no server. Findings and incidents alike. */
 export const shown = (x: { start: number; end: number; servers: string[] }, scope: Scope) =>
@@ -413,7 +435,6 @@ export function findings(scope: Scope, settings: RuleSettings): FindingsResult {
       out.push(...kept.list.filter((f) => shown(f, scope)));
     }
   }
-  for (const [rule, why] of NOT_AVAILABLE) rules.push({ rule, on: false, found: null, notApplicable: why });
   out.sort((a, b) => RANK[a.level] - RANK[b.level] || a.start - b.start || (a.id < b.id ? -1 : 1));
   return { findings: out, rules, bankSettings: db ? bankSettings(db) : {} };
 }

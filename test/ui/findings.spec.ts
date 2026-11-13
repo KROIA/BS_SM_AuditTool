@@ -29,8 +29,9 @@ test.afterAll(() => program.close());
 
 test('the list: grouped into incidents, the severity chips filter it, dark and light', async () => {
   await page.evaluate("location.hash = '#/findings'");
-  // 15, the five transfer findings (fixtures, TRANSFER_CASES; none joins an incident) and four market alerts (three join).
-  await expect(page.locator('.sub').first()).toHaveText(/^24 findings in this time range\. 11 of them belong to 2 incidents\.$/);
+  // 15, the five transfer findings (fixtures, TRANSFER_CASES; none joins an incident), four market alerts (three join) and
+  // the banknote count (AT-35, alone).
+  await expect(page.locator('.sub').first()).toHaveText(/^25 findings in this time range\. 11 of them belong to 2 incidents\.$/);
   await expect(page.locator('.group h2')).toHaveText(['Incident: Tavrik on the diamond market', 'Incident: Quenby on the emerald market', 'Not part of an incident']);
   await expect(detail().locator('h2')).toHaveText(/trading profit within one hour/); // the first of the strongest incident
   await page.screenshot({ path: 'test-results/findings-dark.png' });
@@ -74,7 +75,7 @@ test('a pin, a dismissal with its reason and a note survive a restart', async ()
   await expect(detail()).toContainText('Marked as not a problem. An admin testing the bank.');
   await expect(item(FLAG)).toHaveCount(0); // hidden behind the switch, the detail stays
   await item(PROFIT).click();
-  await expect(page.locator('.sub').first()).toHaveText(/^23 findings in this time range\./);
+  await expect(page.locator('.sub').first()).toHaveText(/^24 findings in this time range\./);
 
   await program.close();
   await launch([]); // the saves come back from case.json too

@@ -63,7 +63,7 @@ test('incidents on the fixture: Tavrik on the diamond market and Quenby on the e
   ]);
   // The bank flag on Tavrik's account (45 minutes) is in; Quenby's lost flag (100 minutes) is 40 minutes after her incident.
   assert.ok(r.incidents[0]!.findings.includes('bank-flag:1'));
-  assert.deepEqual(r.others.map((x) => x.id), ['bank-flag:3', `bank-flag:log@${LOST_FLAG.ts + AUDIT_OFFSET}:${LOST_FLAG.account}:${LOST_FLAG.type}`, 'balance:14:1@' + at(30), 'bank-flag:2', `order-ledger:${uuidText(PLAYERS.Brindle.n)}@${T0 + 301_200}`, 'balance:12:1@' + at(10), 'market-alert:4', 'last-save:after-save']);
+  assert.deepEqual(r.others.map((x) => x.id), ['bank-flag:3', `bank-flag:log@${LOST_FLAG.ts + AUDIT_OFFSET}:${LOST_FLAG.account}:${LOST_FLAG.type}`, 'balance:14:1@' + at(30), 'bank-flag:2', 'banknotes:count', `order-ledger:${uuidText(PLAYERS.Brindle.n)}@${T0 + 301_200}`, 'balance:12:1@' + at(10), 'market-alert:4', 'last-save:after-save']);
 });
 
 test('incidents: the realised profit of its players on its markets within its span', () => {

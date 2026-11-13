@@ -9,13 +9,13 @@ const MAX_UNPACKED = 256 * 1024 * 1024;
 const MAX_DEPTH = 512;
 
 /** Unpacks (gzip or zlib, when packed) and reads one NBT file. Throws a plain sentence when the data is not valid. */
-export function readNbt(file: Buffer): NbtCompound {
+export function readNbt(file: Buffer, maxUnpacked = MAX_UNPACKED): NbtCompound {
   let buf = file;
   try {
-    if (buf[0] === 0x1f && buf[1] === 0x8b) buf = zlib.gunzipSync(buf, { maxOutputLength: MAX_UNPACKED });
-    else if (buf[0] === 0x78) buf = zlib.inflateSync(buf, { maxOutputLength: MAX_UNPACKED });
+    if (buf[0] === 0x1f && buf[1] === 0x8b) buf = zlib.gunzipSync(buf, { maxOutputLength: maxUnpacked });
+    else if (buf[0] === 0x78) buf = zlib.inflateSync(buf, { maxOutputLength: maxUnpacked });
   } catch {
-    throw new Error('The file could not be unpacked, or it unpacks to more than 256 MB.');
+    throw new Error(`The file could not be unpacked, or it unpacks to more than ${maxUnpacked / 1024 / 1024} MB.`);
   }
   try {
     return parse(buf);

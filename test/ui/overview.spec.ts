@@ -109,8 +109,9 @@ test.describe('a master without its market data', () => {
 
   test('the summary says so, and the wealth line and both lists are hidden', async () => {
     // Without trades nothing joins into an incident, so the open findings speak instead of "nothing unusual".
+    // 8 with the banknote count (AT-35): the copy keeps the master's player files.
     await expect(summary(page).locator('.sentence')).toHaveText(
-      'No incident was found, but 7 findings are open in this time range, the strongest critical. The save has no market data, so trading profit, unusual prices and total wealth are not shown.');
+      'No incident was found, but 8 findings are open in this time range, the strongest critical. The save has no market data, so trading profit, unusual prices and total wealth are not shown.');
     await expect(page.getByRole('button', { name: 'Total wealth' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Highest trading profit' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Markets with unusual prices' })).toHaveCount(0);
