@@ -1,6 +1,6 @@
 // A finding in plain words (DESIGN_SPEC 8.2): its title, summary, facts and rule, for the Findings screen and the report.
 // Every number goes through fmt.ts. The facts each rule fills are listed in engine/query/findings.ts.
-import type { Finding, RuleId, RuleSettings } from './api.ts';
+import type { Finding, Rating, RuleId, RuleSettings } from './api.ts';
 import { count, items, money, moneyShort, time } from './fmt.ts';
 
 /** What the screens know about items: the name ("Diamond") and whether it is money. */
@@ -45,6 +45,15 @@ export function ruleText(rule: RuleId, s: RuleSettings): string {
     case 'banknotes': return 'Counts the banknotes withdrawn against those paid in and found in the world. It comes with milestone M3.';
   }
 }
+
+/** How much a gap of the check per account says, by its rating (DESIGN_SPEC 8.4). */
+export const GAP_SAYS: Record<Rating, { short: string; why: string }> = {
+  low: { short: 'Little: old save', why: 'This save was written by BankSystem 2.1.2, which did not log trades or admin actions, so gaps like this are expected there.' },
+  medium: { short: 'Some: the log has known holes',
+    why: 'In the mod version this server ran, several paths still change a balance without a log entry, such as an admin setting a balance by hand, so this may be one of them.' },
+  high: { short: 'Much: the log is complete',
+    why: 'From this point on the bank logs nearly every change, so this points to tampering or a bug. Merged player aliases and changes on an external currency mod\'s side are the remaining harmless causes.' },
+};
 
 export const SOURCE: Record<Finding['source'], string> = { 'tool': 'Found by this tool', 'bank mod': 'Raised by the bank mod on the server', 'market mod': 'Raised by the market mod on the server' };
 export function basis(f: Finding): string {
@@ -168,17 +177,14 @@ export function describe(f: Finding, w: ItemWords): FindingWords {
       const id = n('item'), diff = b('difference'), rose = diff > 0n, size = rose ? diff : -diff;
       const short = w.isMoney(id) ? moneyShort(size) : `${items(size)} ${item(id)}`;
       const labels = (x.labels as string[] | null) ?? [];
-      const why = { low: 'This save was written by BankSystem 2.1.2, which did not log trades or admin actions, so gaps like this are expected there.',
-        medium: 'In the mod version this server ran, several paths still change a balance without a log entry, such as an admin setting a balance by hand, so this may be one of them.',
-        high: 'From this point on the bank logs nearly every change, so this points to tampering or a bug. Merged player aliases and changes on an external currency mod\'s side are the remaining harmless causes.',
-      }[String(x.rating) as 'low' | 'medium' | 'high'] ?? '';
+      const why = GAP_SAYS[String(x.rating) as Rating]?.why ?? '';
       return {
         rule: RULE_NAME[f.rule], measured: `${value(id, size)} not explained`,
         title: `A balance ${rose ? 'rose' : 'fell'} by ${short} and the log has no entry for it`,
         summary: `Between the snapshots of ${time(f.start)} and ${time(f.end)}, account ${f.accounts[0]} ${rose ? 'gained' : 'lost'} ${value(id, size)} more than its trades and log entries explain. ${why}`
           + (labels.length ? ` The gap holds rows the log gives no direction for: ${labels.map((k) => (KIND[k] ?? k).toLowerCase()).join(', ')}.` : ''),
         facts: [['Account', String(f.accounts[0] ?? '')], ['Not explained', (rose ? '+' : '-') + value(id, size)],
-          ['How much this says', { low: 'Little: old save', medium: 'Some: the log has known holes', high: 'Much: the log is complete' }[String(x.rating) as 'low'] ?? String(x.rating)]],
+          ['How much this says', GAP_SAYS[String(x.rating) as Rating]?.short ?? String(x.rating)]],
       };
     }
     case 'order-ledger': {

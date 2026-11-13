@@ -1,11 +1,14 @@
 <script lang="ts">
   // Players: what did this player do? A list on the left, the picked player on the right.
-  // Findings, trading sessions, banknotes and connected players come with M2 to M4.
-  import type { ItemRow, LedgerRow, OrderRow, PlayerDetail, PlayerRow } from '../../shared/api.ts';
+  // The list is in the suspicion order (DESIGN_SPEC 8.3), then by profit. Banknotes and connected players come with M3 and M4.
+  import type { Finding, ItemRow, LedgerRow, Level, OrderRow, PlayerDetail, PlayerRow, Session } from '../../shared/api.ts';
+  import { span } from '../../shared/finding.ts';
   import { count, items as quantity, money, moneyShort, time } from '../../shared/fmt.ts';
+  import { blamed, suspicion } from '../../shared/incident.ts';
+  import FindingLinks from '../app/FindingLinks.svelte';
   import StepChart from '../app/StepChart.svelte';
   import { app, engine } from '../app/state.svelte.ts';
-  import { tone, words } from '../app/words.ts';
+  import { entries, gapRows, LEVEL_COLOR, tone, words, type GapRow } from '../app/words.ts';
 
   let { selected }: { selected: string | null } = $props();
 
@@ -15,44 +18,67 @@
   let detail = $state<PlayerDetail | null>(null);
   let orders = $state<OrderRow[]>([]);
   let bank = $state<LedgerRow[]>([]);
+  let gaps = $state<GapRow[]>([]);
+  let found = $state<Finding[]>([]);
+  let sessions = $state<Session[]>([]);
+  let allSessions = $state(false);
   let tab = $state<'trades' | 'bank'>('trades');
   let allOrders = $state(false);
   let allBank = $state(false);
   let loadedFor = $state<string | null>(null); // the player the detail above was asked for; detail is null when that player is unknown
 
   const main = $derived(app.saves.find((s) => s.sources.some((x) => (x.id === 'bank' || x.id === 'market') && x.status !== 'none' && x.status !== 'missing')));
-  const uuid = $derived(selected ?? list?.[0]?.uuid ?? null);
+  // Most suspicious first: findings not marked as "not a problem", weighted by level; the engine's profit order breaks ties.
+  const dismissed = (id: string) => app.marks[id]?.dismissed === true;
+  const open = $derived(found.filter((f) => !dismissed(f.id)));
+  const ordered = $derived.by(() => {
+    if (!list) return null;
+    const score = suspicion(found, dismissed);
+    return [...list].sort((a, b) => (score.get(b.uuid) ?? 0) - (score.get(a.uuid) ?? 0));
+  });
+  /** Open findings per player, with the highest level (findings come highest level first). */
+  const flags = $derived.by(() => {
+    const out = new Map<string, { n: number; level: Level }>();
+    for (const f of open) for (const p of blamed(f)) out.set(p.uuid, { n: (out.get(p.uuid)?.n ?? 0) + 1, level: out.get(p.uuid)?.level ?? f.level });
+    return out;
+  });
+  const uuid = $derived(selected ?? ordered?.[0]?.uuid ?? null);
+  const flagged = $derived(open.filter((f) => blamed(f).some((p) => p.uuid === uuid)));
   const ready = $derived(loadedFor !== null && loadedFor === uuid);
   const shown = $derived(ready ? detail : null);
 
   $effect(() => {
-    const scope = $state.snapshot(app.scope);
+    const scope = $state.snapshot(app.scope), rules = $state.snapshot(app.rules);
     void app.saves.length; // ask again when saves come or go
     let stale = false;
-    void Promise.all([engine.players(scope), engine.items()]).then(([p, i]) => {
+    void Promise.all([engine.players(scope), engine.items(), engine.findings(scope, rules)]).then(([p, i, f]) => {
       if (stale) return;
-      list = p;
+      [list, found] = [p, f.findings];
       itemRows = new Map(i.map((x) => [x.id, x]));
     });
     return () => (stale = true);
   });
 
   $effect(() => {
-    const scope = $state.snapshot(app.scope), who = uuid;
+    const scope = $state.snapshot(app.scope), rules = $state.snapshot(app.rules), who = uuid;
     void app.saves.length;
     if (!who) return;
     let stale = false;
     void (async () => {
       const d = await engine.player(who, scope);
-      const [o, b] = d ? await Promise.all([engine.orders({ player: who }, scope), engine.ledger({ accounts: d.accounts.map((a) => a.number) }, scope)]) : [[], []];
+      const numbers = d?.accounts.map((a) => a.number) ?? [];
+      const [o, b, s, c] = d
+        ? await Promise.all([engine.orders({ player: who }, scope), engine.ledger({ accounts: numbers }, scope), engine.sessions(who, scope), Promise.all(numbers.map((n) => engine.check(n, scope, rules)))])
+        : [[], [], [], []];
       if (stale) return;
-      [detail, orders, bank, allOrders, allBank, loadedFor] = [d, o, b, false, false, who];
+      [detail, orders, bank, sessions, allOrders, allBank, allSessions, loadedFor] = [d, o, b, s, false, false, false, who];
+      gaps = numbers.flatMap((n, k) => gapRows(n, c[k]!));
     })();
     return () => (stale = true);
   });
 
   // ---- Words ----
-  const { itemName, isMoney, what, amount: bankAmount, amountTone: bankTone } = $derived(words(itemRows));
+  const { itemName, isMoney, what, amount: bankAmount, amountTone: bankTone, change, gapWhat, gapSub, gapWhen } = $derived(words(itemRows));
   const initials = (name: string) => (name.replace(/[^A-Za-z0-9]/g, '').slice(0, 2) || '?').toUpperCase();
   const signed = (raw: bigint) => (raw > 0n ? '+' : '') + moneyShort(raw);
   const when = (ms: number | null) => (ms === null ? 'none in this time range' : time(ms));
@@ -92,8 +118,24 @@
       { label: 'Orders', value: count(s.orders), full: '', fg: 'var(--text)', note: s.orders ? `${count(buys)} bought, ${count(s.orders - buys)} sold` : 'none in this time range' },
       { label: 'Money in the bank now', value: moneyShort(s.moneyNow), full: money(s.moneyNow), fg: 'var(--text)',
         note: own.length === 0 ? 'has no account of their own' : `own ${own.length === 1 ? 'account' : 'accounts'} ${own.join(', ')}, at the time of the copy` },
+      { label: 'Open findings', value: count(flagged.length), full: '', fg: flagged[0] ? LEVEL_COLOR[flagged[0].level] : 'var(--text)',
+        note: flagged.length ? LEVELS.map((l) => [l, flagged.filter((f) => f.level === l).length] as const).filter(([, n]) => n).map(([l, n]) => `${count(n)} ${l}`).join(', ') : 'nothing flagged in this time range' },
     ];
   });
+  const LEVELS: Level[] = ['critical', 'high', 'medium', 'low'];
+
+  // ---- Sessions and bank history ----
+  /** Time between orders: ms below a second, else seconds, else minutes. */
+  const apart = (ms: number) => (ms < 1000 ? `${count(Math.round(ms))} ms` : ms < 60_000 ? `${count(Math.round(ms / 1000))} s` : `${count(Math.round(ms / 60_000))} min`);
+  const sessionRows = $derived([...sessions].reverse().map((s) => {
+    const f = flagged.find((x) => x.start <= s.end && x.end >= s.start); // the strongest finding in the session's time
+    return {
+      key: s.start, when: span(s.start, s.end), market: s.markets.length === 1 ? itemName(s.markets[0]!) : `${count(s.markets.length)} markets`, item: s.markets.length === 1 ? s.markets[0]! : null,
+      sub: `${count(s.orders)} ${s.orders === 1 ? 'order' : 'orders'}${s.medianGapMs === null ? '' : `, ${apart(s.medianGapMs)} apart`}`,
+      profit: s.profit, dot: f ? LEVEL_COLOR[f.level] : 'var(--line2)',
+    };
+  }));
+  const bankEntries = $derived(entries(bank, gaps));
 
   const ownAccounts = $derived(shown?.accounts.filter((a) => a.owner) ?? []);
   const sharedAccounts = $derived(shown?.accounts.filter((a) => !a.owner) ?? []);
@@ -103,21 +145,25 @@
   <aside aria-label="Player list">
     <div class="listhead">
       <h2>Players</h2>
-      <span class="small">highest profit first</span>
+      <span class="small">most suspicious first</span>
     </div>
     {#if !main}
       <p class="small pad">No save with bank and market data is loaded.</p>
     {:else if list && list.length === 0}
       <p class="small pad">This save lists no players.</p>
-    {:else if list}
+    {:else if ordered}
       <div class="roster">
-        {#each list as p (p.uuid)}
+        {#each ordered as p (p.uuid)}
           <a class="row pick" href={'#/players/' + encodeURIComponent(p.uuid)} aria-current={p.uuid === uuid ? 'true' : undefined}>
             <span class="avatar" aria-hidden="true">{initials(p.name)}</span>
             <span class="who">
               <span style="font-weight: 500">{p.name}</span>
               <span class="small ellipsis">{p.orders === 0 ? 'no orders' : p.profit === 0n ? `${count(p.orders)} ${p.orders === 1 ? 'order' : 'orders'}, no profit` : `${signed(p.profit)} trading profit`}</span>
             </span>
+            {#if flags.get(p.uuid)}
+              {@const x = flags.get(p.uuid)!}
+              <span class="count" style="--c: {LEVEL_COLOR[x.level]}" title="{count(x.n)} open {x.n === 1 ? 'finding' : 'findings'}, the highest {x.level}">{count(x.n)}</span>
+            {/if}
           </a>
         {/each}
       </div>
@@ -167,6 +213,16 @@
         {/each}
       </section>
 
+      {#if flagged.length}
+        <section class="card" aria-label="What was flagged">
+          <div class="cardhead">
+            <h2 class="h2 h3" style="flex: 1 1 auto">What was flagged</h2>
+            <a class="ref small" href="#/findings" style="font-weight: 500">All findings</a>
+          </div>
+          <FindingLinks list={flagged} w={{ itemName, isMoney }} empty="" />
+        </section>
+      {/if}
+
       <section class="card">
         <div class="cardhead">
           <h2 class="h2 h3">Money in the bank</h2>
@@ -188,20 +244,45 @@
         {#if orders.length === 0}
           <p class="empty">No orders in the selected time range.</p>
         {:else}
-          <section class="card">
-            <h2 class="h2 h3">Profit by market</h2>
-            <div class="markets">
-              {#each shown.markets as m (m.item)}
-                <div class="market">
-                  <span class="who">
-                    <a class="ref" href="#/markets/{m.item}" style="font-weight: 500">{itemName(m.item)}</a>
-                    <span class="small">{count(m.orders)} {m.orders === 1 ? 'order' : 'orders'}{m.bought ? `, bought for ${moneyShort(m.bought)}` : ''}{m.sold ? `, sold for ${moneyShort(m.sold)}` : ''}{m.soldWithoutPurchase ? `, ${moneyShort(m.soldWithoutPurchase)} of it without a purchase` : ''}</span>
-                  </span>
-                  <span class="num" style="color: {tone(m.profit)}" title={money(m.profit)}>{signed(m.profit)}</span>
+          <div class="pair">
+            <section class="card">
+              <h2 class="h2 h3">Profit by market</h2>
+              <div class="markets">
+                {#each shown.markets as m (m.item)}
+                  <div class="market">
+                    <span class="who">
+                      <a class="ref" href="#/markets/{m.item}" style="font-weight: 500">{itemName(m.item)}</a>
+                      <span class="small">{count(m.orders)} {m.orders === 1 ? 'order' : 'orders'}{m.bought ? `, bought for ${moneyShort(m.bought)}` : ''}{m.sold ? `, sold for ${moneyShort(m.sold)}` : ''}{m.soldWithoutPurchase ? `, ${moneyShort(m.soldWithoutPurchase)} of it without a purchase` : ''}</span>
+                    </span>
+                    <span class="num" style="color: {tone(m.profit)}" title={money(m.profit)}>{signed(m.profit)}</span>
+                  </div>
+                {/each}
+              </div>
+            </section>
+            <section class="card" aria-label="Trading sessions">
+              <div class="cardhead">
+                <h2 class="h2 h3" style="flex: 1 1 auto">Trading sessions</h2>
+                {#if sessionRows.length > ROWS}<button type="button" class="link" onclick={() => (allSessions = !allSessions)}>{allSessions ? 'Show fewer' : `Show all ${count(sessionRows.length)}`}</button>{/if}
+              </div>
+              <p class="small" style="margin: 2px 0 0">Orders less than 5 minutes apart, newest first, with the typical time between them.</p>
+              {#if sessionRows.length === 0}
+                <p style="margin: 12px 0 0; color: var(--text2)">No sessions in this time range.</p>
+              {:else}
+                <div class="markets">
+                  {#each allSessions ? sessionRows : sessionRows.slice(0, ROWS) as s (s.key)}
+                    <div class="session">
+                      <span class="sdot" style="background: {s.dot}" aria-hidden="true"></span>
+                      <span class="who">
+                        <span style="font-weight: 500">{s.when} · {#if s.item !== null}<a class="ref" href="#/markets/{s.item}">{s.market}</a>{:else}{s.market}{/if}</span>
+                        <span class="small">{s.sub}</span>
+                      </span>
+                      <span class="num" style="color: {tone(s.profit)}" title={money(s.profit)}>{signed(s.profit)}</span>
+                    </div>
+                  {/each}
                 </div>
-              {/each}
-            </div>
-          </section>
+              {/if}
+            </section>
+          </div>
           <section class="card">
             <div class="cardhead">
               <h2 class="h2 h3" style="flex: 1 1 auto">Orders</h2>
@@ -233,19 +314,31 @@
         {/if}
       {:else}
         {#if main.generation === 'legacy'}
-          <p class="small" style="margin: 0">This save was written by BankSystem 2.1.2, which did not log trades or admin actions.</p>
+          <p class="small" style="margin: 0">This save was written by BankSystem 2.1.2, which did not log trades or admin actions, so changes without a log entry are expected.</p>
         {/if}
-        {#if bank.length === 0}
+        {#if bankEntries.length === 0}
           <p class="empty">No bank log entries for this player's accounts in the selected time range.</p>
         {:else}
           <section class="card">
             <div class="cardhead">
               <h2 class="h2 h3" style="flex: 1 1 auto">Bank history</h2>
-              <span class="small">{bank.length > ROWS && !allBank ? `the latest ${count(ROWS)} of ${count(bank.length)}` : `${count(bank.length)}, newest first`}, all accounts of the player</span>
-              {#if bank.length > ROWS}<button type="button" class="link" onclick={() => (allBank = !allBank)}>{allBank ? 'Show fewer' : 'Show all'}</button>{/if}
+              <span class="small">{bankEntries.length > ROWS && !allBank ? `the latest ${count(ROWS)} of ${count(bankEntries.length)}` : `${count(bankEntries.length)}, newest first`}, all accounts of the player</span>
+              {#if bankEntries.length > ROWS}<button type="button" class="link" onclick={() => (allBank = !allBank)}>{allBank ? 'Show fewer' : 'Show all'}</button>{/if}
             </div>
             <div class="history">
-              {#each allBank ? bank : bank.slice(0, ROWS) as r (r.id)}
+              {#each allBank ? bankEntries : bankEntries.slice(0, ROWS) as e (e.gap ? e.gap.id : e.row.id)}
+                {#if e.gap}
+                  {@const g = e.gap}
+                  <div class="entry gap">
+                    <span class="etime">{gapWhen(g)}</span>
+                    <span class="who" style="flex: 1 1 260px">
+                      <span style="font-weight: 500; color: var(--high)">{gapWhat(g)}</span>
+                      <span class="small"><a class="ref" href="#/accounts/{g.account}">Account {g.account}</a> · {gapSub(g)}</span>
+                    </span>
+                    <span class="num" style="color: var(--high)">{change(g.item, g.gap.difference)}</span>
+                  </div>
+                {:else}
+                {@const r = e.row}
                 <div class="entry">
                   <span class="etime">{time(r.time)}</span>
                   <span class="who" style="flex: 1 1 260px">
@@ -255,6 +348,7 @@
                   </span>
                   <span class="num" style="color: {bankTone(r)}">{bankAmount(r)}</span>
                 </div>
+                {/if}
               {/each}
             </div>
           </section>
@@ -274,8 +368,14 @@
   .tabs button { height: 44px; margin-bottom: -1px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; font-weight: 500; color: var(--text2); }
   .tabs button[aria-selected='true'] { border-bottom-color: var(--accent); color: var(--text); }
   .markets { display: flex; flex-direction: column; gap: 2px; margin: 12px -10px 0; }
-  .market { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 10px; border-radius: 10px; }
+  .market, .session { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 10px; border-radius: 10px; }
   .history { display: flex; flex-direction: column; gap: 4px; margin: 12px -12px 0; }
   .entry { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding: 12px; border-radius: 10px; }
+  .count { flex: none; min-width: 22px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; font-size: 12px; line-height: 20px; text-align: center; font-weight: 600;
+    color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); }
+  .pair { display: flex; flex-wrap: wrap; gap: 24px; }
+  .pair > .card { flex: 1 1 360px; min-width: 0; box-sizing: border-box; }
+  .sdot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+  .entry.gap { border: 1px dashed var(--high); background: color-mix(in srgb, var(--high) 10%, transparent); }
   .etime { flex: 0 0 170px; font-size: 13px; color: var(--text2); font-variant-numeric: tabular-nums; }
 </style>

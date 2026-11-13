@@ -5,8 +5,8 @@ import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { api } from '../../src/engine/api.ts';
 import { addSave, init } from '../../src/engine/workspace.ts';
-import type { Scope } from '../../src/shared/api.ts';
-import { ALIAS, buildFixtures, COMPANY, ITEM, PLAYERS, SHARED, T0, uuidText, type Fixtures } from '../fixtures/build.ts';
+import { DEFAULT_RULES, type RuleSettings, type Scope } from '../../src/shared/api.ts';
+import { ALIAS, buildFixtures, CHECK, COMPANY, ITEM, PLAYERS, SHARED, T0, uuidText, type Fixtures } from '../fixtures/build.ts';
 
 const MIN = 60_000;
 const ALL: Scope = { from: null, to: null, server: null };
@@ -27,25 +27,41 @@ after(() => {
 
 test('with nothing loaded the account questions answer empty', () => {
   init(path.join(fx.root, 'empty-workspace'));
-  assert.deepEqual([api.accounts(ALL), api.balances(11, ITEM.money, ALL)], [[], []]);
+  assert.deepEqual([api.accounts(ALL, DEFAULT_RULES), api.balances(11, ITEM.money, ALL)], [[], []]);
   assert.equal(api.account(11, ALL), null);
 });
 
-test('accounts: most money first, money from the bank files, log entries counted', () => {
+test('accounts: most money first where the log explains everything, money from the bank files, log entries counted', () => {
   open(fx.master);
-  const list = api.accounts(ALL);
+  const list = api.accounts(ALL, DEFAULT_RULES).filter((a) => !a.deleted);
   assert.deepEqual(list.map((a) => a.number), [COMPANY.account, 24, 11, 3, 27, 10, 7, SHARED.account, 31, 32, 33]);
   for (const a of list) assert.equal(a.money, moneyOf(fx.balances.master, a.number), `account ${a.number}`);
   assert.equal(list[0]!.money, 9_007_199_254_740_993n); // above 2^53: exact only as a bigint
   assert.deepEqual(list.map((a) => a.rows), [1, 4, 64, 6, 4, 2, 22, 1, 0, 0, 0]);
   assert.deepEqual(list.find((a) => a.number === 11), {
     number: 11, name: 'Tavrik', company: null, frozen: false, owner: uuid('Tavrik'), ownerName: 'Tavrik', money: 94_083_000n, rows: 64,
+    deleted: false, unexplained: 0n, gaps: 0, rating: null,
   });
   assert.equal(list.find((a) => a.number === 31)!.frozen, true);
   // The time range counts log entries, the money stays the state of the copy.
-  const window = api.accounts({ from: T0 + 50 * MIN, to: T0 + 55 * MIN, server: null });
+  const window = api.accounts({ from: T0 + 50 * MIN, to: T0 + 55 * MIN, server: null }, DEFAULT_RULES);
   assert.deepEqual(window.filter((a) => a.rows).map((a) => [a.number, a.rows]), [[24, 1], [11, 3]]);
   assert.equal(window.find((a) => a.number === 11)!.money, 94_083_000n);
+});
+
+test('accounts: the money the log does not explain first; deleted accounts are listed and checked', () => {
+  open(fx.master);
+  const head = (settings: RuleSettings, scope = ALL) => api.accounts(scope, settings).slice(0, 3).map((a) => [a.number, a.unexplained, a.gaps, a.rating, a.deleted]);
+  // Only gaps above the threshold count: the pair's two gaps are exactly $1'000, the default.
+  assert.deepEqual(head(DEFAULT_RULES), [[CHECK.set, 1_000_000n, 1, 'medium', true], [CHECK.gain, 500_000n, 1, 'medium', true], [COMPANY.account, 0n, 0, null, false]]);
+  const every: RuleSettings = { ...DEFAULT_RULES, balance: { on: true, money: 0n, items: 0n } };
+  assert.deepEqual(head(every), [[CHECK.set, 1_000_000n, 1, 'medium', true], [CHECK.gain, 500_000n, 1, 'medium', true], [CHECK.pair, 200_000n, 2, 'medium', true]]);
+  assert.deepEqual(head(every, { from: T0 + 100 * MIN, to: null, server: null })[0], [CHECK.raw, 100_000n, 1, 'high', true]);
+  const list = api.accounts(ALL, DEFAULT_RULES);
+  assert.deepEqual(list.filter((a) => a.deleted).map((a) => a.number).sort((a, b) => a - b), [12, 13, 14, 15, 16, 17, 18]);
+  assert.deepEqual(list.find((a) => a.number === CHECK.gone), {
+    number: CHECK.gone, name: '', company: null, frozen: false, owner: null, ownerName: null, money: 0n, rows: 0, deleted: true, unexplained: 0n, gaps: 0, rating: null,
+  });
 });
 
 test('one account: company and shared accounts, users with names, every item slot', () => {
@@ -92,8 +108,10 @@ test('balances: one point per snapshot minute, cut to the time range', () => {
 
 test('an old 2.1.2 save: the same accounts, a log without trade or admin rows', () => {
   open(fx.legacy);
-  const list = api.accounts(ALL);
+  const list = api.accounts(ALL, DEFAULT_RULES);
   for (const a of list) assert.equal(a.money, moneyOf(fx.balances.legacy, a.number), `account ${a.number}`);
-  assert.deepEqual(list.map((a) => [a.number, a.rows]).slice(0, 8), [[41, 1], [24, 2], [11, 3], [27, 1], [3, 1], [10, 1], [7, 1], [30, 1]]);
+  // The unlogged admin actions are the gaps, rated low; they come first.
+  assert.deepEqual(list.map((a) => [a.number, a.rows, a.unexplained, a.rating]).slice(0, 8), [[7, 1, 20_000_000n, 'low'], [10, 1, 2_500_000n, 'low'],
+    [41, 1, 0n, null], [24, 2, 0n, null], [11, 3, 0n, null], [27, 1, 0n, null], [3, 1, 0n, null], [30, 1, 0n, null]]);
   assert.deepEqual(api.balances(10, ITEM.money, ALL), [[T0 - 24 * 60 * MIN, 10_000_000n], [T0 + 126 * MIN, 7_500_000n]]);
 });

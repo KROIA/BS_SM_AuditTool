@@ -1,14 +1,13 @@
-// Incidents (DESIGN_SPEC 8.5) and the suspicion order of the players (8.3), both made from the findings.
+// Incidents (DESIGN_SPEC 8.5), made from the findings. The suspicion order of the players (8.3) is in shared/incident.ts.
 import type { Finding, Incident, IncidentsResult, Level, RuleSettings, Scope } from '../../shared/api.ts';
-import { caseData, dismissedIds, mainData } from '../workspace.ts';
+import { blamed } from '../../shared/incident.ts';
+import { caseData, mainData } from '../workspace.ts';
 import { findings, RANK, shown, state } from './findings.ts';
 import { sales, type Sale } from './sessions.ts';
 
 /** Findings (and incidents) less than this apart join when they share a player or a market. */
 const JOIN = 30 * 60_000;
 const ALL: Scope = { from: null, to: null, server: null };
-/** The players a finding holds to account. A price spike names who traded in that minute but blames none of them. */
-const blamed = (f: Finding) => (f.rule === 'price-spike' ? [] : f.players);
 
 interface Group { list: Finding[]; players: Set<string>; markets: Set<number>; start: number; end: number }
 
@@ -75,13 +74,4 @@ export function incidents(scope: Scope, settings: RuleSettings): IncidentsResult
   }
   out.sort((a, b) => RANK[a.level] - RANK[b.level] || (b.profit > a.profit ? 1 : b.profit < a.profit ? -1 : 0) || a.start - b.start);
   return { incidents: out, others: findings(scope, settings).findings.filter((f) => alone.has(f)), orphans: marked.filter((id) => !raised.has(id)) };
-}
-
-const WEIGHT: Record<Level, number> = { critical: 8, high: 4, medium: 2, low: 1 };
-
-/** Each player's place in the suspicion order (DESIGN_SPEC 8.3): 8, 4, 2, 1 per open finding by its level. Dismissed findings (by default those of the case) and price spikes do not count. */
-export function suspicion(list: Finding[], dismissed: ReadonlySet<string> = dismissedIds()): Map<string, number> {
-  const out = new Map<string, number>();
-  for (const f of list) if (!dismissed.has(f.id)) for (const p of blamed(f)) out.set(p.uuid, (out.get(p.uuid) ?? 0) + WEIGHT[f.level]);
-  return out;
 }

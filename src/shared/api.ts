@@ -196,6 +196,18 @@ export interface AccountRow {
   money: bigint;
   /** Ledger rows of the account in the scope. */
   rows: number;
+  /** Gone from the bank's files, still in the snapshots or the log. Its name is empty, it has no owner, users or slots. */
+  deleted: boolean;
+}
+
+/** An account in the list, with what the check per account (DESIGN_SPEC 8.4) found in the scope. */
+export interface AccountListRow extends AccountRow {
+  /** Money the log does not explain: the size of each gap above the threshold, summed (gaps that cancel each other both count). */
+  unexplained: bigint;
+  /** Gaps above the threshold, of every item. */
+  gaps: number;
+  /** The highest rating of those gaps; null without one. */
+  rating: Rating | null;
 }
 
 export interface AccountDetail extends AccountRow {
@@ -271,6 +283,8 @@ export interface Gap {
   /** Kinds of the rows in the gap whose sign the save does not give (ADMIN_SET without a readable note, older payouts). */
   labels: string[];
   rating: Rating;
+  /** The balance at `to`, free plus locked. */
+  after: bigint;
 }
 
 /**
@@ -279,6 +293,9 @@ export interface Gap {
  */
 export interface ItemCheck {
   item: number;
+  /** When the first and the last snapshot in the scope were taken; null without a snapshot. */
+  from: number | null;
+  to: number | null;
   start: bigint | null;
   /** Signed: + goods or money received from trades, - given. */
   trades: bigint;
@@ -436,19 +453,23 @@ export interface SearchResult {
  */
 export interface QueryApi {
   items(): ItemRow[];
-  /** Sorted by profit, highest first (by suspicion from M2 on). */
+  /** Sorted by profit, highest first. The Players screen puts them in the suspicion order (shared/incident.ts). */
   players(scope: Scope): PlayerRow[];
   player(uuid: string, scope: Scope): PlayerDetail | null;
   /** Newest first. ids: order ids as a finding's records hold them (the mod's order id, else the row id). */
   orders(filter: { player?: string; item?: number; ids?: number[] }, scope: Scope): OrderRow[];
   /** Newest first. Rows of the accounts, or the rows with these ids. */
   ledger(filter: { accounts?: number[]; ids?: number[] }, scope: Scope): LedgerRow[];
-  /** Sorted by money, highest first (by the unexplained amount from M2 on). */
-  accounts(scope: Scope): AccountRow[];
+  /**
+   * Sorted by the money the log does not explain, then by the number of gaps, then by money. Deleted accounts are in it.
+   * The check counts gaps above the "Balance not explained" threshold of the settings.
+   */
+  accounts(scope: Scope, settings: RuleSettings): AccountListRow[];
+  /** Deleted accounts too (deleted: true). */
   account(number: number, scope: Scope): AccountDetail | null;
   /** Snapshots of one account and item: free plus locked. */
   balances(account: number, item: number, scope: Scope): Point[];
-  /** Sorted by swing, largest first (by findings from M2 on). */
+  /** Sorted by swing, largest first. The Markets screen puts those with findings first. */
   markets(scope: Scope): MarketRow[];
   market(item: number, scope: Scope): MarketFacts;
   /** At most 5'000 candles; capped says that the scope held more and should be narrowed. */

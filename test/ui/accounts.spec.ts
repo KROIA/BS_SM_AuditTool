@@ -22,16 +22,60 @@ test.describe('the invented network', () => {
   test.beforeAll(async () => ({ program, page } = await launch(path.resolve('test-results/app-data-accounts'), [fx.master, ...fx.slaves])));
   test.afterAll(() => program.close());
 
-  test('the list: most money first, the company account marked, the first one opens', async () => {
+  test('the list: largest gap first, then most money; deleted and company accounts marked', async () => {
     await page.getByRole('link', { name: 'Bank accounts', exact: true }).click();
-    await expect(page.locator('aside .badge')).toHaveText(['41', '24', '11', '3', '27', '10', '7', '30', '31', '32', '33']);
-    await expect(page.locator('aside .pick').first()).toContainText(/Northreach Rail Co.\s*\$90'071.99B · company/);
-    await expect(page.locator('aside .pick').nth(8)).toContainText(/Old savings\s*\$0\.00 · frozen/);
+    // 12 to 18 are gone from the bank's files and still have snapshots or log rows; 14 and 12 have gaps above $1'000.
+    await expect(page.locator('aside .badge')).toHaveText(['14', '12', '41', '24', '11', '3', '27', '10', '7', '30', '13', '15', '16', '17', '18', '31', '32', '33']);
+    await expect(page.locator('aside .pick').first()).toContainText(/Deleted account\s*\$10'000\.00 not explained/);
+    await expect(page.locator('aside .pick .dot')).toHaveCount(2);
+    await expect(page.locator('aside a[href="#/accounts/41"]')).toContainText(/Northreach Rail Co.\s*\$90'071.99B · company/);
+    await expect(page.locator('aside a[href="#/accounts/31"]')).toContainText(/Old savings\s*\$0\.00 · frozen/);
+    await page.locator('aside a[href="#/accounts/41"]').click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Account 41 · Northreach Rail Co.');
     await expect(page.locator('.facts')).toContainText('Company account');
     await expect(page.locator('.facts')).toContainText('User: AdmiralNoor, every right');
     await expect(page.locator('.fvalue')).toHaveText(["$90'071.99B", '1', '1']);
     await expect(page.locator('.fvalue').first()).toHaveAttribute('title', "$90'071'992'547'409.93");
+  });
+
+  test('the check: a deleted account whose balance fell without a log entry', async () => {
+    await page.locator('aside a[href="#/accounts/14"]').click();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Account 14 · deleted');
+    await expect(page.locator('.facts')).toContainText('Deleted account');
+    await expect(page.locator('.facts')).toContainText("Gone from the bank's files");
+    await expect(page.locator('.facts')).not.toContainText('frozen');
+    const check = page.getByRole('region', { name: 'Does the log explain the balance?' });
+    await expect(check.locator('.tvalue')).toHaveText(["$50'000.00", '$0.00', '$0.00', '$0.00', "$50'000.00", "$40'000.00"]);
+    await expect(check.locator('.vvalue')).toHaveText("-$10'000.00");
+    await expect(check).toContainText("The log does not explain $10'000.00. It left this account between two snapshots,");
+    await expect(check).toContainText('In that time the log has entries without a direction, which may explain it.');
+    await expect(check).toContainText('How much this says: some. In the mod version this server ran');
+    await expect(page.locator('.chart path.band')).toHaveCount(1);
+    await expect(page.locator('.legend')).toHaveText('Orange band: the balance changed and the log has no entry for it.');
+
+    await check.getByRole('button', { name: 'Show it in the history' }).click();
+    await expect(page.getByRole('group', { name: 'Filter the history' }).getByRole('button', { name: 'No log entry' })).toHaveAttribute('aria-pressed', 'true');
+    const rows = page.locator('tbody tr');
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainClass('gap');
+    await expect(rows.first().locator('td')).toHaveText([/Nov 2026, \d\d:\d\d:00 to \d\d:\d\d:00$/,
+      /^Balance fell with no log entry\s*Seen between two balance snapshots; the log has entries without a direction in that time: set by an admin$/, "-$10'000.00", "$40'000.00", 'not recorded', '']);
+    await page.getByRole('button', { name: 'Everything', exact: true }).click();
+    await expect(rows).toHaveCount(2);
+    await expect(page.locator('main')).toContainText('2 entries, newest first.');
+    await page.setViewportSize({ width: 1440, height: 1500 });
+    await page.screenshot({ path: 'test-results/accounts-check-dark.png', fullPage: true });
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    await page.locator('aside a[href="#/accounts/12"]').click();
+    await expect(check.locator('.vvalue')).toHaveText("+$5'000.00");
+    await expect(check).toContainText("The log does not explain $5'000.00. It came into this account between two snapshots,");
+    await page.locator('aside a[href="#/accounts/13"]').click();
+    // Two gaps of exactly $1'000, the default threshold: not above it.
+    await expect(check).toContainText('The log explains every change of money on this account in this time range.');
+    await expect(page.getByRole('button', { name: 'Show it in the history' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'No log entry' }).click();
+    await expect(page.locator('main')).toContainText('The log explains every change of this account in the selected time range.');
   });
 
   test('one account: chart per item, history with filters', async () => {
@@ -41,6 +85,7 @@ test.describe('the invented network', () => {
     await expect(page.locator('.facts')).toContainText('Personal account');
     await expect(page.locator('.facts')).toContainText('Owner: Tavrik');
     await expect(page.locator('.fvalue')).toHaveText(["$940'830.00", '64', '2']);
+    await expect(page.locator('.verdict')).toContainText('The log explains every change of money on this account in this time range.');
     await expect(page.getByRole('group', { name: 'What to chart' }).getByRole('button')).toHaveText(['Money', 'Diamond']);
     await expect(page.getByRole('img', { name: /^Money on account 11 from / })).toBeVisible();
 
@@ -122,9 +167,16 @@ test.describe('an old 2.1.2 save', () => {
   test.beforeAll(async () => ({ program, page } = await launch(path.resolve('test-results/app-data-accounts-legacy'), [fx.legacy])));
   test.afterAll(() => program.close());
 
-  test('the screen says once that the history is incomplete', async () => {
+  test('the check says once that this version did not log trades and admin actions; its gaps are rated low', async () => {
     await page.getByRole('link', { name: 'Bank accounts', exact: true }).click();
+    await expect(page.locator('aside .badge')).toHaveText(['7', '10', '41', '24', '11', '27', '3', '30', '31', '32', '33']);
+    await expect(page.locator('main')).toContainText('BankSystem 2.1.2 wrote this save. It did not log trades or admin actions: orders stand in for trades, and gaps are expected and rated low.');
+    await expect(page.getByText('did not log trades or admin actions')).toHaveCount(1);
+    await expect(page.locator('.verdict')).toContainText("The log does not explain $200'000.00.");
+    await expect(page.locator('.verdict')).toContainText('How much this says: little.');
+    await page.screenshot({ path: 'test-results/accounts-legacy-check-dark.png' });
     await page.locator('aside a[href="#/accounts/11"]').click();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Account 11 · Tavrik');
     await expect(page.getByText('did not log trades or admin actions')).toHaveCount(1);
     await expect(page.locator('tbody tr td:nth-child(2) > span:first-child')).toHaveText(['Withdrawal', 'Withdrawal', 'Deposit']);
     await expect(page.locator('tbody tr').first().locator('td').nth(3)).toHaveText('not recorded');

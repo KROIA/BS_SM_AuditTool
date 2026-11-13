@@ -16,7 +16,7 @@ const abs = (v: bigint) => (v < 0n ? -v : v);
 
 /** What one row or order did to one balance. raw: RAW_CHANGE from an unknown source; unknown: a row whose sign the save does not give. */
 interface Move { ts: number; how: 'trade' | 'raw' | 'row' | 'unknown'; amount: bigint; kind: string }
-interface RawGap { from: number; to: number; diff: bigint; trades: bigint; paidIn: bigint; paidOut: bigint; labels: string[] }
+interface RawGap { from: number; to: number; diff: bigint; trades: bigint; paidIn: bigint; paidOut: bigint; labels: string[]; after: bigint }
 type Series = [number, bigint][];
 
 /**
@@ -104,7 +104,7 @@ function gaps(s: Series, list: Move[]): RawGap[] {
     if (trades !== 0n && raw !== 0n && (raw > 0n) === (trades > 0n)) raw -= abs(raw) < abs(trades) ? raw : trades;
     if (raw > 0n) paidIn += raw;
     else paidOut -= raw;
-    out.push({ from, to, diff: after - before - trades - paidIn + paidOut, trades, paidIn, paidOut, labels: [...labels] });
+    out.push({ from, to, diff: after - before - trades - paidIn + paidOut, trades, paidIn, paidOut, labels: [...labels], after });
   }
   return out;
 }
@@ -116,13 +116,13 @@ function join(list: RawGap[]): RawGap[] {
     if (g.diff === 0n) continue;
     const prev = out.at(-1);
     if (prev && prev.diff !== 0n && g.to - prev.from <= JOIN_MS && cancels(prev.diff, g.diff)) {
-      out[out.length - 1] = { ...prev, to: g.to, diff: prev.diff + g.diff, labels: [...new Set([...prev.labels, ...g.labels])] };
+      out[out.length - 1] = { ...prev, to: g.to, diff: prev.diff + g.diff, labels: [...new Set([...prev.labels, ...g.labels])], after: g.after };
     } else out.push(g);
   }
   return out.filter((g) => g.diff !== 0n);
 }
 
-const gap = (g: RawGap, rating: (from: number) => Rating): Gap => ({ from: g.from, to: g.to, difference: g.diff, labels: g.labels, rating: rating(g.from) });
+const gap = (g: RawGap, rating: (from: number) => Rating): Gap => ({ from: g.from, to: g.to, difference: g.diff, labels: g.labels, rating: rating(g.from), after: g.after });
 
 export const moneyItems = (db: DatabaseSync) => new Set(all(db, 'SELECT id FROM item WHERE money = 1').map((r) => num(r.id)!));
 /** The "Balance not explained" threshold of an item: money or goods (DESIGN_SPEC 8.2). */
@@ -131,31 +131,38 @@ export function threshold(db: DatabaseSync, s: RuleSettings['balance']) {
   return (item: number) => (money.has(item) ? s.money : s.items);
 }
 
-/** Per item of the account: the sum from the first to the last snapshot in the scope, and its gaps above the threshold. */
-export function check(account: number, scope: Scope, settings: RuleSettings): ItemCheck[] {
+/**
+ * Per account (one, or null: all) and item: the sum from the first to the last snapshot in the scope, and its gaps above
+ * the threshold. Items lowest id first.
+ */
+export function checkAll(account: number | null, scope: Scope, settings: RuleSettings): Map<number, ItemCheck[]> {
+  const out = new Map<number, ItemCheck[]>();
   const db = mainData();
-  if (!db) return [];
+  if (!db) return out;
   const { snaps, moves, rating } = read(db, account);
   const limit = threshold(db, settings.balance);
-  const items = [...new Set([...snaps.keys(), ...moves.keys()])].map((k) => Number(k.split(':')[1])).sort((a, b) => a - b);
-  return items.map((item): ItemCheck => {
-    const whole = snaps.get(`${account}:${item}`) ?? [];
+  const keys = [...new Set([...snaps.keys(), ...moves.keys()])].map((k) => k.split(':').map(Number) as [number, number]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  for (const [acc, item] of keys) {
+    const whole = snaps.get(`${acc}:${item}`) ?? [];
     // Start at the last snapshot at or before the range's start (else the first one), end at the last one at or before its end.
     const start = Math.max(0, scope.from === null ? 0 : whole.findLastIndex(([t]) => t <= scope.from!));
     const end = scope.to === null ? whole.length - 1 : whole.findLastIndex(([t]) => t <= scope.to!);
     const s = end >= start ? whole.slice(start, end + 1) : [];
-    const raw = s.length > 1 ? gaps(s, moves.get(`${account}:${item}`) ?? []) : [];
+    const raw = s.length > 1 ? gaps(s, moves.get(`${acc}:${item}`) ?? []) : [];
     const sum = (f: (g: RawGap) => bigint) => raw.reduce((t, g) => t + f(g), 0n);
     const trades = sum((g) => g.trades), paidIn = sum((g) => g.paidIn), paidOut = sum((g) => g.paidOut);
     const first = s[0]?.[1] ?? null, is = s.at(-1)?.[1] ?? null;
     const shouldBe = first === null ? null : first + trades + paidIn - paidOut;
     const list = join(raw).filter((g) => abs(g.diff) > limit(item)).map((g) => gap(g, rating));
-    return {
-      item, start: first, trades, paidIn, paidOut, shouldBe, is, unexplained: is === null ? 0n : is - shouldBe!, gaps: list,
+    (out.get(acc) ?? out.set(acc, []).get(acc)!).push({
+      item, from: s[0]?.[0] ?? null, to: s.at(-1)?.[0] ?? null, start: first, trades, paidIn, paidOut, shouldBe, is, unexplained: is === null ? 0n : is - shouldBe!, gaps: list,
       verdict: s.length < 2 ? 'unchecked' : list.length === 0 ? 'explained' : list.some((g) => g.labels.length === 0) ? 'unexplained' : 'unknown-rows',
-    };
-  });
+    });
+  }
+  return out;
 }
+
+export const check = (account: number, scope: Scope, settings: RuleSettings): ItemCheck[] => checkAll(account, scope, settings).get(account) ?? [];
 
 /** Every gap with a difference over all accounts and items, for the rule "Balance not explained". Not on the API. */
 export function allGaps(): (Gap & { account: number; item: number })[] {

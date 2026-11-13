@@ -1,6 +1,6 @@
-// An incident's title and its sentence for the Overview, in plain English from its figures (DESIGN_SPEC 6.1 and 8.5).
-// Shared by the screens and the report. itemName turns an item id into its name ("Diamond").
-import type { Incident } from './api.ts';
+// An incident's title and its sentence for the Overview, in plain English from its figures (DESIGN_SPEC 6.1 and 8.5),
+// and the suspicion order of the players (8.3). Shared by the screens and the report. itemName turns an item id into its name ("Diamond").
+import type { Finding, Incident, Level } from './api.ts';
 import { count, moneyShort, time } from './fmt.ts';
 
 const MIN = 60_000, HOUR = 60 * MIN, DAY = 24 * HOUR;
@@ -23,6 +23,17 @@ function when(i: Incident): string {
   const ms = i.end - i.start;
   const length = ms < 2 * HOUR ? plural(Math.max(1, Math.round(ms / MIN)), 'minute') : ms < 2 * DAY ? plural(Math.round(ms / HOUR), 'hour') : plural(Math.round(ms / DAY), 'day');
   return `within ${length} on ${day(i.start)}`;
+}
+
+/** The players a finding holds to account. A price spike names who traded in that minute but blames none of them. */
+export const blamed = (f: Finding) => (f.rule === 'price-spike' ? [] : f.players);
+
+const WEIGHT: Record<Level, number> = { critical: 8, high: 4, medium: 2, low: 1 };
+/** Each player's place in the suspicion order (DESIGN_SPEC 8.3): 8, 4, 2, 1 per open finding by its level. Dismissed findings and price spikes do not count. */
+export function suspicion(list: Finding[], dismissed: (id: string) => boolean): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const f of list) if (!dismissed(f.id)) for (const p of blamed(f)) out.set(p.uuid, (out.get(p.uuid) ?? 0) + WEIGHT[f.level]);
+  return out;
 }
 
 /** An incident still open: at least one of its findings is not marked as "not a problem". */

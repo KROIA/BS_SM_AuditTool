@@ -4,11 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { api } from '../../src/engine/api.ts';
-import { join, suspicion } from '../../src/engine/query/incidents.ts';
+import { join } from '../../src/engine/query/incidents.ts';
 import { addSave, init } from '../../src/engine/workspace.ts';
 import { DEFAULT_RULES, type Finding, type Incident, type Scope } from '../../src/shared/api.ts';
 import { time } from '../../src/shared/fmt.ts';
-import { incidentSentence, incidentTitle } from '../../src/shared/incident.ts';
+import { incidentSentence, incidentTitle, suspicion } from '../../src/shared/incident.ts';
 import { AUDIT_OFFSET, buildFixtures, ITEM, LOST_FLAG, PLAYERS, T0, uuidText, type Fixtures } from '../fixtures/build.ts';
 
 const MIN = 60_000;
@@ -102,7 +102,7 @@ test('suspicion: 8, 4, 2, 1 per finding by level, dismissed findings left out', 
   const order = (s: Map<string, number>) => [...s].map(([uuid, n]) => [Object.entries(PLAYERS).find(([, p]) => uuidText(p.n) === uuid)![0], n] as const)
     .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
   // Tavrik also traded in the diamond spike's minute: named there, not counted.
-  assert.deepEqual(order(suspicion(list)), [['Quenby', 12], ['Tavrik', 12], ['Ombrelune', 4], ['Brindle', 2], ['Mikko_82', 1]]);
+  assert.deepEqual(order(suspicion(list, () => false)), [['Quenby', 12], ['Tavrik', 12], ['Ombrelune', 4], ['Brindle', 2], ['Mikko_82', 1]]);
   const lost = list.find((x) => x.id.startsWith('bank-flag:log@'))!.id; // Quenby's critical flag
-  assert.deepEqual(order(suspicion(list, new Set([lost]))).slice(0, 3), [['Tavrik', 12], ['Ombrelune', 4], ['Quenby', 4]]);
+  assert.deepEqual(order(suspicion(list, (id) => id === lost)).slice(0, 3), [['Tavrik', 12], ['Ombrelune', 4], ['Quenby', 4]]);
 });

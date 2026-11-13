@@ -1,11 +1,12 @@
 <script lang="ts">
   // Markets: what happened to this price, and who did it? A list on the left, the picked market on the right.
-  // "What stands out" comes with M2.
-  import type { Candle, ItemRow, MarketFacts, MarketRow, OrderRow, Scope, Trader } from '../../shared/api.ts';
+  // The list puts the markets with open findings first, then the largest swing.
+  import type { Candle, Finding, ItemRow, Level, MarketFacts, MarketRow, OrderRow, Scope, Trader } from '../../shared/api.ts';
   import { amount, count, countShort, items as quantity, money, moneyShort } from '../../shared/fmt.ts';
   import CandleChart from '../app/CandleChart.svelte';
+  import FindingLinks from '../app/FindingLinks.svelte';
   import { app, engine, setRange } from '../app/state.svelte.ts';
-  import { tone, words } from '../app/words.ts';
+  import { LEVEL_COLOR, tone, words } from '../app/words.ts';
 
   let { selected }: { selected: number | null } = $props();
 
@@ -16,6 +17,7 @@
   const FIT = 600;
 
   let list = $state<MarketRow[] | null>(null);
+  let found = $state<Finding[]>([]);
   let itemRows = $state(new Map<number, ItemRow>());
   let facts = $state<MarketFacts | null>(null);
   let traders = $state<Trader[]>([]);
@@ -30,18 +32,27 @@
   let traderOrders = $state<OrderRow[]>([]);
 
   const main = $derived(app.saves.find((s) => s.sources.some((x) => x.id === 'market' && x.status !== 'none' && x.status !== 'missing')));
-  const item = $derived(selected ?? list?.[0]?.item ?? null);
+  // Open findings per market, with the highest level (findings come highest level first); the engine's swing order breaks ties.
+  const open = $derived(found.filter((f) => !app.marks[f.id]?.dismissed));
+  const flags = $derived.by(() => {
+    const out = new Map<number, { n: number; level: Level }>();
+    for (const f of open) for (const m of f.markets) out.set(m, { n: (out.get(m)?.n ?? 0) + 1, level: out.get(m)?.level ?? f.level });
+    return out;
+  });
+  const ordered = $derived(list ? [...list].sort((a, b) => (flags.get(b.item)?.n ?? 0) - (flags.get(a.item)?.n ?? 0)) : null);
+  const item = $derived(selected ?? ordered?.[0]?.item ?? null);
+  const standouts = $derived(open.filter((f) => f.markets.includes(item!)));
   const ready = $derived(loadedFor !== null && loadedFor === item);
   const row = $derived(list?.find((m) => m.item === item) ?? null);
-  const { itemName } = $derived(words(itemRows));
+  const { itemName, isMoney } = $derived(words(itemRows));
 
   $effect(() => {
-    const scope = $state.snapshot(app.scope);
+    const scope = $state.snapshot(app.scope), rules = $state.snapshot(app.rules);
     void app.saves.length; // ask again when saves come or go
     let stale = false;
-    void Promise.all([engine.markets(scope), engine.items()]).then(([m, i]) => {
+    void Promise.all([engine.markets(scope), engine.items(), engine.findings(scope, rules)]).then(([m, i, f]) => {
       if (stale) return;
-      list = m;
+      [list, found] = [m, f.findings];
       itemRows = new Map(i.map((x) => [x.id, x]));
     });
     return () => (stale = true);
@@ -156,21 +167,25 @@
   <aside aria-label="Market list">
     <div class="listhead">
       <h2>Markets</h2>
-      <span class="small">largest swing first</span>
+      <span class="small">most findings first</span>
     </div>
     {#if !main}
       <p class="small pad">No save with market data is loaded.</p>
     {:else if list && list.length === 0}
       <p class="small pad">This save has no markets.</p>
-    {:else if list}
+    {:else if ordered}
       <div class="roster">
-        {#each list as m (m.item)}
+        {#each ordered as m (m.item)}
           <a class="row pick" href="#/markets/{m.item}" aria-current={m.item === item ? 'true' : undefined}>
             <span class="who">
               <span class="ellipsis" style="font-weight: 500">{itemName(m.item)}</span>
               <span class="small">{count(m.orders)} {m.orders === 1 ? 'order' : 'orders'}{m.price !== null ? ` · ${moneyShort(m.price)}` : ''}</span>
             </span>
             <span class="num small" title="Highest price divided by the lowest in this time range">{m.swing === null ? '' : swing(m.swing)}</span>
+            {#if flags.get(m.item)}
+              {@const x = flags.get(m.item)!}
+              <span class="dot" style="background: {LEVEL_COLOR[x.level]}" title="{count(x.n)} open {x.n === 1 ? 'finding' : 'findings'}, the highest {x.level}"></span>
+            {/if}
           </a>
         {/each}
       </div>
@@ -243,34 +258,43 @@
         </div>
       </section>
 
-      <section class="card">
-        <h2 class="h2 h3">Who traded here</h2>
-        <p class="small" style="margin: 2px 0 0">In this time range. Pick a player to put their orders on the chart.</p>
-        {#if traders.length === 0}
-          <p style="margin: 16px 0 0; color: var(--text2)">No player traded on this market in this time range.</p>
-        {:else}
-          <div class="traders">
-            {#each traders as t (t.uuid)}
-              <div class="trow" class:on={t.uuid === trader}>
-                <span class="avatar" aria-hidden="true">{initials(t.name)}</span>
-                <span class="who">
-                  <a class="ref" href="#/players/{encodeURIComponent(t.uuid)}" style="font-weight: 500">{t.name}</a>
-                  <span class="small">{t.bought ? `bought for ${moneyShort(t.bought)}` : 'bought nothing'}, {t.sold ? `sold for ${moneyShort(t.sold)}` : 'sold nothing'}</span>
-                </span>
-                <span class="num" style="color: {tone(t.profit)}" title="Realised profit">{signed(t.profit)}</span>
-                <button type="button" class="link" aria-pressed={t.uuid === trader} onclick={() => (trader = t.uuid === trader ? null : t.uuid)}
-                  >{t.uuid === trader ? 'On the chart' : 'Show on chart'}</button>
-              </div>
-            {/each}
-          </div>
-        {/if}
-      </section>
+      <div class="pair">
+        <section class="card">
+          <h2 class="h2 h3">Who traded here</h2>
+          <p class="small" style="margin: 2px 0 0">In this time range. Pick a player to put their orders on the chart.</p>
+          {#if traders.length === 0}
+            <p style="margin: 16px 0 0; color: var(--text2)">No player traded on this market in this time range.</p>
+          {:else}
+            <div class="traders">
+              {#each traders as t (t.uuid)}
+                <div class="trow" class:on={t.uuid === trader}>
+                  <span class="avatar" aria-hidden="true">{initials(t.name)}</span>
+                  <span class="who">
+                    <a class="ref" href="#/players/{encodeURIComponent(t.uuid)}" style="font-weight: 500">{t.name}</a>
+                    <span class="small">{t.bought ? `bought for ${moneyShort(t.bought)}` : 'bought nothing'}, {t.sold ? `sold for ${moneyShort(t.sold)}` : 'sold nothing'}</span>
+                  </span>
+                  <span class="num" style="color: {tone(t.profit)}" title="Realised profit">{signed(t.profit)}</span>
+                  <button type="button" class="link" aria-pressed={t.uuid === trader} onclick={() => (trader = t.uuid === trader ? null : t.uuid)}
+                    >{t.uuid === trader ? 'On the chart' : 'Show on chart'}</button>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </section>
+        <section class="card" aria-label="What stands out">
+          <h2 class="h2 h3">What stands out</h2>
+          <FindingLinks list={standouts} w={{ itemName, isMoney }} empty="Nothing unusual in this time range." />
+        </section>
+      </div>
     {/if}
   </div>
 </div>
 
 <style>
   .sub .mono { font-size: 13px; }
+  .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+  .pair { display: flex; flex-wrap: wrap; gap: 24px; }
+  .pair > .card { flex: 1 1 380px; min-width: 0; box-sizing: border-box; }
   .mfacts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 16px 24px; }
   .mfacts div { display: flex; flex-direction: column; gap: 2px; }
   .mvalue { font-size: 18px; line-height: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }

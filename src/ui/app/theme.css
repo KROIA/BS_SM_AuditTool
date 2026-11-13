@@ -64,7 +64,7 @@ input { font: inherit; color: inherit; }
 .split .lead { margin: -8px 0 0; font-size: 16px; line-height: 24px; text-wrap: pretty; }
 .split .facts { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: -8px; font-size: 13px; color: var(--text2); }
 .split .facts a, .split .ref { color: var(--accent); }
-.split .figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 16px; }
+.split .figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 16px; }
 .split .figure { display: flex; flex-direction: column; gap: 6px; padding: 20px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
 .split .flabel { font-size: 13px; color: var(--text2); }
 .split .fvalue { font-family: var(--font-head); font-size: 26px; line-height: 32px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }

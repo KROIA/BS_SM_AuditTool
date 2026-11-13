@@ -23,13 +23,24 @@ test.describe('the invented network', () => {
   test.beforeAll(async () => ({ program, page } = await launch(path.resolve('test-results/app-data-markets'), [fx.master, ...fx.slaves])));
   test.afterAll(() => program.close());
 
-  test('the list: largest swing first, the first one opens with its facts', async () => {
+  test('the list: most findings first, then the largest swing; the first one opens with its facts and what stands out', async () => {
     await page.getByRole('link', { name: 'Markets', exact: true }).click();
-    await expect(page.locator('aside .pick .ellipsis')).toHaveText(['Diamond', 'Emerald', 'Gold ingot', 'Wheat', 'Oak log', 'Coal', 'Iron ingot', 'Redstone']);
+    // Diamond 5 findings, Emerald 2, Coal 1 (an order and the bank log disagree), then the swing order.
+    await expect(page.locator('aside .pick .ellipsis')).toHaveText(['Diamond', 'Emerald', 'Coal', 'Gold ingot', 'Wheat', 'Oak log', 'Iron ingot', 'Redstone']);
+    await expect(page.locator('aside')).toContainText('most findings first');
+    await expect(page.locator('aside .pick .dot')).toHaveCount(3);
     await expect(page.locator('aside .pick').first()).toContainText(/60 orders · \$52\.92\s*40\.91×/);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Diamond');
     await expect(page.locator('.lead')).toHaveText('In this time range the highest price was 40.91× the lowest.');
     await expect(page.locator('.mvalue')).toHaveText(['$52.70', '$48.36', "$1'978.42", "390'669", '1', '$52.92']);
+    const standouts = page.getByRole('region', { name: 'What stands out' }).locator('a.link-row');
+    await expect(standouts).toHaveCount(5);
+    await expect(standouts.first()).toContainText('$5.44M trading profit within one hour');
+    await expect(standouts.last()).toContainText("The diamond price swung between $329.74 and $1'978.42 inside one minute");
+    await standouts.last().click();
+    await expect(page).toHaveURL(/#\/findings\/price-spike%3A/);
+    await page.goBack();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Diamond');
   });
 
   test('the chart: a fitting candle length, other lengths, scale, readout and zoom', async () => {
@@ -71,6 +82,7 @@ test.describe('the invented network', () => {
     await expect(page.locator('.legend')).toContainText('Bought by Tavrik');
     await expect(page.locator('.legend')).toContainText('at the time it finished.');
     // Minute 21 holds the 30 buys: the readout names them.
+    await page.locator('.plot').scrollIntoViewIfNeeded();
     const box = (await page.locator('.plot').boundingBox())!;
     await page.mouse.move(box.x + (box.width * 21.5) / 160, box.y + 100);
     await expect(page.locator('.readout')).toContainText("Tavrik bought 3'000 at $");
@@ -95,6 +107,10 @@ test.describe('the invented network', () => {
     await expect(page).toHaveURL(/#\/markets\/2$/);
     await page.evaluate("location.hash = '#/markets/3'");
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Emerald');
+    await expect(page.getByRole('region', { name: 'What stands out' }).locator('a.link-row')).toHaveCount(2);
+    await page.evaluate("location.hash = '#/markets/5'");
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Gold ingot');
+    await expect(page.getByRole('region', { name: 'What stands out' })).toContainText('Nothing unusual in this time range.');
   });
 });
 

@@ -4,9 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { api } from '../../src/engine/api.ts';
-import { suspicion } from '../../src/engine/query/incidents.ts';
 import { addSave, CASE_LIMIT, init } from '../../src/engine/workspace.ts';
 import { DEFAULT_RULES, type Mark, type Scope } from '../../src/shared/api.ts';
+import { suspicion } from '../../src/shared/incident.ts';
 import { buildFixtures, PLAYERS, T0, uuidText, type Fixtures } from '../fixtures/build.ts';
 
 const ALL: Scope = { from: null, to: null, server: null };
@@ -91,8 +91,9 @@ test('suspicion leaves out the findings the case marks as not a problem', () => 
   const list = api.findings(ALL, DEFAULT_RULES).findings;
   const lost = list.find((x) => x.id.startsWith('bank-flag:log@'))!.id; // Quenby's critical flag
   const quenby = uuidText(PLAYERS.Quenby.n);
-  assert.equal(suspicion(list).get(quenby), 12);
+  const stored = (id: string) => api.caseData().marks[id]?.dismissed === true; // as the screens read them
+  assert.equal(suspicion(list, stored).get(quenby), 12);
   api.mark(lost, mark({ dismissed: true }));
-  assert.equal(suspicion(list).get(quenby), 4);
+  assert.equal(suspicion(list, stored).get(quenby), 4);
   api.mark(lost, mark({}));
 });

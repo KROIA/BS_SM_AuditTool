@@ -54,15 +54,15 @@ test('current save: the ordinary accounts explain every change, only the cases s
 test('an unexplained gain is flagged', () => {
   open(fx.master);
   assert.deepEqual(money(CHECK.gain), {
-    item: ITEM.money, start: 1_000_000n, trades: 0n, paidIn: 0n, paidOut: 0n, shouldBe: 1_000_000n, is: 1_500_000n, unexplained: 500_000n,
-    gaps: [{ from: at(10), to: at(11), difference: 500_000n, labels: [], rating: 'medium' }], verdict: 'unexplained',
+    item: ITEM.money, from: at(10), to: at(11), start: 1_000_000n, trades: 0n, paidIn: 0n, paidOut: 0n, shouldBe: 1_000_000n, is: 1_500_000n, unexplained: 500_000n,
+    gaps: [{ from: at(10), to: at(11), difference: 500_000n, labels: [], rating: 'medium', after: 1_500_000n }], verdict: 'unexplained',
   });
 });
 
 test('a pair that cancels within 15 minutes is joined to nothing, one 38 minutes apart is not', () => {
   open(fx.master);
   assert.deepEqual(money(CHECK.pair, { from: null, to: at(30), server: null }).verdict, 'explained');
-  assert.deepEqual(money(CHECK.pair).gaps.map((g) => g.difference), [100_000n, -100_000n]);
+  assert.deepEqual(money(CHECK.pair).gaps.map((g) => [g.difference, g.after]), [[100_000n, 2_100_000n], [-100_000n, 2_000_000n]]);
 });
 
 test('the verdict counts a gap only above the "Balance not explained" threshold', () => {
@@ -95,7 +95,9 @@ test('BS-254 with an older StockMarket: a fill logged as trade and raw change co
 
 test('a deleted account with snapshots only is checked', () => {
   open(fx.master);
-  assert.equal(api.account(CHECK.gone, ALL), null);
+  const gone = api.account(CHECK.gone, ALL)!;
+  assert.deepEqual([gone.deleted, gone.name, gone.owner, gone.money, gone.users, gone.items], [true, '', null, 0n, [], []]);
+  assert.equal(api.account(999, ALL), null);
   assert.deepEqual(api.check(CHECK.gone, ALL, EVERY).map((c) => [c.item, c.start, c.is, c.verdict]), [[ITEM.money, 250_000n, 250_000n, 'explained']]);
   assert.deepEqual(api.check(999, ALL, EVERY), []);
 });
