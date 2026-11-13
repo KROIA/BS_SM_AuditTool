@@ -55,7 +55,7 @@ test('with nothing loaded the market questions answer empty', () => {
   init(path.join(fx.root, 'empty-workspace'));
   assert.deepEqual(api.markets(ALL), []);
   assert.deepEqual(api.market(ITEM.diamond, ALL), { usual: null, low: null, high: null, volume: 0, traders: 0 });
-  assert.deepEqual(api.candles(ITEM.diamond, 60, ALL), { candles: [], capped: false });
+  assert.deepEqual(api.candles(ITEM.diamond, 60, ALL), { candles: [], capped: false, usual: [] });
   assert.deepEqual(api.traders(ITEM.diamond, ALL), []);
 });
 
@@ -115,19 +115,20 @@ test('markets: largest swing first, swing is the highest high over the lowest lo
   assert.deepEqual(mining.filter((m) => m.orders > 0).map((m) => [m.item, m.orders]), [[ITEM.coal, 2], [ITEM.iron, 1]]);
 });
 
-test('market facts: usual price is the median 1-minute open, low, high, volume and traders', () => {
+test('market facts: usual price at the end of the range is the median 1-minute open before it, low, high, volume and traders', () => {
   open(fx.master);
   assert.deepEqual(api.market(ITEM.diamond, ALL), { usual: 5270n, low: 4836n, high: 197842n, volume: 390669, traders: 1 });
-  assert.deepEqual(api.market(ITEM.diamond, NARROW), { usual: 5246n, low: 4957n, high: 197842n, volume: 258712, traders: 1 });
-  // The median the slow way, for an odd and an even number of minutes.
-  for (const s of [ALL, { ...ALL, to: T0 + 158 * MIN }]) {
-    const opens = minutes(fx.master, ITEM.emerald, s).inScope.map((r) => r.open).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  // NARROW ends at T0 + 130 minutes: the usual price is that of minutes 0 to 119, the last whole hours before it (AT-45).
+  assert.deepEqual(api.market(ITEM.diamond, NARROW), { usual: 5213n, low: 4957n, high: 197842n, volume: 258712, traders: 1 });
+  // The median the slow way: every minute before the hour the range ends in (all 160 of them, then minutes 0 to 119).
+  for (const [s, before] of [[ALL, Infinity], [{ ...ALL, to: T0 + 158 * MIN }, T0 + 120 * MIN]] as const) {
+    const opens = minutes(fx.master, ITEM.emerald, ALL).every.filter((r) => r.time < before).map((r) => r.open).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
     const k = opens.length;
     const median = k % 2 ? opens[(k - 1) / 2]! : (opens[k / 2 - 1]! + opens[k / 2]!) / 2n;
     assert.equal(api.market(ITEM.emerald, s).usual, median, `${k} minutes`);
   }
-  // Nothing in the range: no price at all.
-  assert.deepEqual(api.market(ITEM.wheat, { from: T0 + 200 * MIN, to: null, server: null }), { usual: null, low: null, high: null, volume: 0, traders: 0 });
+  // Nothing in the range: no low, high or volume. The usual price is the one at the range's end, which needs no minute inside it (AT-45).
+  assert.deepEqual(api.market(ITEM.wheat, { from: T0 + 200 * MIN, to: null, server: null }), { usual: api.market(ITEM.wheat, ALL).usual, low: null, high: null, volume: 0, traders: 0 });
   // A market without candles: the usual price is the median order price, here of Mikko_82's two wheat sales.
   const save = path.join(fx.root, 'no-wheat-candles');
   fs.cpSync(fx.master, save, { recursive: true });

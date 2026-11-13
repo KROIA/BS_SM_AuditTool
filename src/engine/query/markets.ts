@@ -15,7 +15,7 @@ const COLS = 'market, time, open, low, high, volume';
  * The candles of the scope as one SQL source with the columns of COLS: whole hours from candle_hour, the minutes
  * before the first and after the last whole hour from candle. market null: every market.
  */
-function source(s: Scope, market: number | null) {
+export function source(s: Scope, market: number | null) {
   const params: Record<string, SQLInputValue> = {};
   if (market !== null) params.m = market;
   const hf = s.from === null ? null : Math.ceil(s.from / H) * H;
@@ -91,7 +91,7 @@ export function median(values: bigint[]): bigint | null {
 }
 
 const usualCache = new WeakMap<DatabaseSync, Map<number, bigint | null>>();
-/** The usual price over all loaded data, for the rules. Worked out once per market while the same saves stay loaded. */
+/** The usual price over all loaded data: what usualAt falls back to. Worked out once per market while the same saves stay loaded. */
 export function usualPrice(item: number): bigint | null {
   const db = mainData();
   if (!db) return null;
@@ -100,18 +100,67 @@ export function usualPrice(item: number): bigint | null {
   return known.get(item)!;
 }
 
+const DAY = 1440, FEW = 60;
+const atCache = new WeakMap<DatabaseSync, Map<string, bigint | null>>();
+/**
+ * The usual price of a market at a moment (DESIGN_SPEC 8.1, AT-45): the median open of the last 1'440 one-minute candles
+ * before the moment's hour, so it follows the market. Fewer than 60 candles before it: usualPrice (all data). Cached per
+ * market and hour (null: too few candles); each hour is one read of at most 1'440 rows from the candle index (market, time, open).
+ */
+export function usualAt(item: number, ms: number): bigint | null {
+  const db = mainData();
+  if (!db) return null;
+  return windowed(db, item, ms) ?? usualPrice(item);
+}
+function windowed(db: DatabaseSync, item: number, ms: number): bigint | null {
+  const hour = Math.floor(ms / H) * H, key = `${item}:${hour}`;
+  const known = atCache.get(db) ?? atCache.set(db, new Map()).get(db)!;
+  if (!known.has(key)) {
+    const opens = all(db, 'SELECT open FROM candle WHERE market = :m AND time < :t ORDER BY time DESC LIMIT :k', { m: item, t: hour, k: BigInt(DAY) }).map((r) => big(r.open)!);
+    known.set(key, opens.length < FEW ? null : median(opens));
+  }
+  return known.get(key)!;
+}
+
+/**
+ * The chart's usual line: the windowed usual price for many moments of one market, oldest first, null where fewer than 60
+ * candles lie before (no all-data fallback, which would draw a false drop at the left edge). Close hours not known yet are
+ * worked out from one ordered read of the minutes they need, not one read per hour: the 2'400 hours of a real market took
+ * 1.4 s one by one.
+ */
+function usualSeries(db: DatabaseSync, item: number, times: number[]): (bigint | null)[] {
+  const known = atCache.get(db) ?? atCache.set(db, new Map()).get(db)!;
+  const hours = [...new Set(times.map((t) => Math.floor(t / H) * H))].filter((h) => !known.has(`${item}:${h}`));
+  // One read covers every minute between the hours; one read per hour covers 1'440 each: take the smaller.
+  if (hours.length > 1 && hours.length * DAY > (hours.at(-1)! - hours[0]!) / 60_000) {
+    const first = num(all(db, 'SELECT min(time) AS t FROM (SELECT time FROM candle WHERE market = :m AND time < :h ORDER BY time DESC LIMIT :k)', { m: item, h: hours[0]!, k: BigInt(DAY) })[0]!.t);
+    const rows = all(db, 'SELECT time, open FROM candle WHERE market = :m AND time >= :a AND time < :b ORDER BY time', { m: item, a: first ?? hours[0]!, b: hours.at(-1)! });
+    const time = rows.map((r) => num(r.time)!), open = rows.map((r) => big(r.open)!);
+    let i = 0;
+    for (const h of hours) {
+      while (i < time.length && time[i]! < h) i++;
+      const opens = open.slice(Math.max(0, i - DAY), i);
+      known.set(`${item}:${h}`, opens.length < FEW ? null : median(opens));
+    }
+  }
+  return times.map((t) => windowed(db, item, t));
+}
+/** usualAt for "now": every candle there is lies before it. */
+const END = 8.64e15;
+
 export function market(item: number, scope: Scope): MarketFacts {
   const db = mainData();
   if (!db) return { usual: null, low: null, high: null, volume: 0, traders: 0 };
   const src = source(scope, item);
   const f = all(db, `SELECT min(low) AS lo, max(high) AS hi, total(volume) AS v FROM (${src.sql})`, src.params)[0]!;
   const list = readOrders(db, { item }, scope.to).filter((o) => counts(o, scope));
-  return { usual: usual(db, item, scope, list), low: big(f.lo), high: big(f.hi), volume: Number(f.v), traders: new Set(list.map((o) => o.player)).size };
+  // The usual price at the end of the range (AT-45). scope.to is the last millisecond in it, so its own hour counts.
+  return { usual: usualAt(item, scope.to === null ? END : scope.to + 1), low: big(f.lo), high: big(f.hi), volume: Number(f.v), traders: new Set(list.map((o) => o.player)).size };
 }
 
-export function candles(item: number, minutes: 1 | 5 | 15 | 60 | 1440, scope: Scope): { candles: Candle[]; capped: boolean } {
+export function candles(item: number, minutes: 1 | 5 | 15 | 60 | 1440, scope: Scope): { candles: Candle[]; capped: boolean; usual: (bigint | null)[] } {
   const db = mainData();
-  if (!db) return { candles: [], capped: false };
+  if (!db) return { candles: [], capped: false, usual: [] };
   const q = minutes >= 60 ? source(scope, item) : (({ where, params }) => ({ sql: `SELECT ${COLS} FROM candle WHERE ${where}`, params }))(minuteWhere(item, scope));
   const st = db.prepare(`${q.sql} ORDER BY time`);
   st.setReadBigInts(true);
@@ -140,7 +189,8 @@ export function candles(item: number, minutes: 1 | 5 | 15 | 60 | 1440, scope: Sc
     const next = all(db, 'SELECT open FROM candle WHERE market = :m AND time >= :t ORDER BY time LIMIT 1', { m: item, t: last.time + iv })[0];
     last.close = next ? big(next.open) : null;
   }
-  return { candles: out, capped };
+  // The usual price that follows the market (AT-45): one per candle, worked out once per hour.
+  return { candles: out, capped, usual: usualSeries(db, item, out.map((c) => c.time)) };
 }
 
 export function traders(item: number, scope: Scope): Trader[] {

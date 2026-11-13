@@ -203,7 +203,7 @@
   function groupsOf(n: Node): { head: string; rows: Row[] }[] {
     if (n.id === 'out:items') {
       const worth = n.parts.map((p) => p.items?.worth ?? null);
-      return [{ head: 'Made of', rows: rowsOf(n) }, { head: 'What the goods are worth now', rows: [{ label: 'Worth about, at the usual price', sub: worth.includes(null) ? 'some markets have no usual price' : 'the median price of each market over all data', amount: worth.includes(null) ? null : worth.reduce((s, v) => s! + v!, 0n), basis: 'estimate' }] }];
+      return [{ head: 'Made of', rows: rowsOf(n) }, { head: 'What the goods are worth', rows: [{ label: 'Worth about, at the usual price', sub: worth.includes(null) ? 'some markets have no usual price' : "at each market's usual price before the incident", amount: worth.includes(null) ? null : worth.reduce((s, v) => s! + v!, 0n), basis: 'estimate' }] }];
     }
     if (n.id !== 'out:notes' || !flow) return [{ head: 'Made of', rows: rowsOf(n) }];
     const m = flow.notes, where: Row[] = [];

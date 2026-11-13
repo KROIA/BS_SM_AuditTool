@@ -51,6 +51,12 @@ test.describe('the invented network', () => {
     await expect(page.getByRole('img', { name: 'Price of Diamond in candles of 1 min' })).toBeVisible();
     await expect(page.locator('.readout')).toContainText('Close not known yet'); // the newest candle
     await expect(page.locator('main')).toContainText('The bot\'s own orders cannot be shown.');
+    // The usual price follows the market (AT-45): one point per candle from the second hour on (the first hour has no
+    // candle before it, so no point), 100 minutes; the switch hides it.
+    expect((await page.locator('path.usual').getAttribute('d'))!.match(/L/g)).toHaveLength(99);
+    await page.getByRole('button', { name: 'Usual price' }).click();
+    await expect(page.locator('path.usual')).toHaveAttribute('d', '');
+    await page.getByRole('button', { name: 'Usual price' }).click();
 
     await lengths.getByRole('button', { name: '1 hour' }).click();
     await expect(page.getByRole('img', { name: 'Price of Diamond in candles of 1 hour' })).toBeVisible();

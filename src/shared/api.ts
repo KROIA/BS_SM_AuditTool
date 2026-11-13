@@ -281,7 +281,7 @@ export interface MarketRow {
 }
 
 export interface MarketFacts {
-  /** DESIGN_SPEC 8.1: median open of the 1-minute candles in the scope, else the median order price. */
+  /** DESIGN_SPEC 8.1: the usual price at the end of the scope (median open of the last 1'440 minutes before its hour). */
   usual: bigint | null;
   low: bigint | null;
   high: bigint | null;
@@ -529,8 +529,11 @@ export interface QueryApi {
   /** Sorted by swing, largest first. The Markets screen puts those with findings first. */
   markets(scope: Scope): MarketRow[];
   market(item: number, scope: Scope): MarketFacts;
-  /** At most 5'000 candles; capped says that the scope held more and should be narrowed. */
-  candles(item: number, minutes: 1 | 5 | 15 | 60 | 1440, scope: Scope): { candles: Candle[]; capped: boolean };
+  /**
+   * At most 5'000 candles; capped says that the scope held more and should be narrowed. usual: the usual price at each
+   * candle's start (DESIGN_SPEC 8.1, it follows the market), one per candle.
+   */
+  candles(item: number, minutes: 1 | 5 | 15 | 60 | 1440, scope: Scope): { candles: Candle[]; capped: boolean; usual: (bigint | null)[] };
   /** Sorted by profit, highest first. */
   traders(item: number, scope: Scope): Trader[];
   /** At most 5 hits per group. */
@@ -775,7 +778,7 @@ export interface BanknotesResult {
  * - start (in): the balance at the incident's start (the newest snapshot at or before it, else the first one after it).
  * - market (in): the net trading result on one market, when it is a gain. Proven.
  * - items (out): money kept as goods on a market that lost money: what the goods still held cost at their average buying
- *   price, at most the loss. Proven; items.worth is what they are worth at the usual price, an estimate.
+ *   price, at most the loss. Proven; items.worth is what they are worth at the usual price before the incident, an estimate.
  * - lost (out): the rest of a losing market's money: lost by buying high and selling low. Proven.
  * - other-server (in or out): trading on servers outside the server filter, netted. Proven.
  * - received, sent: transfers from or to the account `other`. Proven.
@@ -801,7 +804,7 @@ export interface FlowPart {
   other: number | null;
   /** In the incident's markets. */
   incident: boolean;
-  /** items: volume kept (raw, x 100) and its worth at the usual price, an estimate (null: no usual price). */
+  /** items: volume kept (raw, x 100) and its worth at the usual price before the incident, an estimate (null: no usual price). */
   items: { qty: bigint; worth: bigint | null } | null;
   /** notes: handed out and paid back in, before netting. */
   notes: { out: bigint; back: bigint } | null;
@@ -845,7 +848,10 @@ export interface Overview {
   moneyNow: bigint;
   /** The highest realised profit in the range, at most 5, only players who made a profit. */
   top: PlayerRow[];
-  /** Markets whose price in the range went at least twice as far from their usual price, furthest first, at most 4. */
+  /**
+   * Markets whose price in the range went at least twice as far from their usual price, furthest first, at most 4. Each
+   * extreme is held against the usual price at its own time; usual is the one at the extreme that went further.
+   */
   unusual: { item: number; low: bigint; high: bigint; usual: bigint; times: number; below: boolean }[];
 }
 

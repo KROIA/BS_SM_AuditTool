@@ -22,7 +22,7 @@
   let facts = $state<MarketFacts | null>(null);
   let traders = $state<Trader[]>([]);
   let loadedFor = $state<number | null>(null);
-  let chart = $state<{ candles: Candle[]; capped: boolean; minutes: Minutes } | null>(null);
+  let chart = $state<{ candles: Candle[]; capped: boolean; usual: (bigint | null)[]; minutes: Minutes } | null>(null);
   let picked = $state<Minutes | null>(null); // the candle length the user picked
   let range = $state<{ from: number; to: number } | null>(null); // the zoomed-in span a new candle length was asked for
   let view = $state<{ from: number; to: number } | null>(null); // the span the chart shows while zoomed in
@@ -78,7 +78,7 @@
     const s: Scope = r ? { ...scope, from: r.from, to: r.to } : scope;
     let stale = false;
     void (async () => {
-      let minutes = m, got: { candles: Candle[]; capped: boolean } | null = null;
+      let minutes = m, got: { candles: Candle[]; capped: boolean; usual: (bigint | null)[] } | null = null;
       if (minutes === null) {
         // The hour candles are quick to read and tell how long the range is.
         const probe = await engine.candles(i, 60, s);
@@ -153,7 +153,7 @@
     if (!facts) return [];
     const f = facts;
     return [
-      { label: 'Usual price', value: f.usual === null ? 'no data' : money(f.usual), title: 'The middle opening price of the 1-minute candles in this time range' },
+      { label: 'Usual price', value: f.usual === null ? 'no data' : money(f.usual), title: 'At the end of this time range: the middle opening price of the last 1\'440 one-minute candles before it' },
       { label: 'Lowest', value: f.low === null ? 'no candles' : money(f.low), title: '' },
       { label: 'Highest', value: f.high === null ? 'no candles' : money(f.high), title: '' },
       { label: 'Volume', value: countShort(f.volume), title: count(f.volume) + ' (the mods keep volumes as floating-point numbers, so the last digits are not exact)' },
@@ -239,7 +239,7 @@
         {:else if chart.candles.length === 0}
           <p class="small" style="margin: 16px 0 0">No candles of this market in this time range.</p>
         {:else}
-          <CandleChart candles={chart.candles} minutes={chart.minutes} {log} usual={showUsual ? facts.usual : null} {marks} {describe} bind:view
+          <CandleChart candles={chart.candles} minutes={chart.minutes} {log} usual={showUsual ? chart.usual : null} {marks} {describe} bind:view
             label="Price of {itemName(item)} in candles of {LENGTHS.find(([m]) => m === chart!.minutes)![1]}" />
           {#if chart.capped}
             <p class="small" style="margin: 12px 0 0; color: var(--high)">This time range holds more than {count(5000)} candles of this length; the first {count(5000)} are shown. Zoom in and pick a shorter candle, or pick a longer one.</p>

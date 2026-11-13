@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { api } from '../../src/engine/api.ts';
-import { usualPrice } from '../../src/engine/query/markets.ts';
+import { usualAt } from '../../src/engine/query/markets.ts';
 import { addSave, init } from '../../src/engine/workspace.ts';
 import { DEFAULT_RULES, type FlowPart, type MoneyFlow, type Scope } from '../../src/shared/api.ts';
 import { buildFixtures, FLOW, ITEM, PLAYERS, T0, uuidText, WORLD, type Fixtures } from '../fixtures/build.ts';
@@ -66,7 +66,7 @@ test('current save: the pump incident closes per player, and each part is what i
   const items = part(f, 'items', tavrik, { market: ITEM.coal }), lost = part(f, 'lost', tavrik, { market: ITEM.coal });
   assert.equal(items.amount, buy!.money / 2n);
   assert.equal(items.amount + lost.amount, -cash(tavrik, ITEM.coal));
-  assert.deepEqual(items.items, { qty: FLOW.coalBought - FLOW.coalSold, worth: ((FLOW.coalBought - FLOW.coalSold) * usualPrice(ITEM.coal)!) / 100n });
+  assert.deepEqual(items.items, { qty: FLOW.coalBought - FLOW.coalSold, worth: ((FLOW.coalBought - FLOW.coalSold) * usualAt(ITEM.coal, f.incident!.start)!) / 100n });
   assert.deepEqual([items.side, items.incident, lost.side], ['out', false, 'out']);
 
   const notes = part(f, 'notes');

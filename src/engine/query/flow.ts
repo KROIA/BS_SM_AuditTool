@@ -7,7 +7,7 @@ import { checkAll, moneyItems, read, unpaired, type Move } from './check.ts';
 import { all, big, num } from './db.ts';
 import { findings } from './findings.ts';
 import { incidents } from './incidents.ts';
-import { usualPrice } from './markets.ts';
+import { usualAt } from './markets.ts';
 import { worldItems } from './world.ts';
 
 const ALL: Scope = { from: null, to: null, server: null };
@@ -111,7 +111,7 @@ export function moneyFlow(scope: Scope, incidentId: string, player: string | nul
         if (mk.cash >= 0n) { push('in', { ...mk.d, amount: mk.cash }); continue; }
         // A losing market: what the goods still held cost (average buying price), at most the loss; the rest was lost.
         const keptCost = mk.qty > 0n && mk.bought > 0n ? min(-mk.cash, (mk.qty * mk.paid) / mk.bought) : 0n;
-        const usual = usualPrice(market);
+        const usual = usualAt(market, inc.start); // the usual price before the incident (AT-45)
         push('out', { ...mk.d, kind: 'items', amount: keptCost, items: { qty: mk.qty, worth: usual === null ? null : (mk.qty * usual) / 100n } });
         push('out', { ...mk.d, kind: 'lost', amount: -mk.cash - keptCost, records: { ...mk.d.records } });
       }

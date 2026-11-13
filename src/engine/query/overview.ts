@@ -4,10 +4,10 @@ import { isOpen } from '../../shared/incident.ts';
 import { dismissedIds, mainData } from '../workspace.ts';
 import { adminEvents } from './admin.ts';
 import { moneyItems } from './check.ts';
-import { all, big, series } from './db.ts';
+import { all, big, num, series } from './db.ts';
 import { findings } from './findings.ts';
 import { incidents } from './incidents.ts';
-import { markets, usualPrice } from './markets.ts';
+import { source, usualAt } from './markets.ts';
 import { players } from './players.ts';
 
 const WEALTH = 32767; // the bank's wealth series: money plus items at market price, per account
@@ -21,24 +21,25 @@ export function overview(scope: Scope): Overview {
   const snaps = (items: string) => series(all(db, `SELECT account, item, time, balance + locked AS v FROM snapshot WHERE item IN (${items})
     ${scope.to !== null ? 'AND time <= :to' : ''} ORDER BY time, id`, scope.to !== null ? { to: scope.to } : {}), scope);
   const wealth = snaps(String(WEALTH));
-  // The usual price takes a sort of every 1-minute candle of a market (about 25 ms each on a real save), so only the
-  // markets with the largest swing are asked, and the search stops once no swing can beat the 4th entry: over all data
-  // the usual price lies between low and high, so the swing caps the factor and the list is exact.
-  // ponytail: in a shorter range the usual price can lie outside it; then only the 12 largest swings are looked at.
+  // Each market's highest high and lowest low in the range, with the time of that candle (SQLite fills the bare column
+  // `time` from the row that holds the max or min). Each extreme is compared with the usual price at its own time
+  // (DESIGN_SPEC 8.1, AT-45). The usual price follows the market, so it need not lie between low and high and the swing no
+  // longer caps the factor: every market is asked, with no early stop. Bounded: two scans of the hour candles of the range
+  // (as markets() does) and at most two usualAt reads per market, each at most 1'440 index rows, cached per hour.
+  const src = source(scope, null), extreme = (agg: string) => new Map(all(db, `SELECT market, ${agg} AS v, time FROM (${src.sql}) GROUP BY market`, src.params)
+    .map((r) => [num(r.market)!, { v: big(r.v)!, time: num(r.time)! }] as const));
+  const lows = extreme('min(low)');
   const unusual: Overview['unusual'] = [];
-  let asked = 0;
-  for (const m of markets(scope)) { // largest swing first
-    if (m.swing === null || m.swing < 2 || asked === 12 || (unusual.length === 4 && m.swing <= unusual[3]!.times)) break;
-    asked++;
-    const usual = usualPrice(m.item);
-    if (usual === null || usual <= 0n) continue;
+  for (const [item, hi] of extreme('max(high)')) {
+    const lo = lows.get(item)!;
+    const uHi = usualAt(item, hi.time), uLo = usualAt(item, lo.time);
     // A low at the price floor (0 or 0.01) says nothing: from there any price is a huge multiple (DESIGN_SPEC 8.2, price spike).
-    const up = Number(m.high) / Number(usual), down = m.low! > 1n ? Number(usual) / Number(m.low) : 0;
+    const up = uHi !== null && uHi > 0n ? Number(hi.v) / Number(uHi) : 0, down = uLo !== null && lo.v > 1n ? Number(uLo) / Number(lo.v) : 0;
     const times = Math.max(up, down);
     if (times < 2) continue;
-    unusual.push({ item: m.item, low: m.low!, high: m.high!, usual, times, below: down > up });
-    unusual.sort((a, b) => b.times - a.times).splice(4);
+    unusual.push({ item, low: lo.v, high: hi.v, usual: down > up ? uLo! : uHi!, times, below: down > up });
   }
+  unusual.sort((a, b) => b.times - a.times || a.item - b.item).splice(4);
   return {
     money: snaps(money),
     wealth: wealth.length ? wealth : null,

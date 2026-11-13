@@ -25,7 +25,7 @@ import type { Fact, Finding, FindingsResult, Level, OrderRow, RuleId, RuleSettin
 import { mainData, mainSave } from '../workspace.ts';
 import { allGaps, moneyItems, threshold } from './check.ts';
 import { all, big, names, num, text } from './db.ts';
-import { median, usualPrice } from './markets.ts';
+import { median, usualAt } from './markets.ts';
 import { readOrders } from './players.ts';
 import { sales } from './sessions.ts';
 import { allTransfers, noTransfers } from './transfers.ts';
@@ -197,7 +197,7 @@ const RULES: { [K in keyof RuleSettings]: Rule<K> } = {
     run: (_db, s, st) => {
       const hits: Hit[] = [];
       for (const o of st.orders) {
-        const usual = usualPrice(o.item);
+        const usual = usualAt(o.item, o.time); // the usual price at the time of the order (AT-45)
         if (usual === null || o.amount === 0n) continue;
         const x = o.price > usual ? ratio(o.price, usual) : ratio(usual, o.price);
         if (x > s.times) hits.push({ subject: `market ${o.item}`, start: o.time, end: o.time, value: x, orders: [o], facts: { price: o.price, usual } });
@@ -218,7 +218,7 @@ const RULES: { [K in keyof RuleSettings]: Rule<K> } = {
       });
       return group(hits).map((g) => {
         const market = g[0]!.market, inside = st.orders.filter((o) => o.item === market && o.time >= g[0]!.start && o.time <= g.at(-1)!.end);
-        return fromHits('price-spike', g, 'medium', s.times, 'times', st, (top) => ({ ...top.facts, usual: usualPrice(market), minutes: g.length }), {
+        return fromHits('price-spike', g, 'medium', s.times, 'times', st, (top) => ({ ...top.facts, usual: usualAt(market, g[0]!.start), minutes: g.length }), {
           markets: [market], records: { orders: [], ledger: [], flags: [], candles: g.map((h) => ({ market, time: h.start })) },
           // The players who traded in it are named, not blamed: their orders are not among the records.
           players: sorted(inside.map((o) => o.player)).map((uuid) => ({ uuid, name: st.nameOf(uuid) })), accounts: [], servers: [],

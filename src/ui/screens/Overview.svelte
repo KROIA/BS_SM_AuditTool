@@ -274,7 +274,7 @@
               {@const sev = m.times >= app.rules['far-price'].times ? 'var(--crit)' : 'var(--high)'}
               <a class="row item" href="#/markets/{m.item}">
                 <span class="avatar" aria-hidden="true">{initials(w.itemName(m.item))}</span>
-                <span class="what"><span style="font-weight: 500">{w.itemName(m.item)}</span><span class="small tab">{money(m.low)} to {money(m.high)} · usual price {money(m.usual)}</span></span>
+                <span class="what"><span style="font-weight: 500">{w.itemName(m.item)}</span><span class="small tab">{money(m.low)} to {money(m.high)} · usual price then {money(m.usual)}</span></span>
                 <span class="chip" style="--tint: {sev}">{factor(m.times)} times {m.below ? 'below usual' : 'usual'}</span>
               </a>
             {/each}

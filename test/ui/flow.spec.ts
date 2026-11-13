@@ -75,8 +75,10 @@ test.describe('the invented network', () => {
     await page.locator('.detail').screenshot({ path: 'test-results/flow-market-dark.png' });
     await page.locator('section.card', { hasText: 'The records behind' }).screenshot({ path: 'test-results/flow-records-dark.png' });
     await node('Spent on items').click();
-    await expect(page.locator('.dright h3.label')).toHaveText(['Made of', 'What the goods are worth now']);
+    await expect(page.locator('.dright h3.label')).toHaveText(['Made of', 'What the goods are worth']);
     await expect(page.locator('.mname')).toContainText(['Coal', 'Worth about, at the usual price']);
+    await expect(page.locator('.detail')).toContainText("at each market's usual price before the incident");
+    await page.locator('.detail').screenshot({ path: 'test-results/flow-items-dark.png' });
   });
 
   test('the player switch follows one player only', async () => {

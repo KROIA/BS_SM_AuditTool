@@ -168,9 +168,9 @@ export function describe(f: Finding, w: ItemWords): FindingWords {
       return {
         rule: RULE_NAME[f.rule], measured: `${times(v as number)} times ${side} the usual price`,
         title: `${n('orders') === 1 ? 'An order' : `${count(n('orders'))} orders`} at up to ${times(v as number)} times ${side} the usual price`,
-        summary: `${who} placed ${plural(n('orders'), 'order', 'orders')} on the ${market} market at prices far from its usual price of ${money(b('usual'))}. `
-          + `The furthest was at ${money(b('price'))}, ${times(v as number)} times ${side} it.`,
-        facts: [['Usual price', money(b('usual'))], ['Furthest price', money(b('price'))], ['Orders', count(n('orders'))]],
+        summary: `${who} placed ${plural(n('orders'), 'order', 'orders')} on the ${market} market at prices far from its usual price at the time. `
+          + `The furthest was at ${money(b('price'))}, ${times(v as number)} times ${side} the usual price of ${money(b('usual'))} then.`,
+        facts: [['Usual price then', money(b('usual'))], ['Furthest price', money(b('price'))], ['Orders', count(n('orders'))]],
       };
     }
     case 'price-spike': {
@@ -179,11 +179,11 @@ export function describe(f: Finding, w: ItemWords): FindingWords {
         rule: RULE_NAME[f.rule], measured: `${times(v as number)} times from low to high`,
         title: `The ${market} price swung between ${money(b('low'))} and ${money(b('high'))} inside one minute`,
         summary: `In the minute from ${time(n('time'))} the ${market} price moved between ${money(b('low'))} and ${money(b('high'))}`
-          + (x.usual === null ? '. ' : `; its usual price is ${money(b('usual'))}. `)
+          + (x.usual === null ? '. ' : `; its usual price then was ${money(b('usual'))}. `)
           + (n('minutes') > 1 ? `${count(n('minutes'))} minutes close together swung like this. ` : '')
           + (traders.length ? `${traders.length <= 3 ? traders.join(', ') : `${count(traders.length)} players`} traded on this market at the time. They are named, not blamed: the price bot moves prices too.`
             : 'No player order falls into these minutes.'),
-        facts: [['Lowest price', money(b('low'))], ['Highest price', money(b('high'))], ['Usual price', x.usual === null ? 'unknown' : money(b('usual'))],
+        facts: [['Lowest price', money(b('low'))], ['Highest price', money(b('high'))], ['Usual price then', x.usual === null ? 'unknown' : money(b('usual'))],
           ['Minutes', count(n('minutes'))]],
       };
     }

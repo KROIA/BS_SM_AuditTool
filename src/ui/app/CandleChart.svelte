@@ -11,8 +11,8 @@
     candles: Candle[];
     minutes: number;
     log: boolean;
-    /** The dashed line; null hides it. */
-    usual: bigint | null;
+    /** The dashed line, one price per candle (null: no point there); null hides it. */
+    usual: (bigint | null)[] | null;
     marks: Mark[];
     label: string;
     /** More words for the readout of one candle, from its start to its end (exclusive). */
@@ -71,7 +71,14 @@
       const vh = vmax > 0 ? Math.max(1, Math.sqrt(c.volume / vmax) * VH) : 0;
       if (vh) vol += `M${f(x)} ${VH}v-${f(vh)}h${f(bw)}v${f(vh)}Z`;
     });
-    const uy = usual === null ? -1 : Y(Number(usual));
+    // The usual price follows the market: a line through one point per shown candle, broken where it is not known.
+    // Points far off the plot are pulled in to its edge; the svg clips them.
+    let line = '', pen = 'M';
+    for (let i = 0; i < n; i++) {
+      const u = usual?.[start + i];
+      if (u === null || u === undefined) (pen = 'M');
+      else (line += `${pen}${f((i + 0.5) * slot)} ${f(Math.min(2 * H, Math.max(-H, Y(Number(u)))))}`), (pen = 'L');
+    }
     const span = shown.at(-1)!.time + iv - shown[0]!.time, step = Math.max(1, Math.round(n / 6));
     const pct = (v: number) => `${((v / H) * 100).toFixed(2)}%`;
     const at = (i: number) => `${(((i + 0.5) / n) * 100).toFixed(2)}%`;
@@ -83,7 +90,7 @@
     return {
       up, down, wickUp, wickDown, vol, markers, slot,
       grid: ticks.map((t) => `M0 ${f(Y(t))}H${W}`).join(''),
-      usual: uy > 0 && uy < H ? `M0 ${f(uy)}H${W}` : '',
+      usual: line,
       yticks: ticks.map((t) => ({ top: pct(Y(t)), label: axis(t) })),
       xticks: shown.flatMap((c, i) => (i % step === step >> 1 ? [{ left: at(i), label: span < 86_400_000 ? when(c.time).clock : when(c.time).day }] : [])),
     };

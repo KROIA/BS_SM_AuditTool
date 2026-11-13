@@ -86,7 +86,9 @@ test('profit per hour: Tavrik above $1M, Quenby below', () => {
 test('price far from usual: Tavrik\'s diamonds and Quenby\'s emeralds, per market', () => {
   open(fx.master);
   const f = of('far-price');
-  assert.deepEqual(f.map((x) => [x.markets, who(x), x.facts.usual, x.facts.orders]), [[[ITEM.diamond], ['Tavrik'], 5_270n, 30], [[ITEM.emerald], ['Quenby'], 3_009n, 10]]);
+  // The usual price at the time of the most extreme order (AT-45): the diamond one lies in the first hour, fewer than 60
+  // minutes before it, so all data counts; the emerald one at minute 60 is measured against the median of minutes 0 to 59.
+  assert.deepEqual(f.map((x) => [x.markets, who(x), x.facts.usual, x.facts.orders]), [[[ITEM.diamond], ['Tavrik'], 5_270n, 30], [[ITEM.emerald], ['Quenby'], 3_035n, 10]]);
   assert.ok((f[0]!.measured.value as number) > 37 && (f[1]!.measured.value as number) < 12);
   assert.deepEqual(of('far-price', set('far-price', { times: 12 })).map((x) => x.markets), [[ITEM.diamond]]);
 });
