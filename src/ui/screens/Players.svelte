@@ -1,7 +1,7 @@
 <script lang="ts">
   // Players: what did this player do? A list on the left, the picked player on the right.
-  // The list is in the suspicion order (DESIGN_SPEC 8.3), then by profit. Connected players come with M4.
-  import type { BanknotesResult, Finding, ItemRow, LedgerRow, Level, OrderRow, PlayerDetail, PlayerRow, Session, WorldItemsResult, WorldStack } from '../../shared/api.ts';
+  // The list is in the suspicion order (DESIGN_SPEC 8.3), then by profit. Connected players: DESIGN_SPEC 8.9.
+  import type { BanknotesResult, Finding, ItemRow, LedgerRow, Level, LinkStrength, LinkWay, OrderRow, PlayerDetail, PlayerLink, PlayerRow, Session, WorldItemsResult, WorldStack } from '../../shared/api.ts';
   import { span } from '../../shared/finding.ts';
   import { count, items as quantity, money, moneyShort, time } from '../../shared/fmt.ts';
   import { blamed, suspicion } from '../../shared/incident.ts';
@@ -13,6 +13,7 @@
   let { selected }: { selected: string | null } = $props();
 
   const ROWS = 10; // tables show this many rows until "Show all" (DESIGN_SPEC rule 3)
+  const ALL = { from: null, to: null, server: null }; // a link's records are its own ids: no range applies
   let list = $state<PlayerRow[] | null>(null);
   let itemRows = $state(new Map<number, ItemRow>());
   let detail = $state<PlayerDetail | null>(null);
@@ -22,7 +23,7 @@
   let found = $state<Finding[]>([]);
   let sessions = $state<Session[]>([]);
   let allSessions = $state(false);
-  let tab = $state<'trades' | 'bank' | 'notes'>('trades');
+  let tab = $state<'trades' | 'bank' | 'notes' | 'links'>('trades');
   let notes = $state<BanknotesResult | null>(null);
   let world = $state<WorldItemsResult | null>(null);
   let allOrders = $state(false);
@@ -91,6 +92,39 @@
     });
     return () => (stale = true);
   });
+
+  // Connected players, also only while their tab is open; the count in the tab's label stays until the player or scope changes.
+  let linked = $state<{ for: string; list: PlayerLink[] } | null>(null);
+  let recordsOf = $state<string | null>(null), allRecords = $state(false);
+  let records = $state<{ for: string; orders: OrderRow[]; ledger: LedgerRow[] } | null>(null);
+  $effect(() => {
+    void [$state.snapshot(app.scope), app.saves.length, uuid];
+    linked = null;
+    recordsOf = null;
+  });
+  $effect(() => {
+    const scope = $state.snapshot(app.scope), who = uuid;
+    void app.saves.length;
+    if (tab !== 'links' || !who) return;
+    let stale = false;
+    void engine.links(who, scope).then((l) => {
+      if (!stale) linked = { for: who, list: l };
+    });
+    return () => (stale = true);
+  });
+  const links = $derived(linked && linked.for === uuid ? linked.list : null);
+  $effect(() => {
+    const l = links?.find((x) => x.player.uuid === recordsOf);
+    if (!l) return;
+    let stale = false;
+    allRecords = false;
+    void Promise.all([l.records.orders.length ? engine.orders({ ids: [...l.records.orders] }, ALL) : [], l.records.ledger.length ? engine.ledger({ ids: [...l.records.ledger] }, ALL) : []]).then(([o, b]) => {
+      if (!stale) records = { for: l.player.uuid, orders: o, ledger: b };
+    });
+    return () => (stale = true);
+  });
+  const rec = $derived(records && records.for === recordsOf ? records : null);
+  const cut = <T,>(l: T[]) => (allRecords ? l : l.slice(0, ROWS));
 
   // ---- Words ----
   const { itemName, isMoney, what, amount: bankAmount, amountTone: bankTone, change, gapWhat, gapSub, gapWhen } = $derived(words(itemRows));
@@ -203,6 +237,34 @@
     return carried.length ? '' : `No banknotes or valuables in ${shown.name}'s inventory or ender chest${app.scope.server === null ? '' : ` on ${app.scope.server}`}.`;
   });
 
+  // ---- Connected players ----
+  const STRENGTH: Record<LinkStrength, string> = { proven: 'Proven', likely: 'Likely', weak: 'Weak' };
+  const unit = (n: number, word: string) => `${count(n)} ${word}${n === 1 ? '' : 's'}`;
+  /** A length of time in words: under a minute, 12 minutes, 3 hours and 10 minutes. */
+  const duration = (ms: number) => {
+    const m = Math.round(ms / 60_000);
+    return m < 1 ? 'under a minute' : m < 60 ? unit(m, 'minute') : unit(Math.floor(m / 60), 'hour') + (m % 60 ? ` and ${unit(m % 60, 'minute')}` : '');
+  };
+  /** One plain sentence per way two players are linked; the times are in the records. */
+  function sentence(w: LinkWay, me: string, them: string): string {
+    if (w.kind === 'account') return `Both use account ${w.account}, ${w.name}.`;
+    if (w.kind === 'transfer') {
+      if (w.sent && w.received) return `${me} sent ${them} ${moneyShort(w.sent)} and got ${moneyShort(w.received)} back, in ${unit(w.transfers, 'transfer')}.`;
+      return w.sent ? `${me} sent ${them} ${moneyShort(w.sent)} in ${unit(w.transfers, 'transfer')}.` : `${them} sent ${me} ${moneyShort(w.received)} in ${unit(w.transfers, 'transfer')}.`;
+    }
+    if (w.kind === 'notes') {
+      const [payer, taker] = w.tookOut ? [them, me] : [me, them], last = w.withdrawn.at(-1)!.ts;
+      const what = `${taker} withdrew exactly that amount${w.withdrawn.length > 1 ? ` in ${count(w.withdrawn.length)} withdrawals` : ''}`;
+      return w.paidIn.logged ? `${payer} paid in ${money(w.amount)} of banknotes ${duration(w.paidIn.from - last)} after ${what}.`
+        : `${money(w.amount)} appeared on ${payer}'s account without a log row, at most ${duration(w.paidIn.to - last)} after ${what}.`;
+    }
+    return `Both traded ${itemName(w.item).toLowerCase()} at the same time, for ${duration(w.overlapMs)}${w.sessions > 1 ? ` over ${count(w.sessions)} sessions` : ''}.`;
+  }
+  const sentences = (l: PlayerLink) => {
+    const list = l.ways.map((w) => sentence(w, shown?.name ?? '', l.player.name));
+    return list.length > 2 ? [...list.slice(0, 2), `And ${count(list.length - 2)} more.`] : list;
+  };
+
   const ownAccounts = $derived(shown?.accounts.filter((a) => a.owner) ?? []);
   const sharedAccounts = $derived(shown?.accounts.filter((a) => !a.owner) ?? []);
 </script>
@@ -305,6 +367,7 @@
         <button type="button" role="tab" aria-selected={tab === 'trades'} onclick={() => (tab = 'trades')}>Trades</button>
         <button type="button" role="tab" aria-selected={tab === 'bank'} onclick={() => (tab = 'bank')}>Bank history</button>
         <button type="button" role="tab" aria-selected={tab === 'notes'} onclick={() => (tab = 'notes')}>Banknotes and items</button>
+        <button type="button" role="tab" aria-selected={tab === 'links'} onclick={() => (tab = 'links')}>Connected players{links ? ` (${count(links.length)})` : ''}</button>
       </div>
 
       {#if tab === 'trades'}
@@ -377,6 +440,66 @@
                 </tbody>
               </table>
             </div>
+          </section>
+        {/if}
+      {:else if tab === 'links'}
+        {#if !links}
+          <p class="small" aria-busy="true">Looking for connected players…</p>
+        {:else if links.length === 0}
+          <p class="empty">No other player shares an account, a transfer, banknotes or a trading session with {shown.name} in this time range.</p>
+        {:else}
+          <section class="card" aria-label="Connected players">
+            <div class="links">
+              {#each links as l (l.player.uuid)}
+                <div class="link-item">
+                  <a class="lrow" href={'#/players/' + encodeURIComponent(l.player.uuid)}>
+                    <span class="avatar" aria-hidden="true">{initials(l.player.name)}</span>
+                    <span class="who">
+                      <span class="lname">{l.player.name}</span>
+                      {#each sentences(l) as t, i (i)}<span class="small">{t}</span>{/each}
+                    </span>
+                    <span class="strength {l.strength}">{STRENGTH[l.strength]}</span>
+                  </a>
+                  <!-- A shared account alone has no records: it is in the bank's files, not in a log row. -->
+                  {#if l.records.ledger.length || l.records.orders.length}
+                    <button type="button" class="link small" onclick={() => (recordsOf = recordsOf === l.player.uuid ? null : l.player.uuid)}>{recordsOf === l.player.uuid ? 'Hide the records' : 'Show the records'}</button>
+                  {/if}
+                  {#if recordsOf === l.player.uuid}
+                    {#if !rec}
+                      <p class="small" aria-busy="true" style="margin: 0">Loading the records…</p>
+                    {:else}
+                      <div class="scroll">
+                        {#if rec.orders.length}
+                          <table>
+                            <thead><tr><th>Order</th><th>Time</th><th>Player</th><th>Market</th><th>Side</th><th class="r">Quantity</th><th class="r">Price</th></tr></thead>
+                            <tbody>
+                              {#each cut(rec.orders) as o (o.id)}
+                                <tr><td>{o.orderId ?? o.id}</td><td class="mono">{time(o.time, false, true)}</td><td>{o.player === uuid ? shown.name : l.player.name}</td><td>{itemName(o.item)}</td>
+                                  <td style="color: {o.amount > 0n ? 'var(--buy)' : 'var(--sell)'}">{o.amount > 0n ? 'Buy' : 'Sell'}</td><td class="r">{quantity(abs(o.amount))}</td><td class="r">{money(o.price)}</td></tr>
+                              {/each}
+                            </tbody>
+                          </table>
+                        {/if}
+                        {#if rec.ledger.length}
+                          <table>
+                            <thead><tr><th>Entry</th><th>Time</th><th>Account</th><th>What</th><th class="r">Amount</th></tr></thead>
+                            <tbody>
+                              {#each cut(rec.ledger) as r (r.id)}
+                                <tr><td>{r.id}</td><td class="mono">{time(r.time)}</td><td><a class="ref" href="#/accounts/{r.account}">{r.account}</a></td><td>{what(r)}</td><td class="r">{bankAmount(r)}</td></tr>
+                              {/each}
+                            </tbody>
+                          </table>
+                        {/if}
+                      </div>
+                      {#if Math.max(rec.orders.length, rec.ledger.length) > ROWS}
+                        <button type="button" class="link small" onclick={() => (allRecords = !allRecords)}>{allRecords ? 'Show fewer' : `Show all ${count(rec.orders.length + rec.ledger.length)}`}</button>
+                      {/if}
+                    {/if}
+                  {/if}
+                </div>
+              {/each}
+            </div>
+            <p class="small" style="margin: 12px 0 0; text-wrap: pretty">Proven: a shared account or a transfer in the bank's log. Likely: banknotes one withdrew and the other paid in within a day, to the exact amount. Weak: both traded the same market at the same time.</p>
           </section>
         {/if}
       {:else if tab === 'notes'}
@@ -484,5 +607,17 @@
   .nrow > span:first-child:not(.who) { color: var(--text2); }
   .nrow.total > span:first-child { color: var(--text); font-weight: 500; }
   .where { margin: 12px 0 0; padding: 12px; border-radius: 10px; font-size: 13px; color: var(--text2); background: var(--raised); text-wrap: pretty; }
+  .links { display: flex; flex-direction: column; margin: -4px -10px 0; }
+  .link-item { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px 10px 12px; border-bottom: 1px solid var(--line); }
+  .link-item:last-child { border-bottom: 0; }
+  .lrow { display: flex; align-items: flex-start; gap: 12px; width: 100%; color: inherit; text-decoration: none; }
+  .lname { font-weight: 500; }
+  .lrow:hover .lname { color: var(--accent); }
+  .strength { flex: none; height: 24px; padding: 0 8px; box-sizing: border-box; border-radius: 6px; font-size: 12px; line-height: 22px; font-weight: 500; }
+  .strength.proven { color: var(--text2); border: 1px solid var(--line2); }
+  .strength.likely { color: var(--high); border: 1px dashed var(--high); }
+  .strength.weak { color: var(--text3); border: 1px dotted var(--line2); }
+  .link-item > .link { margin-left: 44px; }
+  .scroll { width: 100%; overflow-x: auto; display: flex; flex-direction: column; gap: 12px; }
   .etime { flex: 0 0 170px; font-size: 13px; color: var(--text2); font-variant-numeric: tabular-nums; }
 </style>

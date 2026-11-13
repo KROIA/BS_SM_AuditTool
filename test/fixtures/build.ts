@@ -907,3 +907,28 @@ export function buildFixtures(root: string, flow = false): Fixtures {
 
   return { root, master, slaves, legacy, exported, rows, balances: { master: masterBank.balance, legacy: legacyBank.balance }, lastPlayed };
 }
+
+/**
+ * Cases for Connected players (AT-41), written into a copy of the current master by addLinkCases. Brindle pays in exactly
+ * the notes Tavrik withdrew a minute before (Likely). Brindle and Mikko_82 buy coal in sessions that overlap for 3 minutes
+ * (Weak). Brindle buys wheat 6 minutes after Mikko_82's lone wheat sale: two sessions that do not overlap.
+ */
+export const LINKS = {
+  paidIn: { player: 'Brindle' as Name, amount: 200_000_000n, ts: T0 + 52 * MIN + 500 },
+  coal: [['Brindle', 60], ['Mikko_82', 61], ['Brindle', 63], ['Mikko_82', 64], ['Brindle', 66]] as [Name, number][],
+  wheat: { player: 'Brindle' as Name, minute: 18 },
+} as const;
+
+export function addLinkCases(save: string) {
+  const bank = new DatabaseSync(path.join(save, 'data/BankSystem/Database/banksystem.db'));
+  const p = LINKS.paidIn;
+  bank.prepare(`INSERT INTO TransactionLog (account_number, actor_uuid, actor_name, kind, type_code, item_id, amount, ts, source_kind)
+    VALUES (?, ?, ?, 'DEPOSIT', 1, ?, ?, ?, 'PLAYER')`).run(PLAYERS[p.player].account, uuidText(PLAYERS[p.player].n), p.player, ITEM.money, p.amount, p.ts);
+  bank.close();
+  const market = new DatabaseSync(path.join(save, 'data/StockMarket/Database/stockdata.db'));
+  const order = market.prepare(`INSERT INTO OrderHistory (itemid, accountid, userid_one, userid_two, type, amount, price, time) VALUES (?, ?, ?, ?, 0, 3200, 120, ?)`);
+  const add = (who: Name, item: number, minute: number) => order.run(item, PLAYERS[who].account, ...uuidHalves(PLAYERS[who].n), T0 + minute * MIN);
+  for (const [who, minute] of LINKS.coal) add(who, ITEM.coal, minute);
+  add(LINKS.wheat.player, ITEM.wheat, LINKS.wheat.minute);
+  market.close();
+}

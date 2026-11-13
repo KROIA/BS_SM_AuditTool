@@ -4,7 +4,7 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { buildFixtures, PLAYERS, uuidText } from '../fixtures/build.ts';
+import { addLinkCases, buildFixtures, PLAYERS, uuidText } from '../fixtures/build.ts';
 
 const fx = buildFixtures(path.resolve('test-results/fixtures-players'));
 const data = path.resolve('test-results/app-data-players');
@@ -133,6 +133,84 @@ test.describe('an old 2.1.2 save', () => {
     await old.screenshot({ path: 'test-results/players-legacy-bank-dark.png' });
     await gap.getByRole('link', { name: 'Account 7' }).click();
     await expect(old).toHaveURL(/#\/accounts\/7$/);
+  });
+
+  test('connected players: money that appeared without a row is a likely note link (AT-41)', async () => {
+    await old.evaluate(`location.hash = '#/players/${uuidText(PLAYERS.Tavrik.n)}'`);
+    await old.getByRole('tab', { name: /^Connected players/ }).click();
+    const brindle = old.locator('.link-item', { hasText: 'Brindle' });
+    await expect(brindle).toContainText("$1'500'000.00 appeared on Brindle's account without a log row, at most 30 minutes after Tavrik withdrew exactly that amount.");
+    await brindle.scrollIntoViewIfNeeded();
+    await old.screenshot({ path: 'test-results/players-legacy-links-dark.png' });
+  });
+});
+
+test.describe('connected players (AT-41)', () => {
+  let app: ElectronApplication;
+  let p: Page;
+  const open = (name: keyof typeof PLAYERS) => p.evaluate(`location.hash = '#/players/${uuidText(PLAYERS[name].n)}'`);
+  const rows = () => p.locator('.link-item');
+  const shots = async (name: string) => {
+    for (const [theme, other] of [['dark', 'light'], ['light', 'dark']] as const) {
+      for (const width of [1440, 900]) {
+        await p.setViewportSize({ width, height: 900 });
+        const end = `${theme}${width === 900 ? '-900' : ''}.png`;
+        await p.getByRole('tablist', { name: 'Player details' }).scrollIntoViewIfNeeded();
+        await p.screenshot({ path: `test-results/${name}-${end}` });
+        await p.getByRole('region', { name: 'Connected players' }).screenshot({ path: `test-results/${name}-card-${end}` });
+      }
+      await p.getByRole('button', { name: `Switch to the ${other} theme` }).click();
+    }
+    await p.setViewportSize({ width: 1440, height: 900 });
+  };
+  test.beforeAll(async () => {
+    // A copy of the master with a note link and two coal sessions that overlap (fixtures, LINKS).
+    const save = path.resolve('test-results/fixtures-players-links');
+    fs.rmSync(save, { recursive: true, force: true });
+    fs.cpSync(fx.master, save, { recursive: true });
+    addLinkCases(save);
+    const dir = path.resolve('test-results/app-data-players-links');
+    fs.rmSync(dir, { recursive: true, force: true });
+    app = await electron.launch({ args: ['.', '--open', save], env: { ...process.env, AUDIT_TOOL_DATA: dir } });
+    p = await app.firstWindow();
+    await p.setViewportSize({ width: 1440, height: 900 });
+    await expect(p.getByRole('heading', { level: 1 })).toHaveText('Overview');
+  });
+  test.afterAll(() => app.close());
+
+  test('one row per player: why in plain words, how sure, and the records behind it', async () => {
+    await open('Tavrik');
+    await expect(p.getByRole('heading', { level: 1 })).toHaveText('Tavrik');
+    await expect(p.getByRole('tab', { name: /^Connected players/ })).toHaveText('Connected players'); // counted only once opened
+    await p.getByRole('tab', { name: /^Connected players/ }).click();
+    await expect(p.getByRole('tab', { name: /^Connected players/ })).toHaveText('Connected players (3)');
+    await expect(rows().locator('.lname')).toHaveText(['Ombrelune', 'Quenby', 'Brindle']);
+    await expect(rows().locator('.strength')).toHaveText(['Proven', 'Proven', 'Likely']);
+    await expect(rows().nth(0)).toContainText('Tavrik sent Ombrelune $1M in 1 transfer.');
+    await expect(rows().nth(1)).toContainText('Both use account 30, Tavrik and Quenby.');
+    await expect(rows().nth(1).getByRole('button')).toHaveCount(0); // a shared account has no log row behind it
+    await expect(rows().nth(2)).toContainText("Brindle paid in $2'000'000.00 of banknotes 1 minute after Tavrik withdrew exactly that amount.");
+    await expect(p.locator('main')).toContainText('Proven: a shared account or a transfer in the bank\'s log. Likely: banknotes one withdrew and the other paid in within a day, to the exact amount. Weak: both traded the same market at the same time.');
+    await rows().nth(2).getByRole('button', { name: 'Show the records' }).click();
+    await expect(rows().nth(2).locator('tbody tr')).toHaveCount(2); // the withdrawal and the deposit
+    await expect(rows().nth(2).locator('tbody tr td:nth-child(4)')).toHaveText(['Deposit', 'Withdrawal']); // newest first
+    await shots('players-links');
+    await rows().nth(2).getByRole('button', { name: 'Hide the records' }).click();
+  });
+
+  test('a row opens the other player; a weak link names the market and the minutes; no link, one sentence', async () => {
+    await rows().nth(2).locator('a.lrow').click();
+    await expect(p).toHaveURL(new RegExp(`#/players/${uuidText(PLAYERS.Brindle.n)}$`));
+    await expect(p.getByRole('heading', { level: 1 })).toHaveText('Brindle');
+    await expect(rows().locator('.lname')).toHaveText(['Tavrik', 'Mikko_82']); // the tab stays open
+    await expect(rows().locator('.strength')).toHaveText(['Likely', 'Weak']);
+    await expect(rows().nth(1)).toContainText('Both traded coal at the same time, for 3 minutes.');
+    await rows().nth(1).getByRole('button', { name: 'Show the records' }).click();
+    await expect(rows().nth(1).locator('tbody tr')).toHaveCount(6);
+    await shots('players-links-weak');
+    await open('AdmiralNoor');
+    await expect(p.locator('.empty')).toHaveText('No other player shares an account, a transfer, banknotes or a trading session with AdmiralNoor in this time range.');
+    await expect(p.getByRole('tab', { name: /^Connected players/ })).toHaveText('Connected players (0)');
   });
 });
 

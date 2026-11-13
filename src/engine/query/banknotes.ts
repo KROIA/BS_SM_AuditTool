@@ -41,17 +41,20 @@ const list = (words: string[]) => {
   return q.length < 2 ? q.join('') : `${q.slice(0, -1).join(', ')} and ${q.at(-1)}`;
 };
 
-/** One movement of notes, oldest first. account null: a NoteFlow row. */
-interface Move { ts: number; delta: bigint; account: number | null; player: string | null; refund: boolean; withdraw: boolean; source: string | null }
+/** One movement of notes, oldest first. account and id (the log row) null: a NoteFlow row. delta is cut by put-backs on 2.1.2. */
+export interface NoteMove { id: number | null; ts: number; delta: bigint; account: number | null; player: string | null; refund: boolean; withdraw: boolean; source: string | null }
 
 const empty = (reason: string): BanknotesResult =>
   ({ reason, outstanding: 0n, ledger: { out: 0n, back: 0n }, putBack: 0n, appeared: [], tooLarge: [], flow: [], accounts: [], players: [], series: [], unclear: { rows: 0, amount: 0n }, skipped: 0, missing: [] });
 
-export function banknotes(scope: Scope): BanknotesResult {
+export const banknotes = (scope: Scope): BanknotesResult => countNotes(scope).result;
+
+/** The count and the movements it was made of, every one up to the range's end (the range limits only the result's figures). */
+export function countNotes(scope: Scope): { result: BanknotesResult; moves: NoteMove[] } {
   const db = mainData(), main = mainSave();
-  if (!db || !main) return empty('No save with bank data is loaded, so no note can be counted.');
+  if (!db || !main) return { result: empty('No save with bank data is loaded, so no note can be counted.'), moves: [] };
   const money = moneyItems(db), worth = noteWorth(db);
-  if (!money.size) return empty('The save does not say which item is money (ItemIDs.nbt), so no note can be counted.');
+  if (!money.size) return { result: empty('The save does not say which item is money (ItemIDs.nbt), so no note can be counted.'), moves: [] };
   const inRange = (ts: number) => scope.from === null || ts >= scope.from;
   const params: Record<string, SQLInputValue> = { money: JSON.stringify([...money]) };
   if (scope.to !== null) params.to = scope.to;
@@ -60,9 +63,9 @@ export function banknotes(scope: Scope): BanknotesResult {
   const nameOf = names(db);
   const owner = new Map(all(db, 'SELECT number, owner FROM account WHERE owner IS NOT NULL').map((r) => [num(r.number)!, String(r.owner)]));
   const person = (uuid: string | undefined) => (uuid ? { uuid, name: nameOf(uuid) } : null);
-  const moves: Move[] = [];
+  const moves: NoteMove[] = [];
   const unclear = { rows: 0, amount: 0n };
-  for (const r of all(db, `SELECT ts, account, actor, kind, amount, note, balance_after FROM ledger WHERE item IN (SELECT value FROM json_each(:money))
+  for (const r of all(db, `SELECT id, ts, account, actor, kind, amount, note, balance_after FROM ledger WHERE item IN (SELECT value FROM json_each(:money))
       AND kind IN (${[...NOTE_KINDS, 'UNKNOWN_LEGACY'].map((k) => `'${k}'`).join(', ')}) ${until} ${onServer(scope, params)} ORDER BY ts, id`, params)) {
     const ts = num(r.ts)!, amount = big(r.amount)!, kind = String(r.kind);
     const delta = noteChange(kind, amount, text(r.note), big(r.balance_after));
@@ -71,7 +74,7 @@ export function banknotes(scope: Scope): BanknotesResult {
     } else if (delta !== 0n) {
       const account = num(r.account)!, actor = text(r.actor);
       const player = kind === 'ACCOUNT_DELETE_PAYOUT' ? DELETED.exec(text(r.note) ?? '')?.[1] ?? owner.get(account) ?? null : actor && UUID.test(actor) ? actor : null;
-      moves.push({ ts, delta, account, player, refund: kind === 'WITHDRAW_REFUND', withdraw: kind === 'WITHDRAW', source: null });
+      moves.push({ id: num(r.id)!, ts, delta, account, player, refund: kind === 'WITHDRAW_REFUND', withdraw: kind === 'WITHDRAW', source: null });
     }
   }
 
@@ -84,7 +87,7 @@ export function banknotes(scope: Scope): BanknotesResult {
       const ts = num(r.ts)!, each = worth.get(num(r.item)!), player = text(r.player);
       if (each === undefined) { if (inRange(ts)) skipped++; continue; }
       const source = String(r.source);
-      moves.push({ ts, delta: big(r.amount)! * each, account: null, player: player && UUID.test(player) ? player : null, refund: false, withdraw: false,
+      moves.push({ id: null, ts, delta: big(r.amount)! * each, account: null, player: player && UUID.test(player) ? player : null, refund: false, withdraw: false,
         source: SOURCES.has(source) ? source : 'other' });
     }
   }
@@ -162,11 +165,12 @@ export function banknotes(scope: Scope): BanknotesResult {
   if (absent.length) missing.push(`The ${absent.length === 1 ? 'slave' : 'slaves'} ${list(absent)} ${absent.length === 1 ? 'is' : 'are'} not loaded, so notes made or destroyed there outside the bank are not counted.`);
 
   const byNet = (a: { net: bigint }, b: { net: bigint }) => (a.net === b.net ? 0 : a.net > b.net ? -1 : 1);
-  return {
+  const result: BanknotesResult = {
     reason: null, outstanding, ledger, putBack, appeared, tooLarge, flow: [...flow.values()].sort((a, b) => (a.source < b.source ? -1 : 1)),
     accounts: [...accounts.values()].sort((a, b) => byNet(a, b) || a.account - b.account),
     players: [...players.values()].sort((a, b) => byNet(a, b) || (a.player.name < b.player.name ? -1 : 1)),
     // ponytail: one point per distinct millisecond (39 on the November copy); no screen draws it yet, thin it when one does.
     series: series(steps, scope), unclear, skipped, missing,
   };
+  return { result, moves };
 }

@@ -9,6 +9,7 @@ import { findings } from './query/findings.ts';
 import { moneyFlow } from './query/flow.ts';
 import { incidents } from './query/incidents.ts';
 import { candles, market, markets, traders } from './query/markets.ts';
+import { links } from './query/links.ts';
 import { keyEvents, overview } from './query/overview.ts';
 import { items, ledger, orders, player, players } from './query/players.ts';
 import { search } from './query/search.ts';
@@ -47,6 +48,7 @@ export const api: EngineApi = {
   keyEvents,
   transfers,
   banknotes,
+  links,
   moneyFlow,
   worldItems,
   startScan,

@@ -206,8 +206,9 @@
       return [{ head: 'Made of', rows: rowsOf(n) }, { head: 'What the goods are worth', rows: [{ label: 'Worth about, at the usual price', sub: worth.includes(null) ? 'some markets have no usual price' : "at each market's usual price before the incident", amount: worth.includes(null) ? null : worth.reduce((s, v) => s! + v!, 0n), basis: 'estimate' }] }];
     }
     if (n.id !== 'out:notes' || !flow) return [{ head: 'Made of', rows: rowsOf(n) }];
-    const m = flow.notes, where: Row[] = [];
-    if (n.v > m.outside) where.push({ label: 'Paid in again', sub: `by ${flow.player === null ? 'these players' : 'this player'}: “Notes paid in” and “Likely notes paid in” on the left`, amount: n.v - m.outside, basis: 'estimate' });
+    const m = flow.notes, where: Row[] = [], others = m.others.reduce((s, o) => s + o.amount, 0n);
+    if (n.v > m.outside + others) where.push({ label: 'Paid in again', sub: `by ${flow.player === null ? 'these players' : 'this player'}: “Notes paid in” and “Likely notes paid in” on the left`, amount: n.v - m.outside - others, basis: 'estimate' });
+    for (const o of m.others) where.push({ label: `Likely paid in by ${o.player.name}`, sub: 'the same amount, paid in within a day after it was taken out', amount: o.amount, basis: 'estimate', href: `#/players/${encodeURIComponent(o.player.uuid)}` });
     where.push({ label: 'In their own files', sub: 'inventory and ender chest', amount: m.inFiles, basis: 'estimate' });
     if (m.elsewhere === null || m.notFound === null) {
       where.push({ label: 'Not in their own files', sub: 'pick All players to see where the rest may be: notes found elsewhere are one pool for all of them', amount: m.outside - m.inFiles, basis: 'estimate' });

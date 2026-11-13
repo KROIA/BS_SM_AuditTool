@@ -9,10 +9,10 @@ import { api } from '../../src/engine/api.ts';
 import { usualAt } from '../../src/engine/query/markets.ts';
 import { addSave, init } from '../../src/engine/workspace.ts';
 import { DEFAULT_RULES, type FlowPart, type MoneyFlow, type Scope } from '../../src/shared/api.ts';
-import { buildFixtures, FLOW, ITEM, PLAYERS, T0, uuidText, WORLD, type Fixtures } from '../fixtures/build.ts';
+import { addLinkCases, buildFixtures, FLOW, ITEM, LINKS, PLAYERS, T0, uuidText, WORLD, type Fixtures } from '../fixtures/build.ts';
 
 const ALL: Scope = { from: null, to: null, server: null };
-const tavrik = uuidText(PLAYERS.Tavrik.n), quenby = uuidText(PLAYERS.Quenby.n), ombrelune = uuidText(PLAYERS.Ombrelune.n);
+const tavrik = uuidText(PLAYERS.Tavrik.n), quenby = uuidText(PLAYERS.Quenby.n), ombrelune = uuidText(PLAYERS.Ombrelune.n), brindle = uuidText(PLAYERS.Brindle.n);
 const PUMP = `hour-profit:${tavrik}@${T0}`;
 let fx: Fixtures;
 let n = 0;
@@ -87,8 +87,8 @@ test('current save: the pump incident closes per player, and each part is what i
   // Notes still outside, both players as one: what Ombrelune paid in is not outside any more. None in their files (Tavrik
   // has only a .dat_old), all found notes are elsewhere, the rest not found. Tavrik alone: his $4M.
   const out = 400_000_000n - part(f, 'notes', ombrelune).amount;
-  assert.deepEqual(f.notes, { outside: out, inFiles: 0n, elsewhere: WORLD.found, notFound: out - WORLD.found });
-  assert.deepEqual(flow(PUMP, tavrik).notes, { outside: 400_000_000n, inFiles: 0n, elsewhere: null, notFound: null });
+  assert.deepEqual(f.notes, { outside: out, inFiles: 0n, elsewhere: WORLD.found, notFound: out - WORLD.found, others: [] });
+  assert.deepEqual(flow(PUMP, tavrik).notes, { outside: 400_000_000n, inFiles: 0n, elsewhere: null, notFound: null, others: [] });
   assert.deepEqual(f.missing, []);
 });
 
@@ -135,11 +135,14 @@ test('2.1.2: orders stand in for trades; notes, removals and money without a row
   assert.equal(part(f, 'unexplained').amount, FLOW.unexplained);
   assert.equal(part(f, 'unexplained').basis, 'estimate'); // the rest after estimates is one too
   assert.equal(f.parts.filter((p) => ['admin', 'sent', 'received', 'other'].includes(p.kind)).length, 0); // 2.1.2 logged none
+  // The $1.5M that appeared on Brindle's account without a row is exactly the cut withdrawal at minute 51: a Likely note
+  // link (AT-41), so it is off the notes outside, at most what is left after Ombrelune's deposit.
   const out = 350_000_000n - FLOW.converter - part(f, 'notes', ombrelune).amount;
-  assert.deepEqual(f.notes, { outside: out, inFiles: out < WORLD.legacy ? out : WORLD.legacy, elsewhere: 0n, notFound: out < WORLD.legacy ? 0n : out - WORLD.legacy });
+  const brindleName = { uuid: brindle, name: 'Brindle' };
+  assert.deepEqual(f.notes, { outside: 0n, inFiles: 0n, elsewhere: 0n, notFound: 0n, others: [{ player: brindleName, amount: out }] });
   // Tavrik alone: the notes in his own file, and no further split (the notes found elsewhere are one pool for everyone).
   const alone = flow(PUMP, tavrik).notes;
-  assert.deepEqual(alone, { outside: 350_000_000n - FLOW.converter, inFiles: WORLD.legacy, elsewhere: null, notFound: null });
+  assert.deepEqual(alone, { outside: 350_000_000n - FLOW.converter - 150_000_000n, inFiles: WORLD.legacy, elsewhere: null, notFound: null, others: [{ player: brindleName, amount: 150_000_000n }] });
   assert.ok(f.to! > f.incident!.end, 'the copy was taken after the incident');
   assert.match(f.missing.join(' '), /2\.1\.2 logged no admin action/);
 
@@ -149,6 +152,16 @@ test('2.1.2: orders stand in for trades; notes, removals and money without a row
   const removed = part(q, 'removed', quenby);
   assert.deepEqual([removed.side, removed.amount, removed.basis], ['out', 20_000_000n, 'estimate']);
   assert.deepEqual(removed.records.findings, [`balance:${PLAYERS.Quenby.account}:${ITEM.money}@${T0 + 61 * 60_000}`]); // the gap from her last snapshot before it
+});
+
+test('notes another player likely paid in are off the notes outside (AT-41)', () => {
+  const save = path.join(fx.root, 'links');
+  fs.cpSync(fx.master, save, { recursive: true });
+  addLinkCases(save);
+  open(save);
+  const notes = flow(PUMP, tavrik).notes;
+  assert.deepEqual([notes.outside, notes.others], [400_000_000n - LINKS.paidIn.amount, [{ player: { uuid: brindle, name: 'Brindle' }, amount: LINKS.paidIn.amount }]]);
+  assert.equal(flow(PUMP, tavrik).parts.find((p) => p.kind === 'notes')!.amount, 400_000_000n, 'the node keeps its value: the rows add up to it');
 });
 
 test('without a save or players, a sentence instead of a flow', () => {

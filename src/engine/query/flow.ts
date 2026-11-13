@@ -4,16 +4,17 @@ import type { BanknotesResult, FlowPart, MoneyFlow, RuleSettings, Scope } from '
 import { mainData, mainSave } from '../workspace.ts';
 import { banknotes, noteChange } from './banknotes.ts';
 import { checkAll, moneyItems, read, unpaired, type Move } from './check.ts';
-import { all, big, num } from './db.ts';
+import { all, big, names, num } from './db.ts';
 import { findings } from './findings.ts';
 import { incidents } from './incidents.ts';
+import { noteMatches } from './links.ts';
 import { usualAt } from './markets.ts';
 import { worldItems } from './world.ts';
 
 const ALL: Scope = { from: null, to: null, server: null };
 const TRANSFER = new Set(['TRANSFER', 'TRANSFER_IN', 'TRANSFER_OUT']);
 const min = (a: bigint, b: bigint) => (a < b ? a : b);
-const ZERO = { outside: 0n, inFiles: 0n, elsewhere: 0n, notFound: 0n };
+const ZERO = { outside: 0n, inFiles: 0n, elsewhere: 0n, notFound: 0n, others: [] };
 
 type Draft = Omit<FlowPart, 'side'>;
 type Part = FlowPart;
@@ -192,8 +193,17 @@ export function moneyFlow(scope: Scope, incidentId: string, player: string | nul
   let outside = 0n;
   for (const p of merged.values()) if (chosen.includes(p.player)) outside += p.kind === 'notes' ? (p.side === 'out' ? p.amount : -p.amount) : p.kind === 'appeared' ? -p.amount : 0n;
   if (outside < 0n) outside = 0n;
+  // Notes they took out after the start that another player likely paid in (a Likely note link, DESIGN_SPEC 8.9).
+  const others: MoneyFlow['notes']['others'] = [], nameOf = names(db);
+  for (const m of noteMatches(ALL)) {
+    if (!chosen.includes(m.out) || chosen.includes(m.in) || m.withdrawn[0]!.ts <= inc.start || outside === 0n) continue;
+    const amount = min(m.amount, outside);
+    outside -= amount;
+    const o = others.find((x) => x.player.uuid === m.in) ?? (others.push({ player: { uuid: m.in, name: nameOf(m.in) }, amount: 0n }), others.at(-1)!);
+    o.amount += amount;
+  }
   const inFiles = min(outside, own), elsewhere = min(outside - inFiles, world.notes > incidentFiles ? world.notes - incidentFiles : 0n);
-  const notes = player === null ? { outside, inFiles, elsewhere, notFound: outside - inFiles - elsewhere } : { outside, inFiles, elsewhere: null, notFound: null };
+  const notes = player === null ? { outside, inFiles, elsewhere, notFound: outside - inFiles - elsewhere, others } : { outside, inFiles, elsewhere: null, notFound: null, others };
 
   const missing: string[] = [];
   if (legacy) {

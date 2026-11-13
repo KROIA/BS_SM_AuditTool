@@ -571,6 +571,12 @@ export interface QueryApi {
    */
   banknotes(scope: Scope): BanknotesResult;
   /**
+   * The players linked to one player (DESIGN_SPEC 8.9), strongest first. The range and the server filter apply to
+   * transfers, notes and sessions; a shared account is the state of the copy. At most 5 players linked by trading alone,
+   * at most 3 markets per player.
+   */
+  links(uuid: string, scope: Scope): PlayerLink[];
+  /**
    * Where the money of one incident went (DESIGN_SPEC 6.6, 8.10), for all its players (player null) or one. The time range
    * does not apply; the server filter applies to orders and trade rows (trading elsewhere becomes "other-server").
    * settings: the incidents are made from the findings, and the threshold of gaps on 2.1.2 is the balance rule's.
@@ -829,14 +835,41 @@ export interface MoneyFlow {
   accounts: { account: number; player: string; from: number | null; start: bigint; now: bigint }[];
   parts: FlowPart[];
   /** Where the notes still outside are (estimates), for the chosen players as one: notes out minus notes paid in minus
-   *  "appeared", then in their own files, found elsewhere (any file but the incident players', owner unknown), not found.
-   *  With one player chosen, elsewhere and notFound are null: the notes found elsewhere are one pool for all players. */
-  notes: { outside: bigint; inFiles: bigint; elsewhere: bigint | null; notFound: bigint | null };
+   *  "appeared" minus others, then in their own files, found elsewhere (any file but the incident players', owner unknown), not found.
+   *  With one player chosen, elsewhere and notFound are null: the notes found elsewhere are one pool for all players.
+   *  others: notes they took out that a player not chosen likely paid in (a Likely note link, DESIGN_SPEC 8.9). */
+  notes: { outside: bigint; inFiles: bigint; elsewhere: bigint | null; notFound: bigint | null; others: { player: { uuid: string; name: string }; amount: bigint }[] };
   /** The copy: when the main save was last played. */
   to: number | null;
   /** The main save is 2.1.2: gaps stand in for what it did not log. */
   legacy: boolean;
   missing: string[];
+}
+
+/** How sure a link between two players is (DESIGN_SPEC 8.9). */
+export type LinkStrength = 'proven' | 'likely' | 'weak';
+/** One way two players are linked; "this" is the player asked about, "they" the other one. */
+export type LinkWay =
+  /** Proven: both are users of the account (the owner counts as one). The state of the copy: no range applies. */
+  | { kind: 'account'; account: number; name: string }
+  /** Proven: transfers between an account each of them owns, in the range. sent: from this player's, received: to it. */
+  | { kind: 'transfer'; sent: bigint; received: bigint; transfers: number }
+  /**
+   * Likely: notes one of them withdrew and the other paid in, the exact amount, within a day after. tookOut: this player
+   * withdrew. withdrawn: one withdrawal, or a run of them that adds up to the amount, oldest first.
+   * paidIn.logged false: money that appeared on a 2.1.2 account without a row, sometime between from and to.
+   */
+  | { kind: 'notes'; amount: bigint; tookOut: boolean; withdrawn: { account: number; ts: number }[]; paidIn: { account: number; from: number; to: number; logged: boolean } }
+  /** Weak: both traded the market in trading sessions that overlap: overlapMs summed over the overlaps. */
+  | { kind: 'market'; item: number; overlapMs: number; sessions: number };
+
+export interface PlayerLink {
+  player: { uuid: string; name: string };
+  strength: LinkStrength;
+  /** Proven ways first, then likely, then weak; per weak market the most overlap first. */
+  ways: LinkWay[];
+  /** orders: order ids, as orders({ ids }) takes them. */
+  records: { ledger: number[]; orders: number[] };
 }
 
 export interface Overview {
@@ -885,7 +918,7 @@ export interface AdminEvent {
   ledgerId: number | null;
 }
 
-export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers' | 'banknotes' | 'moneyFlow' | 'worldItems' | 'startScan' | 'stopScan' | 'scanStatus'> {
+export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers' | 'banknotes' | 'links' | 'moneyFlow' | 'worldItems' | 'startScan' | 'stopScan' | 'scanStatus'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
   addSave(path: string): Workspace;

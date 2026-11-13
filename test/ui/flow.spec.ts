@@ -130,4 +130,14 @@ test.describe('an old 2.1.2 save', () => {
     await expect(page.locator('.notes')).toContainText('2.1.2 logged no admin action');
     await shot('flow-legacy');
   });
+
+  test('notes another player likely paid in get a row of their own (AT-41)', async () => {
+    // The $1.5M that appeared on Brindle's account is exactly what Tavrik took out at minute 51.
+    await page.getByRole('group', { name: 'Whose money to follow' }).getByRole('button', { name: 'Tavrik' }).click();
+    await node('Taken out as notes').click();
+    await expect(page.locator('.mname')).toHaveText(['Tavrik', 'Paid in again', 'Likely paid in by Brindle', 'In their own files', 'Not in their own files']);
+    await expect(page.locator('.mrow', { hasText: 'Likely paid in by Brindle' })).toContainText("$1'500'000.00");
+    await expect(page.getByRole('link', { name: 'Likely paid in by Brindle' })).toHaveAttribute('href', `#/players/${encodeURIComponent(uuidText(PLAYERS.Brindle.n))}`);
+    await page.locator('.detail').screenshot({ path: 'test-results/flow-legacy-likely-dark.png' });
+  });
 });
