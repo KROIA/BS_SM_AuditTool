@@ -3,11 +3,8 @@
 // spreadsheet would read as a formula gets a leading apostrophe. Number cells are typed and never changed.
 import { amount, count, items } from './fmt.ts';
 
-/**
- * The separator. Swiss and German Excel expect ";" (their decimal mark is a comma); the numbers never hold either, so
- * changing it here is all it takes.
- */
-export const SEP = ',';
+/** The separator: ";", so the file opens straight in Swiss and German Excel (user, 2026-11-13). The numbers never hold it. */
+export const SEP = ';';
 
 /**
  * text and id: written as they are, guarded against formulas. money: raw (real x 100), two decimals. quantity: raw item

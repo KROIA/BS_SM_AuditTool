@@ -4,6 +4,7 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
+import { SEP } from '../../src/shared/csv.ts';
 import { buildFixtures, TRANSFER_CASES } from '../fixtures/build.ts';
 
 const fx = buildFixtures(path.resolve('test-results/fixtures-csv'));
@@ -26,7 +27,7 @@ function read(file: string): string[][] {
       else if (c === '"') quoted = false;
       else field += c;
     } else if (c === '"') quoted = true;
-    else if (c === ',') rows.at(-1)!.push(field), (field = '');
+    else if (c === SEP) rows.at(-1)!.push(field), (field = '');
     else if (c === '\r' && text[i + 1] === '\n') rows.at(-1)!.push(field), (field = ''), rows.push([]), i++;
     else field += c;
   }
