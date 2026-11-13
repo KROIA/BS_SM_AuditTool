@@ -1,11 +1,15 @@
 <script lang="ts">
   // Saves and servers: what is loaded, what could be read, and what time each source covers.
-  // While nothing is loaded it is the start screen. Transfers and the world scan follow in M3.
+  // While nothing is loaded it is the start screen. Two tabs: the loaded saves, and the transfers between servers
+  // (#/saves/transfers). The world scan follows in M3.
   import type { SaveSource, SaveSummary, SaveTable } from '../../shared/api.ts';
   import { bytes, count, time } from '../../shared/fmt.ts';
   import Icon from '../app/Icon.svelte';
   import { ICON } from '../app/nav.ts';
   import { app, browse, drop, folderName, removeSave } from '../app/state.svelte.ts';
+  import Transfers from './Transfers.svelte';
+
+  let { tab }: { tab: string | null } = $props();
 
   const LABEL: Record<SaveSource['id'], string> = {
     bank: 'Bank accounts and log',
@@ -162,6 +166,13 @@
   <p class="sub">The tool works on copies and never writes to a save.</p>
 </div>
 
+{#if !empty}
+  <div role="tablist" aria-label="Saves and servers" class="tabs">
+    <a role="tab" href="#/saves" aria-selected={tab !== 'transfers'}>Loaded saves</a>
+    <a role="tab" href="#/saves/transfers" aria-selected={tab === 'transfers'}>Transfers between servers</a>
+  </div>
+{/if}
+
 {#if empty}
   <div class="start" class:over role="region" aria-label="Drop a save folder here" ondragover={onOver} ondragleave={() => (over = false)} ondrop={onDrop}>
     <span style="color: var(--text3); display: flex"><Icon d={ICON.upload} size={36} /></span>
@@ -170,7 +181,7 @@
     <p>The tool only reads copies of the files and never writes to a save.</p>
     <button type="button" class="btn primary" onclick={browse}>Open folder</button>
   </div>
-{:else}
+{:else if tab !== 'transfers'}
   <div class="add" class:over role="region" aria-label="Drop a save folder here" ondragover={onOver} ondragleave={() => (over = false)} ondrop={onDrop}>
     <span style="color: var(--text3); display: flex"><Icon d={ICON.upload} size={22} /></span>
     <p>Drop a world folder here to add another save. The master and its slaves are matched by their server ids.</p>
@@ -185,7 +196,9 @@
   <p class="problem">{w}</p>
 {/each}
 
-{#if !empty}
+{#if !empty && tab === 'transfers'}
+  <Transfers />
+{:else if !empty}
   <div class="grid">
     {#each app.saves as save (save.path)}
       <section class="card save" title={save.path}>
@@ -261,6 +274,9 @@
 {/if}
 
 <style>
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); }
+  .tabs a { display: flex; align-items: center; height: 44px; margin-bottom: -1px; padding: 0 14px; border-bottom: 2px solid transparent; font-weight: 500; color: var(--text2); }
+  .tabs a[aria-selected='true'] { border-bottom-color: var(--accent); color: var(--text); }
   .add { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 16px 20px; border-radius: 14px; border: 1px dashed var(--line2); }
   .add p { flex: 1 1 320px; min-width: 0; margin: 0; color: var(--text2); }
   .start { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 72px 32px; border-radius: 16px; border: 2px dashed var(--line2); text-align: center; }
