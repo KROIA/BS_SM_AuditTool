@@ -14,14 +14,14 @@
 //   market-alert kind (profit, pump_dump_pump, pump_dump_cycle, other), amount (raw), windowMs, threshold (as stored: real money
 //                or percent), text; for a pump open (the minute's candle open, null without one), percent (null without a candle)
 //   transfer     transferId, class (lost, twice, created, parked), direction, path, item (null: money), sent, received (of that
-//                item), itemsOff (items that differ), steps, why
+//                item), locked (true: nothing moved and the measured value is what stays locked), itemsOff (items that differ), steps, why
 //   banknotes    outstanding (the note count, corrected on 2.1.2), found (in player files and the region scan), difference
 //                (found - outstanding), inventory, enderChest, blocks (in blocks and entities), offers (in villagers' offers, not in
 //                found), putBack, appeared (money that could be notes paid back through the converter, 2.1.2), missing and
 //                unreadable (names of players without a readable file), unnamed (how many UUIDs without a file or a name),
 //                without (saves), scan (the coverage's state), scanFiles, scanFilesTotal, chunksUnread, lz4, filesUnread
 import type { DatabaseSync } from 'node:sqlite';
-import type { Fact, Finding, FindingsResult, Level, OrderRow, RuleId, RuleSettings, RuleStatus, Scope, TransferItem } from '../../shared/api.ts';
+import type { Fact, Finding, FindingsResult, Level, OrderRow, RuleId, RuleSettings, RuleStatus, Scope, TransferItem, TransferRow } from '../../shared/api.ts';
 import { mainData, mainSave } from '../workspace.ts';
 import { allGaps, moneyItems, threshold } from './check.ts';
 import { all, big, names, num, text } from './db.ts';
@@ -356,11 +356,14 @@ const RULES: { [K in keyof RuleSettings]: Rule<K> } = {
       const way = t.class === 'lost' ? -1n : t.class === 'parked' ? 0n : 1n;
       const off = (i: TransferItem) => (way === 0n ? (i.received > i.sent ? i.received - i.sent : i.sent - i.received) : way * (i.received - i.sent));
       const top = t.items.reduce<TransferItem | null>((a, i) => (a === null || off(i) > off(a) ? i : a), null) ?? { item: null, sent: 0n, received: 0n };
+      // Nothing moved on either side: the amount at stake is what stays locked, never an amount of 0.
+      const held = off(top) === 0n ? t.locked.reduce<TransferRow['locked'][number] | null>((a, l) => (a === null || l.amount > a.amount ? l : a), null) : null;
+      const item = held ? held.item : top.item;
       return {
         ...blank('transfer', t.id), level: 'high', start: t.start, end: t.end,
         players: t.player ? [t.player] : [], accounts: t.account === null ? [] : [t.account], servers: t.server === null ? [] : [t.server],
-        measured: { value: top.sent > top.received ? top.sent - top.received : top.received - top.sent, threshold: null, unit: top.item === null ? 'money' : 'items' },
-        facts: { transferId: t.id, class: t.class, direction: t.direction, path: t.path, item: top.item, sent: top.sent, received: top.received,
+        measured: { value: held ? held.amount : top.sent > top.received ? top.sent - top.received : top.received - top.sent, threshold: null, unit: item === null ? 'money' : 'items' },
+        facts: { transferId: t.id, class: t.class, direction: t.direction, path: t.path, item, sent: top.sent, received: top.received, locked: held !== null,
           itemsOff: t.items.filter((i) => i.sent !== i.received).length, steps: t.steps, why: t.why },
         records: { orders: [], ledger: t.ledger, flags: t.flags, candles: [] },
       };

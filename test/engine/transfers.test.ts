@@ -157,4 +157,32 @@ test('classify: parking marks, known gaps and the drop cases', () => {
   assert.deepEqual([r.class, r.items], ['lost', [{ item: null, sent: 500n, received: 300n }]]);
   assert.match(r.why, /could not be booked back \(refund deposit refused: FAILED\): the value is gone/);
   assert.equal(of({ rows: [row('WITHDRAW', -500n), refundLost], gap: 'not loaded' }), 'lost');
+
+  // AT-47, a slave's withdrawal whose answer never came. The terminal (WITHDRAW, 2) leaves the items with the player; the
+  // download block (16) does when the slave reported the park (flag 6 with the id), and took them back before.
+  const out = (type: number, more: Partial<Pair> = {}) => classify({ steps: [req('FROM_MASTER', 'ASYNC_BANK', 400n, type, 'terminal', 4), { ...step('TIMED_OUT'), ts: t + 1 }],
+    rows: [], flags: [], gap: null, copy, money: new Set([1, NOTE]), ...more });
+  const reported = { id: 6, ts: t + 2, account: 3 };
+  const unlock = (ts: number, amount = 400n) => ({ id: 9, ts, account: 3, kind: 'ADMIN_UNLOCK', item: 4, amount, change: 0n });
+  // Paid, and the items stayed with the player: in order.
+  assert.equal(out(2, { rows: [row('WITHDRAW', -400n, 4)] }).class, 'ok');
+  assert.equal(out(16, { rows: [row('DOWNLOAD_WITHDRAW', -400n, 4)], flags: [reported] }).class, 'ok');
+  // Paid, and the download block of an older save took the items back: paid and got nothing.
+  const takenBack = out(16, { rows: [row('DOWNLOAD_WITHDRAW', -400n, 4)] });
+  assert.deepEqual([takenBack.class, takenBack.items], ['parked', [{ item: 4, sent: 400n, received: 0n }]]);
+  assert.match(takenBack.why, /likely paid and got nothing/);
+  // Kept and not paid: the items count as handed out and the amount stays locked. Without the slave's report a lock freed
+  // without a row is named as the limit. An unlock after the park, of at least the amount, makes it twice.
+  const kept = out(2);
+  assert.deepEqual([kept.class, kept.items, kept.locked], ['parked', [{ item: 4, sent: 0n, received: 400n }], [{ item: 4, amount: 400n }]]);
+  assert.match(kept.why, /refused craft/);
+  assert.doesNotMatch(out(2, { flags: [reported] }).why, /refused craft/);
+  const twice = out(2, { unlocks: [unlock(t + 5)] });
+  assert.deepEqual([twice.class, twice.unlock, twice.locked], ['twice', 9, []]);
+  assert.equal(out(2, { unlocks: [unlock(t - 5)] }).class, 'parked');
+  assert.equal(out(2, { unlocks: [unlock(t + 5, 100n)] }).class, 'parked');
+  // Taken back and not paid: nothing moved, and what is at stake is the locked amount, never 0. Released by an unlock: ok.
+  const old = out(16);
+  assert.deepEqual([old.class, old.items, old.locked], ['parked', [], [{ item: 4, amount: 400n }]]);
+  assert.equal(out(16, { unlocks: [unlock(t + 5)] }).class, 'ok');
 });

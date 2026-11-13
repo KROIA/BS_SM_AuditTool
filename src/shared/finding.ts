@@ -265,7 +265,8 @@ export function headline(f: Finding, w: ItemWords, lang: Lang = 'en', short: (ra
         lost: `${s} sent between servers did not arrive`, twice: `${s} more arrived than was sent between servers`,
         created: `${s} arrived from another server that no server sent`, parked: `A transfer of ${s} between servers was left for an admin`,
       };
-      return { rule, measured: `${size} ${de ? (extra ? 'zu viel' : 'fehlt') : extra ? 'too much' : 'missing'}`, title: title[String(x.class)] ?? rule };
+      const how = x.locked === true ? (de ? 'gesperrt' : 'locked') : de ? (extra ? 'zu viel' : 'fehlt') : extra ? 'too much' : 'missing';
+      return { rule, measured: `${size} ${how}`, title: title[String(x.class)] ?? rule };
     }
     case 'banknotes': {
       const more = b('difference') > 0n, s = short(v as bigint);

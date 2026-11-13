@@ -53,10 +53,15 @@ export interface Pair {
   copy: number | null;
   /** The items that are money: their amounts are folded into one (banknotes in the journal, the base item on the master). */
   money: ReadonlySet<number>;
+  /** The master's ADMIN_UNLOCK rows of the transfer's account, which carry no transfer id. */
+  unlocks?: Row[];
 }
 
-/** What was sent and received per item, and the class. Pure, so the tests can give it any pair. */
-export function classify(p: Pair): { items: TransferItem[]; class: TransferClass; why: string } {
+/**
+ * What was sent and received per item, and the class. locked: what stays locked on the account because the master took
+ * nothing; unlock: the ADMIN_UNLOCK row that likely released it. Pure, so the tests can give it any pair.
+ */
+export function classify(p: Pair): { items: TransferItem[]; class: TransferClass; why: string; locked: TransferRow['locked']; unlock: number | null } {
   const req = p.steps.find((s) => s.step === 'REQUESTED');
   const dir = req?.direction ?? p.steps.find((s) => s.direction)?.direction ?? null;
   const has = (step: string) => p.steps.some((s) => s.step === step);
@@ -72,10 +77,10 @@ export function classify(p: Pair): { items: TransferItem[]; class: TransferClass
   for (const r of p.rows) add(net, key(r.item), signed(r));
   const debited = p.rows.some((r) => signed(r) < 0n);
   const map = (m: Amounts, f: (v: bigint) => bigint): Amounts => new Map([...m].map(([k, v]) => [k, f(v)]));
-  const result = (sent: Amounts, received: Amounts, cls: TransferClass, why: string) => {
+  const result = (sent: Amounts, received: Amounts, cls: TransferClass, why: string, locked: Amounts = new Map(), unlock: number | null = null) => {
     const items = [...new Set([...sent.keys(), ...received.keys()])].sort((a, b) => (a ?? -1) - (b ?? -1))
       .map((item) => ({ item, sent: sent.get(item) ?? 0n, received: received.get(item) ?? 0n }));
-    return { items, class: cls, why };
+    return { items, class: cls, why, locked: [...locked].map(([item, amount]) => ({ item, amount })), unlock };
   };
   const none: Amounts = new Map();
 
@@ -132,6 +137,29 @@ export function classify(p: Pair): { items: TransferItem[]; class: TransferClass
   const final = p.steps.some((s) => FINAL.has(s.step));
   if (p.copy !== null && (start > p.copy || (!final && start > p.copy - IN_FLIGHT))) {
     return result(sent, received, 'after-snapshot', 'It started shortly before or after one of the copies was taken, so the other side may not have it yet.');
+  }
+  // A slave's withdrawal through the terminal (WITHDRAW) or a download block (DOWNLOAD_WITHDRAW) whose answer never came.
+  // The terminal leaves the items with the player. The download block does so since slaves report these parks to the
+  // master (TRANSFER_PARKED with this id, BS-267); before, it took them back. The slave sends no unlock either way, so
+  // what the master did not take stays locked, until an admin releases it (ADMIN_UNLOCK, which names no transfer).
+  if (dir === 'FROM_MASTER' && timedOut && req?.path === 'ASYNC_BANK' && (req.ledgerType === 2 || req.ledgerType === 16)) {
+    const asked = fold(new Map(), req.items);
+    const reported = p.flags.length > 0, kept = req.ledgerType === 2 || reported;
+    const same = (a: Amounts, b: Amounts) => [...new Set([...a.keys(), ...b.keys()])].every((k) => (a.get(k) ?? 0n) === (b.get(k) ?? 0n));
+    const parkedAt = Math.min(...p.steps.filter((s) => s.step === 'TIMED_OUT').map((s) => s.ts));
+    if (debited) {
+      if (!kept) return result(sent, none, 'parked', 'The download block took the items back when no answer came, but the master took the payment: the player likely paid and got nothing.');
+      return same(sent, asked) ? result(sent, asked, 'ok', 'The slave never heard back, but the master took the payment and the items stayed with the player: in order.')
+        : result(sent, asked, 'parked', 'The slave never heard back; the items stayed with the player, and the master took a different amount than they were worth.');
+    }
+    const unlock = p.unlocks?.find((u) => u.ts >= parkedAt && asked.has(key(u.item)) && abs(u.amount) >= asked.get(key(u.item))!) ?? null;
+    if (kept) {
+      if (unlock) return result(none, asked, 'twice', 'The items stayed with the player, the master never took the payment, and an admin later released the locked amount: the player likely has the items and the money.', new Map(), unlock.id);
+      const limit = reported ? '' : ' A lock freed without a log row (a refused craft could do that before slaves reported these parks) does not show here.';
+      return result(none, asked, 'parked', `The items stayed with the player, but the master never took the payment: the amount stays locked on the account until an admin takes it.${limit}`, asked);
+    }
+    if (unlock) return result(none, none, 'ok', 'The download block took the items back, the master took nothing, and an admin later released the locked amount.', new Map(), unlock.id);
+    return result(none, none, 'parked', 'The download block took the items back and the master took nothing: the amount stays locked on the account until an admin releases it.', asked);
   }
   if (timedOut || p.flags.length || p.rows.some((r) => r.kind === 'ACCOUNT_DELETE_LOSS')) {
     return result(sent, received, 'parked', 'The outcome was unknown on the server; the mod left it for an admin.');
@@ -205,6 +233,11 @@ export function allTransfers(): TransferRow[] {
   const known = main.knownSlaves ?? null;
   const knownSaves = known?.map((name) => slaves.find((s) => s.name === name) ?? null) ?? null;
   const nameOf = names(db), money = new Set(noteWorth(db).keys());
+  const unlocks = new Map<number, Row[]>();
+  for (const r of all(db, "SELECT id, ts, account, item, amount FROM ledger WHERE kind = 'ADMIN_UNLOCK' ORDER BY ts, id")) {
+    const row: Row = { id: num(r.id)!, ts: num(r.ts)!, account: num(r.account)!, kind: 'ADMIN_UNLOCK', item: num(r.item)!, amount: big(r.amount)!, change: 0n };
+    (unlocks.get(row.account) ?? unlocks.set(row.account, []).get(row.account)!).push(row);
+  }
   const owner = new Map(all(db, 'SELECT number, owner FROM account WHERE owner IS NOT NULL').map((r) => [num(r.number)!, String(r.owner)]));
 
   const out: TransferRow[] = [];
@@ -228,15 +261,15 @@ export function allTransfers(): TransferRow[] {
         else older(s.lastPlayedMs);
       }
     }
-    const c = classify({ steps: e.steps, rows: e.rows, flags: e.flags, gap, copy, money });
     const req = e.steps.find((s) => s.step === 'REQUESTED') ?? e.steps[0];
     const account = req?.account ?? e.rows[0]?.account ?? null;
+    const c = classify({ steps: e.steps, rows: e.rows, flags: e.flags, gap, copy, money, unlocks: account === null ? [] : unlocks.get(account) ?? [] });
     const player = e.steps.find((s) => s.player !== null && UUID.test(s.player))?.player ?? (account === null ? null : owner.get(account) ?? null);
     out.push({
       id, start, end, direction: (req?.direction ?? null) as TransferRow['direction'], path: (e.steps.find((s) => s.path)?.path ?? null) as TransferRow['path'],
       server: e.server, account, player: player === null ? null : { uuid: player, name: nameOf(player) }, steps: e.steps.slice(0, 50).map((s) => s.step),
-      items: c.items, ledger: e.rows.map((r) => r.id), flags: e.flags.map((f) => f.id),
-      class: c.class, why: c.why,
+      items: c.items, ledger: [...e.rows.map((r) => r.id), ...(c.unlock === null ? [] : [c.unlock])], flags: e.flags.map((f) => f.id),
+      locked: c.locked, class: c.class, why: c.why,
     });
   }
   out.sort((a, b) => b.start - a.start || (a.id < b.id ? -1 : 1));

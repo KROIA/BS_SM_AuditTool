@@ -765,9 +765,11 @@ export interface TransferRow {
    * received - sent. Money first, then by item id. Item amounts are item units (count x 100).
    */
   items: TransferItem[];
-  /** The master's ledger rows and TRANSFER_PARKED flags with this id. */
+  /** The master's ledger rows and TRANSFER_PARKED flags with this id, and the ADMIN_UNLOCK row that likely released its lock. */
   ledger: number[];
   flags: number[];
+  /** A withdrawal the master never took: per item, the raw amount that stays locked on the account. Empty otherwise. */
+  locked: { item: number | null; amount: bigint }[];
   class: TransferClass;
   /** Why it is in its class, in one sentence. */
   why: string;
