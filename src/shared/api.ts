@@ -70,6 +70,8 @@ export interface SaveSummary {
 export interface Workspace {
   saves: SaveSummary[];
   warnings: string[];
+  /** Zips of the last session whose unpacked copy is gone: the window opens them again, with their progress. */
+  unpack?: string[];
 }
 
 /** Sent while a save is being read, and by the region scan after each file (with scan set; done and total count files). */
@@ -980,7 +982,8 @@ export interface AdminEvent {
 export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers' | 'banknotes' | 'links' | 'moneyFlow' | 'takeBack' | 'worldItems' | 'startScan' | 'stopScan' | 'scanStatus'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
-  addSave(path: string): Workspace;
+  /** A save folder, or a .zip that holds one or several (DESIGN_SPEC 4.1); a zip is unpacked first, so it answers later. */
+  addSave(path: string): Workspace | Promise<Workspace>;
   removeSave(path: string): Workspace;
   selfCheck(): EngineCheck;
   /** The marks and rule settings of case.json; the defaults when it has none or cannot be read. */
@@ -994,4 +997,4 @@ export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player'
 }
 
 /** The same calls as the screens see them: every answer arrives later. */
-export type RemoteEngine = { [K in keyof EngineApi]: (...args: Parameters<EngineApi[K]>) => Promise<ReturnType<EngineApi[K]>> };
+export type RemoteEngine = { [K in keyof EngineApi]: (...args: Parameters<EngineApi[K]>) => Promise<Awaited<ReturnType<EngineApi[K]>>> };

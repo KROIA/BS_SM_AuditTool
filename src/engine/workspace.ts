@@ -1,16 +1,28 @@
 // The engine's memory of what is loaded: the saves of one network, each read once into its own cache database.
 // case.json remembers the save folders between sessions; the cache can be deleted at any time and is rebuilt.
+// A zip is unpacked into zips/ once (DESIGN_SPEC 4.1) and then opens like a folder; the save keeps the zip's path.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { bytes } from '../shared/fmt.ts';
 import { DEFAULT_RULES, type Answer, type CaseChoices, type CaseData, type Cutoff, type Mark, type Progress, type RuleSettings, type SaveSummary, type Workspace } from '../shared/api.ts';
 import { cachedSummary, importSave } from './save/import.ts';
 import { findDataDir } from './save/locate.ts';
+import { unzip, type ZipProblem } from './save/zip.ts';
 import { dropScan, resetScan } from './scan.ts';
 
 let root = ''; // the workspace folder: case.json and cache/
 let saves: SaveSummary[] = [];
+/**
+ * Saves opened from a zip: the path the save goes by (the zip's, with the folder inside for a zip of several saves) ->
+ * the zip, the unpacked folder and what was not unpacked from that part. waiting: saves from zips of the last session
+ * whose unpacked copy is gone; the window opens those zips again (Workspace.unpack), until then case.json keeps them.
+ */
+const fromZip = new Map<string, { zip: string; dir: string; problems: string[] }>();
+let waiting: string[] = [];
+/** The folder a save is read from: the unpacked copy for a save from a zip. */
+export const folderOf = (picked: string) => fromZip.get(picked)?.dir ?? picked;
 let report: (p: Progress) => void = () => {};
 /** Sends progress to whoever listens (the window); the region scan reports through it too. */
 export const tell = (p: Progress) => report(p);
@@ -94,7 +106,7 @@ function theCase(): Case {
 /** Written to a temporary file first and then renamed, so a crash never leaves half a case.json. */
 function remember() {
   const c = theCase();
-  c.saves = saves.map((s) => s.path);
+  c.saves = [...saves.map((s) => s.path), ...waiting];
   const text = JSON.stringify({ version: 2, ...c }, (_k, v: unknown) => (typeof v === 'bigint' ? String(v) : v), 2);
   fs.writeFileSync(caseFile() + '.tmp', text);
   fs.renameSync(caseFile() + '.tmp', caseFile());
@@ -123,12 +135,107 @@ export function setChoices(choices: CaseChoices): CaseData {
 export const dismissedIds = () => new Set(Object.entries(theCase().marks).flatMap(([id, m]) => (m.dismissed ? [id] : [])));
 
 function load(picked: string): SaveSummary {
-  const cache = cacheFile(picked);
-  const cached = cachedSummary(cache, picked);
-  if (cached) return cached;
-  dropScan(picked); // the cache is rebuilt, and the scan's results with it
-  return importSave(picked, cache, (step, done, total) => report({ save: path.basename(picked), step, done, total }));
+  const cache = cacheFile(picked), dir = folderOf(picked), zip = fromZip.get(picked);
+  let summary = cachedSummary(cache, dir);
+  if (!summary) {
+    dropScan(picked); // the cache is rebuilt, and the scan's results with it
+    summary = importSave(dir, cache, (step, done, total) => report({ save: path.basename(picked), step, done, total }));
+  }
+  return zip ? { ...summary, path: picked, warnings: [...zip.problems, ...summary.warnings] } : summary;
 }
+
+// ---- zips (DESIGN_SPEC 4.1): unpacked once per zip path, size and time; unzip.json beside the contents says it is complete
+
+const zipHome = (zip: string) => path.join(root, 'zips', crypto.createHash('sha1').update(path.resolve(zip).toLowerCase()).digest('hex').slice(0, 16));
+/** The folder the contents go into is named after the zip, so a save at the top of the zip is named like it. */
+const zipContent = (zip: string) => path.join(zipHome(zip), path.parse(zip).name.replace(/[. ]+$/, '') || 'zip');
+const isZip = (p: string) => /\.zip$/i.test(p) && (fs.statSync(p, { throwIfNoEntry: false })?.isFile() ?? false);
+/** The zip a remembered save path belongs to: the path itself, or the zip a folder inside it (up to three deep) goes by. */
+const zipOf = (p: string) => [p, path.dirname(p), path.dirname(path.dirname(p)), path.dirname(path.dirname(path.dirname(p)))].find(isZip) ?? null;
+
+interface Unpacked { size: number; mtime: number; problems: ZipProblem[] }
+/** What a complete earlier unpack of this zip left out; null when there is none or the zip changed since. */
+function unpacked(zip: string): ZipProblem[] | null {
+  try {
+    const st = fs.statSync(zip), m = JSON.parse(fs.readFileSync(path.join(zipHome(zip), 'unzip.json'), 'utf8')) as Unpacked;
+    if (m.size !== st.size || m.mtime !== Math.round(st.mtimeMs) || !Array.isArray(m.problems)) return null;
+    return m.problems.filter((x) => typeof x?.entry === 'string' && typeof x.text === 'string');
+  } catch {
+    return null;
+  }
+}
+
+async function unpack(zip: string): Promise<ZipProblem[]> {
+  const done = unpacked(zip);
+  if (done) return done;
+  const home = zipHome(zip), st = fs.statSync(zip);
+  fs.rmSync(home, { recursive: true, force: true });
+  try {
+    const r = await unzip(zip, zipContent(zip), (d, t) => report({ save: path.basename(zip), step: `Unpacking the zip: ${bytes(d)} of ${bytes(t)}`, done: d, total: t }));
+    const m: Unpacked = { size: st.size, mtime: Math.round(st.mtimeMs), problems: r.problems };
+    fs.writeFileSync(path.join(home, 'unzip.json'), JSON.stringify(m)); // written last: without it the zip is unpacked again
+    return r.problems;
+  } catch (e) {
+    fs.rmSync(home, { recursive: true, force: true });
+    throw new Error(`"${path.basename(zip)}" could not be opened: ${(e as Error).message.replace(/\.$/, '')}.`);
+  }
+}
+
+/** The save folders inside an unpacked zip, as the folder picker would take them: up to three folders deep, not inside a save. */
+function savesIn(dir: string): string[] {
+  const out: string[] = [];
+  let level = [dir];
+  for (let depth = 0; depth < 4 && level.length; depth++) {
+    const next: string[] = [];
+    for (const d of level) {
+      try {
+        const data = findDataDir(d);
+        out.push(path.basename(data) === 'data' ? path.dirname(data) : data);
+      } catch {
+        try {
+          next.push(...fs.readdirSync(d, { withFileTypes: true }).filter((x) => x.isDirectory()).map((x) => path.join(d, x.name)).sort());
+        } catch { /* unreadable */ }
+      }
+    }
+    level = next.slice(0, 500);
+  }
+  return out;
+}
+
+/** Fills fromZip for the saves inside an unpacked zip; each problem goes to the save its entry lies in, else the first. */
+function mapZip(zip: string, problems: ZipProblem[]): string[] {
+  const content = zipContent(zip);
+  const found = savesIn(content).map((dir) => ({ dir, rel: path.relative(content, dir).replaceAll(path.sep, '/'), problems: [] as string[] }));
+  for (const p of problems) {
+    const entry = p.entry.replaceAll('\\', '/');
+    const own = found.filter((f) => entry.startsWith(f.rel + '/')).sort((a, b) => b.rel.length - a.rel.length)[0] ?? found[0];
+    own?.problems.push(p.text);
+  }
+  return found.map((f) => {
+    const picked = path.join(zip, f.rel);
+    fromZip.set(picked, { zip, dir: f.dir, problems: f.problems });
+    return picked;
+  });
+}
+
+/** Opens a zip like a folder: unpacked (once), then every save inside is added. */
+export async function addZip(file: string): Promise<Workspace> {
+  const zip = path.resolve(file);
+  const problems = await unpack(zip);
+  waiting = waiting.filter((p) => zipOf(p) !== zip);
+  const found = mapZip(zip, problems);
+  if (!found.length) {
+    if (!saves.some((s) => fromZip.get(s.path)?.zip === zip)) fs.rmSync(zipHome(zip), { recursive: true, force: true });
+    const lost = problems.length ? ` ${problems.length === 1 ? 'One file was' : `${problems.length} files were`} not unpacked, for example: ${problems[0]!.text}` : '';
+    throw new Error(`"${path.basename(zip)}" holds no BankSystem or StockMarket data. A zip should hold a world folder, its "data" folder or an audit export.${lost}`);
+  }
+  let w = state();
+  for (const picked of found) w = add(picked);
+  return w;
+}
+
+/** A folder, or a .zip file. */
+export const open = (chosen: string): Workspace | Promise<Workspace> => (isZip(chosen) ? addZip(chosen) : addSave(chosen));
 
 function closeMaster() {
   for (const db of opened.values()) db.close();
@@ -157,7 +264,7 @@ function networkWarnings(): string[] {
   }
   return out;
 }
-const state = (): Workspace => ({ saves, warnings: networkWarnings() });
+const state = (): Workspace => ({ saves, warnings: networkWarnings(), ...(waiting.length ? { unpack: [...new Set(waiting.map((p) => zipOf(p)!))] } : {}) });
 
 /** Sets where the workspace lives and who hears about progress. Called once, before anything else. */
 export function init(dir: string, onProgress: (p: Progress) => void = () => {}) {
@@ -166,6 +273,8 @@ export function init(dir: string, onProgress: (p: Progress) => void = () => {}) 
   root = dir;
   report = onProgress;
   saves = [];
+  fromZip.clear();
+  waiting = [];
   kase = null;
   fs.mkdirSync(path.join(root, 'cache'), { recursive: true });
 }
@@ -175,6 +284,15 @@ export function workspace(): Workspace {
   if (saves.length === 0) {
     for (const p of theCase().saves) {
       try {
+        const zip = zipOf(p);
+        if (zip && !fromZip.has(p)) {
+          const problems = unpacked(zip);
+          if (!problems) {
+            waiting.push(p);
+            continue;
+          }
+          mapZip(zip, problems);
+        }
         saves.push(load(p));
       } catch {
         // the folder was moved or deleted since
@@ -187,7 +305,11 @@ export function workspace(): Workspace {
 export function addSave(chosen: string): Workspace {
   // The world folder, whether the world or its data folder was picked: both are the same save.
   const dir = path.resolve(findDataDir(chosen));
-  const picked = path.basename(dir) === 'data' ? path.dirname(dir) : dir;
+  return add(path.basename(dir) === 'data' ? path.dirname(dir) : dir);
+}
+
+/** Adds one save folder, or one save inside an unpacked zip by the path it goes by. */
+function add(picked: string): Workspace {
   closeMaster(); // a re-import replaces the cache file, which cannot be deleted while it is open (Windows)
   const summary = load(picked);
   const main = mainSave();
@@ -205,6 +327,15 @@ export function removeSave(picked: string): Workspace {
   saves = saves.filter((s) => !isSame(s, picked));
   dropScan(picked);
   fs.rmSync(cacheFile(picked), { force: true });
+  // The unpacked copy goes with the last save of its zip.
+  const zip = [...fromZip].find(([p]) => cacheFile(p) === cacheFile(picked))?.[1].zip;
+  waiting = waiting.filter((p) => cacheFile(p) !== cacheFile(picked));
+  if (zip && !saves.some((s) => fromZip.get(s.path)?.zip === zip)) {
+    for (const [p, z] of fromZip) if (z.zip === zip) fromZip.delete(p);
+    try {
+      fs.rmSync(zipHome(zip), { recursive: true, force: true, maxRetries: 3 });
+    } catch { /* a file still open: the next unpack of this zip replaces it */ }
+  }
   remember();
   return state();
 }

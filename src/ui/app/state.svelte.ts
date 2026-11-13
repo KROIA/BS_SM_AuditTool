@@ -3,7 +3,7 @@ import { DEFAULT_RULES, type CaseChoices, type CaseData, type Incident, type Mar
 
 interface Bridge {
   call(method: string, ...args: unknown[]): Promise<unknown>;
-  pickFolder(): Promise<string | null>;
+  pickFolder(zip?: boolean): Promise<string | null>;
   exportReport(incidentId: string, options: ReportOptions, settings: RuleSettings): Promise<{ path: string } | { error: string } | null>;
   saveText(defaultName: string, text: string, kind: 'csv'): Promise<{ path: string } | { error: string } | null>;
   startupPaths(): Promise<string[]>;
@@ -164,12 +164,13 @@ export function removeSave(path: string) {
   return run(() => engine.removeSave(path));
 }
 
-export async function browse() {
-  const path = await bridge.pickFolder();
+/** zip: a .zip file instead of a folder (one dialog cannot offer both on Windows). */
+export async function browse(zip = false) {
+  const path = await bridge.pickFolder(zip);
   if (path) await addSaves([path]);
 }
 
-/** Folders dropped onto the page. Things that are not folders are passed on too: the engine says what is wrong with them. */
+/** Folders and zips dropped onto the page. Anything else is passed on too: the engine says what is wrong with it. */
 export function drop(files: FileList) {
   const paths = [...files].map((f) => bridge.pathOf(f)).filter(Boolean);
   if (paths.length) void addSaves(paths);
@@ -185,7 +186,12 @@ export function folderName(path: string): string {
 export async function start() {
   // The rules first: the Overview's questions follow the saves at once and should not run with the defaults.
   useCase(await engine.caseData());
-  await run(() => engine.workspace());
+  let unpack: string[] = [];
+  await run(async () => {
+    const w = await engine.workspace();
+    unpack = w.unpack ?? []; // zips of the last session whose unpacked copy is gone
+    return w;
+  });
   toOverview();
-  await addSaves(await bridge.startupPaths());
+  await addSaves([...unpack, ...(await bridge.startupPaths())]);
 }

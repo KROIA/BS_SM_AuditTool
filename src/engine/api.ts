@@ -19,11 +19,11 @@ import { takeBack } from './query/takeback.ts';
 import { transfers } from './query/transfers.ts';
 import { worldItems } from './query/world.ts';
 import { scanStatus, startScan, stopScan } from './scan.ts';
-import { addSave, caseData, mark, removeSave, setChoices, setRules, workspace } from './workspace.ts';
+import { caseData, mark, open, removeSave, setChoices, setRules, workspace } from './workspace.ts';
 
 export const api: EngineApi = {
   workspace,
-  addSave,
+  addSave: open,
   removeSave,
   caseData,
   mark,

@@ -4,7 +4,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('audit', {
   call: (method: string, ...args: unknown[]) => ipcRenderer.invoke('engine', method, args),
-  pickFolder: () => ipcRenderer.invoke('pickFolder'),
+  pickFolder: (zip?: boolean) => ipcRenderer.invoke('pickFolder', zip === true),
   // Builds the report, asks where to save it and writes it; the page never sees the file.
   exportReport: (incidentId: string, options: unknown, settings: unknown) => ipcRenderer.invoke('exportReport', incidentId, options, settings),
   // A table the page made as CSV text: main asks where to save it and writes it, never into a save.

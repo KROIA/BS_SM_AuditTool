@@ -14,7 +14,7 @@ import { all, num, text } from './query/db.ts';
 import { findDataDir } from './save/locate.ts';
 import { worthOf } from './save/players.ts';
 import type { ScanAnswer } from './save/region-worker.ts';
-import { cacheFile, loadedSaves, mainData, saveData, tell } from './workspace.ts';
+import { cacheFile, folderOf, loadedSaves, mainData, saveData, tell } from './workspace.ts';
 
 export const SCAN_LIMITS = {
   /** Region files per save; the rest are not listed. */
@@ -42,7 +42,7 @@ function regionFiles(s: SaveSummary, fresh = false): RegionFile[] {
   const out: RegionFile[] = [];
   let world: string | null = null;
   try {
-    const dataDir = findDataDir(s.path);
+    const dataDir = findDataDir(folderOf(s.path));
     if (path.basename(dataDir) === 'data') world = path.dirname(dataDir);
   } catch {
     // the folder is gone

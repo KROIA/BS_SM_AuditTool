@@ -54,6 +54,8 @@
   const taken = (save: SaveSummary) => save.exported
     ? (save.lastPlayedMs === null ? 'Audit export, when it was made is unknown' : 'Audit export made ' + time(save.lastPlayedMs))
     : save.lastPlayedMs === null ? 'When the copy was taken is unknown' : 'Copy taken ' + time(save.lastPlayedMs);
+  /** The zip a save was opened from: its path is the zip's, with the folder inside for a zip of several saves. */
+  const zipOf = (save: SaveSummary) => save.path.split(/[\\/]/).find((part) => /\.zip$/i.test(part));
   const size = (save: SaveSummary) => bytes(save.sources.filter((s) => s.id !== 'audit').reduce((sum, s) => sum + s.bytes, 0)) + ' of databases';
   function versions(save: SaveSummary): string {
     const mc = save.minecraft ? `Minecraft ${save.minecraft}` : 'Minecraft version unknown';
@@ -192,15 +194,19 @@
   <div class="start" class:over role="region" aria-label="Drop a save folder here" ondragover={onOver} ondragleave={() => (over = false)} ondrop={onDrop}>
     <span style="color: var(--text3); display: flex"><Icon d={ICON.upload} size={36} /></span>
     <h2 class="h2">Open a save</h2>
-    <p>A save is the world folder, or its <code>data</code> folder, of a server that runs BankSystem and StockMarket. Drop one or several here.</p>
+    <p>A save is the world folder, or its <code>data</code> folder, of a server that runs BankSystem and StockMarket, or an audit export. Drop one or several here, also as a <code>.zip</code>.</p>
     <p>The tool only reads copies of the files and never writes to a save.</p>
-    <button type="button" class="btn primary" onclick={browse}>Open folder</button>
+    <div class="opens">
+      <button type="button" class="btn primary" onclick={() => browse()}>Open folder</button>
+      <button type="button" class="btn ghost" onclick={() => browse(true)}>Open zip</button>
+    </div>
   </div>
 {:else if tab !== 'transfers' && tab !== 'scan'}
   <div class="add" class:over role="region" aria-label="Drop a save folder here" ondragover={onOver} ondragleave={() => (over = false)} ondrop={onDrop}>
     <span style="color: var(--text3); display: flex"><Icon d={ICON.upload} size={22} /></span>
-    <p>Drop a world folder here to add another save. The master and its slaves are matched by their server ids.</p>
-    <button type="button" class="btn ghost" onclick={browse}>Open folder</button>
+    <p>Drop a world folder or a zip here to add another save. The master and its slaves are matched by their server ids.</p>
+    <button type="button" class="btn ghost" onclick={() => browse()}>Open folder</button>
+    <button type="button" class="btn ghost" onclick={() => browse(true)}>Open zip</button>
   </div>
 {/if}
 
@@ -224,7 +230,7 @@
             <h2 class="h2" style="flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere">{save.name}</h2>
             <span class="role" class:master={save.role === 'MASTER'}>{ROLE[save.role]}{save.roleAssumed ? ', assumed' : ''}</span>
           </div>
-          <p class="small" style="margin: 4px 0 0">{taken(save)} · {size(save)}</p>
+          <p class="small" style="margin: 4px 0 0">{taken(save)} · {size(save)}{zipOf(save) ? ` · from ${zipOf(save)}` : ''}</p>
           <p class="small" style="margin: 0">{versions(save)}</p>
         </div>
         <div class="list">
@@ -301,7 +307,7 @@
   .add p { flex: 1 1 320px; min-width: 0; margin: 0; color: var(--text2); }
   .start { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 72px 32px; border-radius: 16px; border: 2px dashed var(--line2); text-align: center; }
   .start p { max-width: 560px; margin: 0; color: var(--text2); text-wrap: pretty; }
-  .start .btn { margin-top: 12px; }
+  .start .opens { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 12px; }
   .start code { font-family: var(--font-mono); font-size: 13px; padding: 1px 5px; border-radius: 5px; background: var(--raised); }
   .over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
   .primary { padding: 0 18px; border: 0; background: var(--accent); color: var(--onaccent); font-weight: 600; }

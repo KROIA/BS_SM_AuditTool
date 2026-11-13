@@ -72,9 +72,12 @@ if (process.env.AUDIT_TOOL_DATA) app.setPath('userData', path.resolve(process.en
 Menu.setApplicationMenu(null);
 ipcMain.handle('engine', (_e, method, args) => callEngine(method, args));
 ipcMain.handle('startupPaths', () => startupPaths());
-ipcMain.handle('pickFolder', async () => {
+// Windows cannot pick a folder and a file in one dialog: zip asks for a .zip file instead of a folder.
+ipcMain.handle('pickFolder', async (_e, zip: unknown) => {
   if (!win) return null;
-  const r = await dialog.showOpenDialog(win, { title: 'Open a save', properties: ['openDirectory'] });
+  const r = await dialog.showOpenDialog(win, zip === true
+    ? { title: 'Open a zipped save', properties: ['openFile'], filters: [{ name: 'Zip (*.zip)', extensions: ['zip'] }] }
+    : { title: 'Open a save', properties: ['openDirectory'] });
   return r.canceled ? null : (r.filePaths[0] ?? null);
 });
 
