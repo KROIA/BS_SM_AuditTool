@@ -25,8 +25,10 @@ test.describe('with nothing loaded', () => {
 
   test('the saves screen is the start screen', async () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Saves and servers');
-    await expect(page.getByRole('heading', { level: 2 })).toHaveText('Open a save');
+    await expect(page.getByRole('heading', { level: 2 })).toHaveText(['Open a save', 'From a server to a report']);
     await expect(page.getByRole('region', { name: 'Drop a save folder here' })).toContainText('never writes to a save');
+    await expect(page.getByRole('region', { name: 'From a server to a report' }).getByRole('listitem')).toHaveCount(3);
+    await expect(page.getByRole('region', { name: 'From a server to a report' })).toContainText('/banksystem backup export');
     await expect(page.getByRole('button', { name: 'Open folder' })).toBeVisible();
     await expect(page.locator('nav')).toContainText('No save loaded');
     await expect(page.getByText('What each source covers')).toHaveCount(0);

@@ -201,6 +201,26 @@
       <button type="button" class="btn ghost" onclick={() => browse(true)}>Open zip</button>
     </div>
   </div>
+  <section aria-labelledby="guide">
+    <h2 class="h2" id="guide">From a server to a report</h2>
+    <ol class="guide">
+      <li class="card">
+        <span class="step">1</span>
+        <h3>Get the saves</h3>
+        <p>Run <code>/banksystem backup export</code> on each server. It writes a zip into <code>audit_exports</code> in the world folder. Where the command is missing, copy the world folder while the server is stopped: a copy from a running server is often damaged.</p>
+      </li>
+      <li class="card">
+        <span class="step">2</span>
+        <h3>Open them together</h3>
+        <p>Open the master's save and those of its slaves, as folders or zips. The tool matches them by their server ids. The first read takes a while, after that a save opens at once.</p>
+      </li>
+      <li class="card">
+        <span class="step">3</span>
+        <h3>Follow the answer</h3>
+        <p>The Overview says whether something needs attention. Findings, Players and Money flow show what happened and who gained. Case and report works out what to take back and writes the report for the admins.</p>
+      </li>
+    </ol>
+  </section>
 {:else if tab !== 'transfers' && tab !== 'scan'}
   <div class="add" class:over role="region" aria-label="Drop a save folder here" ondragover={onOver} ondragleave={() => (over = false)} ondrop={onDrop}>
     <span style="color: var(--text3); display: flex"><Icon d={ICON.upload} size={22} /></span>
@@ -308,7 +328,12 @@
   .start { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 72px 32px; border-radius: 16px; border: 2px dashed var(--line2); text-align: center; }
   .start p { max-width: 560px; margin: 0; color: var(--text2); text-wrap: pretty; }
   .start .opens { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 12px; }
-  .start code { font-family: var(--font-mono); font-size: 13px; padding: 1px 5px; border-radius: 5px; background: var(--raised); }
+  .start code, .guide code { font-family: var(--font-mono); font-size: 13px; padding: 1px 5px; border-radius: 5px; background: var(--raised); }
+  .guide { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 12px 0 0; padding: 0; list-style: none; }
+  .guide li { display: flex; flex-direction: column; gap: 8px; padding: 20px; }
+  .guide h3 { margin: 0; font-size: 15px; font-weight: 600; }
+  .guide p { margin: 0; color: var(--text2); text-wrap: pretty; }
+  .step { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--raised); color: var(--accent); font-size: 13px; font-weight: 600; }
   .over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
   .primary { padding: 0 18px; border: 0; background: var(--accent); color: var(--onaccent); font-weight: 600; }
   .primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 85%, var(--text)); }

@@ -24,4 +24,4 @@ They are read to port a screen, not run. How to read one:
 - The canvas shows numbers with commas in its data; the program formats every number through `src/shared/fmt.ts`.
 - All names and amounts are invented.
 
-What the canvas shows but version 1 does not build is listed in `.claude/DESIGN_SPEC.md`, section 7.3.
+Version 1 does not build everything the canvas shows.

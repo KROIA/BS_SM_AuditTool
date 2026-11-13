@@ -1,5 +1,5 @@
 // Reads the mods' NBT files of a save: players, bank accounts, items, markets, companies.
-// Layouts: .claude/DATA_SOURCES.md, "Exact NBT layouts". Anything missing or malformed is skipped, never fatal.
+// Layouts as the mods write them (read from their source). Anything missing or malformed is skipped, never fatal.
 import fs from 'node:fs';
 import path from 'node:path';
 import { readSmallFile } from './locate.ts';

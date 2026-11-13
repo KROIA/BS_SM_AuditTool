@@ -4,7 +4,7 @@
 //
 // The table definitions are copied from the mods (BankSystem 3835d933, StockMarket 898aac66):
 // common/src/main/resources/sql/*.sql, BankSystem data/DiagnosticsDatabase.java, StockMarket data/OrderOriginLog.java.
-// The NBT files follow .claude/DATA_SOURCES.md, "Exact NBT layouts". Region files hold the cases of the region scan (AT-36).
+// The NBT files follow the layouts src/engine/save/files.ts reads. Region files hold the cases of the region scan (AT-36).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';

@@ -49,7 +49,7 @@ test('the file picker opens a zip: progress while unpacking, then the Overview',
   const data = path.resolve('test-results/app-data-zip-pick');
   fs.rmSync(data, { recursive: true, force: true });
   await launch(data);
-  await expect(page.getByRole('heading', { level: 2 })).toHaveText('Open a save');
+  await expect(page.getByRole('heading', { level: 2, name: 'Open a save' })).toBeVisible();
   await page.screenshot({ path: 'test-results/zip-start-dark.png' });
   await program.evaluate(({ dialog }, f) => { dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [f] })) as never; }, big);
   await page.getByRole('button', { name: 'Open zip' }).click();
