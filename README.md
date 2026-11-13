@@ -8,7 +8,8 @@ It only reads. It works on copies, never writes into a save and never connects t
 
 ## Install
 
-Windows 10 or 11, 64-bit. Nothing else is needed.
+Windows 10 or 11, 64-bit. Nothing else is needed. Both files are on the
+[Releases](https://github.com/KROIA/BS_SM_AuditTool/releases) page.
 
 - **Installer**: `Audit Tool Setup 1.0.0.exe` installs for the current user, without admin rights, and adds a Start
   menu entry and a desktop shortcut. You choose the folder; the default is `%LOCALAPPDATA%\Programs\Audit Tool`. The
