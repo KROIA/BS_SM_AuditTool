@@ -51,6 +51,9 @@ const SPARE = [
 export const ACCOUNT_ORDER = [...Object.values(PLAYERS).map((p) => p.account), SHARED.account, COMPANY.account, ...SPARE.map((s) => s.account)];
 /** Accounts of the master with only the rows and snapshots of one case of the check per account; none is in the bank files. */
 export const CHECK = { gain: 12, pair: 13, set: 14, stamp: 15, raw: 16, gone: 17 } as const;
+/** The bank's wealth series (item 32767) on the master: account, minute after T0, raw value. */
+export const WEALTH = 32767;
+export const WEALTH_SNAPS = [[PLAYERS.Tavrik.account, 0, 60_000_000n], [COMPANY.account, 10, 9_007_199_254_840_993n], [PLAYERS.Tavrik.account, 30, 600_000_000n]] as const;
 /** A trade row of order 1 logged a second time, on a deleted account: the case of the rule "Order and ledger disagree". */
 export const STRAY = { account: 18, order: 1 } as const;
 /** When the master's bank last saved: the trade row of the last order (minute 130, +5.3 s) is newer. */
@@ -351,6 +354,8 @@ function bankDatabase(dataDir: string, legacy: boolean, list: Order[], transfers
     // 17: a deleted account with two snapshots and no rows.
     snap(CHECK.gone, 5, 250_000n);
     snap(CHECK.gone, 6, 250_000n);
+    // The bank's wealth series: Tavrik's grows tenfold, the company's comes in between and stays (carried forward).
+    for (const [account, m, v] of WEALTH_SNAPS) snap(account, m, v, WEALTH);
     // Order and ledger disagree: a stray PERIODIC row of order 1 (Brindle's first coal buy), so its rows add up to more than
     // its volume. It sits on a deleted account without snapshots, so no account's figures and no check move.
     log(STRAY.account, 5, 'TRADE_BUY', 4, ITEM.coal, 3_200n, { source_kind: 'STOCKMARKET', tag: 'PERIODIC', ref: `sm:order:${STRAY.order}`,

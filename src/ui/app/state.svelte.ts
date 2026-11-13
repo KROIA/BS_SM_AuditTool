@@ -1,5 +1,5 @@
 // What the whole program shares: the open screen, the theme, the loaded saves and what is being loaded.
-import { DEFAULT_RULES, type CaseData, type Mark, type Progress, type RemoteEngine, type RuleSettings, type SaveSummary, type Scope, type Workspace } from '../../shared/api.ts';
+import { DEFAULT_RULES, type CaseData, type Incident, type Mark, type Progress, type RemoteEngine, type RuleSettings, type SaveSummary, type Scope, type Workspace } from '../../shared/api.ts';
 
 interface Bridge {
   call(method: string, ...args: unknown[]): Promise<unknown>;
@@ -42,6 +42,8 @@ export const app = $state({
   /** The rule settings and the marks on findings, from case.json. Pass rules on with $state.snapshot. */
   rules: DEFAULT_RULES as RuleSettings,
   marks: {} as Record<string, Mark>,
+  /** "The incident" of the range menu and the Overview (ScopeMenus works it out); undefined while the rules run. */
+  incident: undefined as Incident | null | undefined,
 });
 
 function useCase(c: CaseData) {
@@ -104,16 +106,28 @@ async function run(call: () => Promise<Workspace>) {
   }
 }
 
+/**
+ * From the Saves screen to the Overview once saves are loaded (DESIGN_SPEC 6.0). Not when something went wrong: the
+ * Saves screen says what. The route is set at once, not on hashchange, so the Overview asks before the slow rules run.
+ */
+function toOverview() {
+  if (app.route !== 'saves' || app.saves.length === 0 || app.errors.length) return;
+  location.hash = '#/overview';
+  app.route = 'overview';
+}
+
 /** Reads the folders one after the other. Folders opened while others are read join the end of the queue. */
 export async function addSaves(paths: string[]) {
   const idle = app.queue.length === 0;
   if (idle) app.errors = [];
   app.queue.push(...paths);
   if (!idle) return;
+  const first = app.saves.length === 0;
   while (app.queue.length) {
     await run(() => engine.addSave(app.queue[0]!));
     app.queue.shift();
   }
+  if (first) toOverview();
 }
 
 export function removeSave(path: string) {
@@ -140,7 +154,9 @@ export function folderName(path: string): string {
 
 /** Brings back the saves of the last session, then opens the folders given on the command line. */
 export async function start() {
-  await run(() => engine.workspace());
+  // The rules first: the Overview's questions follow the saves at once and should not run with the defaults.
   useCase(await engine.caseData());
+  await run(() => engine.workspace());
+  toOverview();
   await addSaves(await bridge.startupPaths());
 }

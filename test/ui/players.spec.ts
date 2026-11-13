@@ -15,12 +15,12 @@ test.beforeAll(async () => {
   program = await electron.launch({ args: ['.', ...[fx.master, ...fx.slaves].flatMap((s) => ['--open', s])], env: { ...process.env, AUDIT_TOOL_DATA: data } });
   page = await program.firstWindow();
   await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(page.locator('section.save h2')).toHaveCount(3);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Overview'); // opens once the saves are loaded
 });
 test.afterAll(() => program.close());
 
 test('the list is sorted by profit and the first player opens', async () => {
-  await page.getByRole('link', { name: 'Players' }).click();
+  await page.getByRole('link', { name: 'Players', exact: true }).click();
   await expect(page.locator('aside .pick .who > span:first-child')).toHaveText(['Tavrik', 'Quenby', 'AdmiralNoor', 'Brindle', 'Mikko_82', 'Ombrelune']);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tavrik');
   await expect(page.locator('.uuid')).toHaveText('a1b2c3d4-e5f6-4a7b-8c9d-000000000001');

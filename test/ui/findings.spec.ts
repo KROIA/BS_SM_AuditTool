@@ -23,7 +23,7 @@ const detail = () => page.getByRole('region', { name: 'Selected finding' });
 test.beforeAll(async () => {
   fs.rmSync(data, { recursive: true, force: true });
   await launch([fx.master, ...fx.slaves]);
-  await expect(page.locator('section.save h2')).toHaveCount(3);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Overview'); // opens once the saves are loaded
 });
 test.afterAll(() => program.close());
 
@@ -77,7 +77,7 @@ test('a pin, a dismissal with its reason and a note survive a restart', async ()
 
   await program.close();
   await launch([]); // the saves come back from case.json too
-  await expect(page.getByRole('link', { name: /^3 saves loaded/ })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Overview'); // the saves came back
   await page.evaluate(`location.hash = '#/findings/${encodeURIComponent(PROFIT)}'`);
   await expect(page.getByRole('link', { name: 'Case: 1 pinned' })).toBeVisible();
   await expect(detail().getByRole('button', { name: 'Pinned to the case' })).toHaveAttribute('aria-pressed', 'true');

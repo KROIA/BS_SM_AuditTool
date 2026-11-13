@@ -211,6 +211,9 @@ export interface MarketRow {
   price: bigint | null;
   /** Highest high divided by lowest low of the candles in the scope; null without candles. */
   swing: number | null;
+  /** Lowest low and highest high of the candles in the scope; null without candles. */
+  low: bigint | null;
+  high: bigint | null;
   orders: number;
 }
 
@@ -471,7 +474,30 @@ export interface QueryApi {
   incidents(scope: Scope, settings: RuleSettings): IncidentsResult;
   /** Admin actions and admin changes from the bank's audit log in the time range, oldest first. Empty without an audit log. */
   adminEvents(scope: Scope): AdminEvent[];
+  /** The Overview's figures, chart and lists, without the findings (those take the first run of the rules). */
+  overview(scope: Scope): Overview;
+  /** The few strongest moments of the time range for the Overview's chart, oldest first. */
+  keyEvents(scope: Scope, settings: RuleSettings): KeyEvent[];
 }
+
+export interface Overview {
+  /** Money on all bank accounts over time (DESIGN_SPEC 8.1): per account the last snapshot at or before each point, summed. */
+  money: Point[];
+  /** The bank's wealth series (item 32767) summed the same way; null when the save has none (it needs StockMarket). */
+  wealth: Point[] | null;
+  /** Money on all accounts now, from the bank's files. */
+  moneyNow: bigint;
+  /** The highest realised profit in the range, at most 5, only players who made a profit. */
+  top: PlayerRow[];
+  /** Markets whose price in the range went at least twice as far from their usual price, furthest first, at most 4. */
+  unusual: { item: number; low: bigint; high: bigint; usual: bigint; times: number; below: boolean }[];
+}
+
+/** A moment worth a number on the Overview's chart. */
+export type KeyEvent =
+  | { kind: 'incident'; time: number; incident: Incident }
+  | { kind: 'gap'; time: number; finding: Finding }
+  | { kind: 'admin'; time: number; admin: AdminEvent };
 
 /** One admin action (ADMIN_SET, ADMIN_REMOVE, ...) or admin change of BS-257 (RIGHTS_OP, SLAVE_TRUST, ...) from the audit log. */
 export interface AdminEvent {
@@ -497,7 +523,7 @@ export interface AdminEvent {
   ledgerId: number | null;
 }
 
-export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents'> {
+export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
   addSave(path: string): Workspace;

@@ -59,14 +59,15 @@ export function markets(scope: Scope): MarketRow[] {
   const db = mainData();
   if (!db) return [];
   const rows = new Map<number, MarketRow>();
-  const row = (item: number) => rows.get(item) ?? rows.set(item, { item, price: null, swing: null, orders: 0 }).get(item)!;
+  const row = (item: number) => rows.get(item) ?? rows.set(item, { item, price: null, swing: null, low: null, high: null, orders: 0 }).get(item)!;
   for (const r of all(db, 'SELECT DISTINCT market FROM candle_hour')) row(num(r.market)!);
   for (const r of all(db, 'SELECT item, price FROM market')) row(num(r.item)!).price = big(r.price);
   for (const o of readOrders(db, {}, scope.to)) if (counts(o, scope)) row(o.item).orders++;
   const src = source(scope, null);
   for (const r of all(db, `SELECT market, max(high) AS hi, min(low) AS lo FROM (${src.sql}) GROUP BY market`, src.params)) {
-    const lo = big(r.lo)!;
-    row(num(r.market)!).swing = Number(big(r.hi)!) / Number(lo > 0n ? lo : 1n); // ponytail: a low of 0 counts as 1 raw (0.01)
+    const lo = big(r.lo)!, m = row(num(r.market)!);
+    [m.low, m.high] = [lo, big(r.hi)!];
+    m.swing = Number(m.high) / Number(lo > 0n ? lo : 1n); // ponytail: a low of 0 counts as 1 raw (0.01)
   }
   return [...rows.values()].sort((a, b) => (b.swing ?? -1) - (a.swing ?? -1) || b.orders - a.orders || a.item - b.item);
 }

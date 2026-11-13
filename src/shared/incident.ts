@@ -25,6 +25,11 @@ function when(i: Incident): string {
   return `within ${length} on ${day(i.start)}`;
 }
 
+/** An incident still open: at least one of its findings is not marked as "not a problem". */
+export const isOpen = (i: Incident, dismissed: (id: string) => boolean) => i.findings.some((id) => !dismissed(id));
+/** "The incident" of the range menu and the Overview: the strongest open one (incidents() sorts strongest first). */
+export const strongest = (list: Incident[], dismissed: (id: string) => boolean) => list.find((i) => isOpen(i, dismissed)) ?? null;
+
 /** Short: "Tavrik and Quenby on the diamond market". */
 export function incidentTitle(i: Incident, itemName: (id: number) => string): string {
   const w = who(i), m = where(i, itemName);

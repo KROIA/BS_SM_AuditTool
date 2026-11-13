@@ -18,7 +18,7 @@ test.beforeAll(async () => {
   program = await electron.launch({ args: ['.', ...[fx.master, ...fx.slaves].flatMap((s) => ['--open', s])], env: { ...process.env, AUDIT_TOOL_DATA: data } });
   page = await program.firstWindow();
   await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(page.locator('section.save h2')).toHaveCount(3);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Overview'); // opens once the saves are loaded
 });
 test.afterAll(() => program.close());
 

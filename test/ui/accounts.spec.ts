@@ -12,7 +12,7 @@ async function launch(data: string, open: string[]) {
   const program = await electron.launch({ args: ['.', ...open.flatMap((s) => ['--open', s])], env: { ...process.env, AUDIT_TOOL_DATA: data } });
   const page = await program.firstWindow();
   await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(page.locator('section.save h2')).toHaveCount(open.length);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Overview'); // opens once the saves are loaded
   return { program, page };
 }
 
@@ -23,7 +23,7 @@ test.describe('the invented network', () => {
   test.afterAll(() => program.close());
 
   test('the list: most money first, the company account marked, the first one opens', async () => {
-    await page.getByRole('link', { name: 'Bank accounts' }).click();
+    await page.getByRole('link', { name: 'Bank accounts', exact: true }).click();
     await expect(page.locator('aside .badge')).toHaveText(['41', '24', '11', '3', '27', '10', '7', '30', '31', '32', '33']);
     await expect(page.locator('aside .pick').first()).toContainText(/Northreach Rail Co.\s*\$90'071.99B · company/);
     await expect(page.locator('aside .pick').nth(8)).toContainText(/Old savings\s*\$0\.00 · frozen/);
@@ -98,7 +98,7 @@ test.describe('the invented network', () => {
   });
 
   test('account numbers on the Players screen open the account', async () => {
-    await page.getByRole('link', { name: 'Players' }).click();
+    await page.getByRole('link', { name: 'Players', exact: true }).click();
     await page.locator('.facts').getByRole('link', { name: '30' }).click();
     await expect(page).toHaveURL(/#\/accounts\/30$/);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Account 30 · Tavrik and Quenby');
@@ -123,7 +123,7 @@ test.describe('an old 2.1.2 save', () => {
   test.afterAll(() => program.close());
 
   test('the screen says once that the history is incomplete', async () => {
-    await page.getByRole('link', { name: 'Bank accounts' }).click();
+    await page.getByRole('link', { name: 'Bank accounts', exact: true }).click();
     await page.locator('aside a[href="#/accounts/11"]').click();
     await expect(page.getByText('did not log trades or admin actions')).toHaveCount(1);
     await expect(page.locator('tbody tr td:nth-child(2) > span:first-child')).toHaveText(['Withdrawal', 'Withdrawal', 'Deposit']);

@@ -2,7 +2,7 @@
   // The time range and the server filter of the top bar. Both set app.scope, which every screen passes to its questions.
   import type { Incident } from '../../shared/api.ts';
   import { time } from '../../shared/fmt.ts';
-  import { incidentTitle } from '../../shared/incident.ts';
+  import { incidentTitle, strongest as pick } from '../../shared/incident.ts';
   import Icon from './Icon.svelte';
   import { ICON } from './nav.ts';
   import { app, engine, newest, setRange, type Range } from './state.svelte.ts';
@@ -36,18 +36,24 @@
   const CHOICES: [Range, string][] = [['all', 'Everything'], ['day', 'Last 24 hours'], ['week', 'Last 7 days']];
 
   // The strongest incident over all the data of the filtered server (highest level, then largest profit) that still has
-  // a finding not marked as "not a problem".
+  // a finding not marked as "not a problem". Shared through app.incident with the Overview.
   let strongest = $state<{ incident: Incident; title: string } | null>(null);
   $effect(() => {
     const server = app.scope.server, rules = $state.snapshot(app.rules), marks = app.marks;
-    void app.saves;
+    const none = app.saves.length === 0;
     let stale = false;
-    void Promise.all([engine.incidents({ from: null, to: null, server }, rules), engine.items()]).then(([r, i]) => {
+    app.incident = none ? null : undefined;
+    if (none) strongest = null;
+    if (none || app.queue.length) return; // saves are still being read: each one would start the rules over
+    // The engine answers one call after the other and the first run of the rules takes seconds: a tick later, the
+    // screen's own quick questions go first.
+    const timer = setTimeout(() => void Promise.all([engine.incidents({ from: null, to: null, server }, rules), engine.items()]).then(([r, i]) => {
       if (stale) return;
-      const top = r.incidents.find((x) => x.findings.some((id) => !marks[id]?.dismissed));
+      const top = pick(r.incidents, (id) => marks[id]?.dismissed === true);
+      app.incident = top;
       strongest = top ? { incident: top, title: incidentTitle(top, words(new Map(i.map((x) => [x.id, x]))).itemName) } : null;
-    });
-    return () => (stale = true);
+    }));
+    return () => ((stale = true), clearTimeout(timer));
   });
 
   function choose(r: Range) {

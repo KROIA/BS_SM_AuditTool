@@ -4,6 +4,7 @@
   import Accounts from '../screens/Accounts.svelte';
   import Findings from '../screens/Findings.svelte';
   import Markets from '../screens/Markets.svelte';
+  import Overview from '../screens/Overview.svelte';
   import Players from '../screens/Players.svelte';
   import Saves from '../screens/Saves.svelte';
   import Soon from '../screens/Soon.svelte';
@@ -56,6 +57,8 @@
       <div class="page" class:flush={screen.id === 'players' || screen.id === 'accounts' || screen.id === 'markets'}>
         {#if screen.id === 'saves'}
           <Saves />
+        {:else if screen.id === 'overview'}
+          <Overview />
         {:else if screen.id === 'players'}
           <Players selected={route[1] ? decodeURIComponent(route[1]) : null} />
         {:else if screen.id === 'accounts'}

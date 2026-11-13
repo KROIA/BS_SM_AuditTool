@@ -13,7 +13,7 @@ async function launch(data: string, open: string[]) {
   const program = await electron.launch({ args: ['.', ...open.flatMap((s) => ['--open', s])], env: { ...process.env, AUDIT_TOOL_DATA: data } });
   const page = await program.firstWindow();
   await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(page.locator('section.save h2')).toHaveCount(open.length);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Overview'); // opens once the saves are loaded
   return { program, page };
 }
 
@@ -24,7 +24,7 @@ test.describe('the invented network', () => {
   test.afterAll(() => program.close());
 
   test('the list: largest swing first, the first one opens with its facts', async () => {
-    await page.getByRole('link', { name: 'Markets' }).click();
+    await page.getByRole('link', { name: 'Markets', exact: true }).click();
     await expect(page.locator('aside .pick .ellipsis')).toHaveText(['Diamond', 'Emerald', 'Gold ingot', 'Wheat', 'Oak log', 'Coal', 'Iron ingot', 'Redstone']);
     await expect(page.locator('aside .pick').first()).toContainText(/60 orders · \$52\.92\s*40\.91×/);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Diamond');
@@ -105,7 +105,7 @@ test.describe('an old 2.1.2 save', () => {
   test.afterAll(() => program.close());
 
   test('markers sit where the orders were placed, and the legend says why', async () => {
-    await page.getByRole('link', { name: 'Markets' }).click();
+    await page.getByRole('link', { name: 'Markets', exact: true }).click();
     await page.getByRole('button', { name: 'Show on chart' }).click();
     await expect(page.locator('.mark')).toHaveCount(60);
     await expect(page.locator('.legend')).toContainText('at the time it was placed: this save does not record when orders finished.');

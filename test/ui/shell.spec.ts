@@ -115,7 +115,9 @@ test.describe('with the invented network loaded', () => {
     await expect(page.getByText('Diagnostics, mining-1')).toHaveCount(0);
     await program.close();
     ({ program, page } = await launch(data, [], false));
-    await expect(page.locator('section.save h2')).toHaveText(['survival-main', 'nether-hub']);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Overview'); // saves that come back open the Overview
     await expect(page.locator('nav')).toContainText('2 saves loaded');
+    await page.getByRole('link', { name: 'Saves and servers' }).first().click();
+    await expect(page.locator('section.save h2')).toHaveText(['survival-main', 'nether-hub']);
   });
 });
