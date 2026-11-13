@@ -1,14 +1,14 @@
 <script lang="ts">
   // Players: what did this player do? A list on the left, the picked player on the right.
-  // The list is in the suspicion order (DESIGN_SPEC 8.3), then by profit. Banknotes and connected players come with M3 and M4.
-  import type { Finding, ItemRow, LedgerRow, Level, OrderRow, PlayerDetail, PlayerRow, Session } from '../../shared/api.ts';
+  // The list is in the suspicion order (DESIGN_SPEC 8.3), then by profit. Connected players come with M4.
+  import type { BanknotesResult, Finding, ItemRow, LedgerRow, Level, OrderRow, PlayerDetail, PlayerRow, Session, WorldItemsResult, WorldStack } from '../../shared/api.ts';
   import { span } from '../../shared/finding.ts';
   import { count, items as quantity, money, moneyShort, time } from '../../shared/fmt.ts';
   import { blamed, suspicion } from '../../shared/incident.ts';
   import FindingLinks from '../app/FindingLinks.svelte';
   import StepChart from '../app/StepChart.svelte';
   import { app, engine } from '../app/state.svelte.ts';
-  import { entries, gapRows, LEVEL_COLOR, tone, whereMade, words, type GapRow } from '../app/words.ts';
+  import { entries, gapRows, heldText, LEVEL_COLOR, tone, whereMade, words, type GapRow } from '../app/words.ts';
 
   let { selected }: { selected: string | null } = $props();
 
@@ -22,7 +22,9 @@
   let found = $state<Finding[]>([]);
   let sessions = $state<Session[]>([]);
   let allSessions = $state(false);
-  let tab = $state<'trades' | 'bank'>('trades');
+  let tab = $state<'trades' | 'bank' | 'notes'>('trades');
+  let notes = $state<BanknotesResult | null>(null);
+  let world = $state<WorldItemsResult | null>(null);
   let allOrders = $state(false);
   let allBank = $state(false);
   let loadedFor = $state<string | null>(null); // the player the detail above was asked for; detail is null when that player is unknown
@@ -74,6 +76,19 @@
       [detail, orders, bank, sessions, allOrders, allBank, allSessions, loadedFor] = [d, o, b, s, false, false, false, who];
       gaps = numbers.flatMap((n, k) => gapRows(n, c[k]!));
     })();
+    return () => (stale = true);
+  });
+
+  // The Banknotes and items tab asks only while it is open: the count and the world take a while on a large save.
+  $effect(() => {
+    const scope = $state.snapshot(app.scope);
+    void app.saves.length;
+    void app.scanRound; // the region scan finds bank terminals with the player's slots
+    if (tab !== 'notes') return;
+    let stale = false;
+    void Promise.all([engine.banknotes(scope), engine.worldItems()]).then(([b, w]) => {
+      if (!stale) [notes, world] = [b, w];
+    });
     return () => (stale = true);
   });
 
@@ -143,6 +158,50 @@
     };
   }));
   const bankEntries = $derived(entries(bank, gaps));
+
+  // ---- Banknotes and items ----
+  /** What the log and NoteFlow say this player did with notes in the range (an estimate: notes change hands). */
+  const moves = $derived(notes?.players.find((p) => p.player.uuid === uuid) ?? null);
+  const noteRows = $derived.by(() => {
+    if (!shown || !notes || notes.reason !== null) return [];
+    const m = moves ?? { out: 0n, back: 0n, created: 0n, destroyed: 0n, net: 0n };
+    const own = new Set(shown.accounts.filter((a) => a.owner).map((a) => a.number));
+    const mine = notes.accounts.filter((a) => own.has(a.account));
+    const intoOwn = mine.reduce((sum, a) => sum + a.back, 0n), outOfOwn = mine.reduce((sum, a) => sum + a.out, 0n);
+    return [
+      { label: 'Withdrawn as banknotes', raw: m.out, total: false },
+      { label: `Paid back in by ${shown.name}`, raw: m.back, total: false },
+      ...(m.created ? [{ label: 'Made outside the bank (converter, villagers, creative mode)', raw: m.created, total: false }] : []),
+      ...(m.destroyed ? [{ label: 'Destroyed outside the bank (converter, villagers)', raw: m.destroyed, total: false }] : []),
+      // The accounts tell what others did: notes paid into this player's accounts, or taken out of them, by someone else.
+      ...(intoOwn !== m.back ? [{ label: 'Paid into their own accounts by anyone', raw: intoOwn, total: false }] : []),
+      ...(outOfOwn !== m.out ? [{ label: 'Withdrawn from their own accounts by anyone', raw: outOfOwn, total: false }] : []),
+      { label: 'Still outside the bank, if nobody else used them', raw: m.net, total: true },
+    ];
+  });
+  /** What the player carries, per place and server, and the bank terminal slots the region scan found for them. */
+  const carried = $derived.by(() => {
+    if (!world || world.reason !== null || !uuid) return [];
+    const server = app.scope.server, p = world.players.find((x) => x.player.uuid === uuid);
+    const held = new Map<string, WorldStack[]>();
+    for (const s of p ? [...p.stacks, ...p.valuables] : []) {
+      const k = `${s.place} on ${s.server}`;
+      if (server === null || s.server === server) held.set(k, [...(held.get(k) ?? []), s]);
+    }
+    const out = [...held].map(([k, list]) => ({ key: k, label: k.charAt(0).toUpperCase() + k.slice(1), sub: heldText(list), raw: list.reduce((a, s) => a + (s.value ?? 0n), 0n) }));
+    for (const t of world.places) {
+      if (t.player?.uuid !== uuid || (server !== null && t.server !== server)) continue;
+      out.push({ key: t.server + t.where, label: `Slots at a ${t.where}`, sub: `${t.server}, ${heldText([...t.stacks, ...t.valuables])}`, raw: t.notes });
+    }
+    return out;
+  });
+  const carriedNote = $derived.by(() => {
+    if (!world || !shown) return '';
+    if (world.reason !== null) return world.reason;
+    if (world.unreadable.some((p) => p.uuid === shown.uuid)) return `What ${shown.name} carries is unknown: the player file could not be read.`;
+    if (world.missing.some((p) => p.uuid === shown.uuid)) return `What ${shown.name} carries is unknown: no loaded save has a player file for them.`;
+    return carried.length ? '' : `No banknotes or valuables in ${shown.name}'s inventory or ender chest${app.scope.server === null ? '' : ` on ${app.scope.server}`}.`;
+  });
 
   const ownAccounts = $derived(shown?.accounts.filter((a) => a.owner) ?? []);
   const sharedAccounts = $derived(shown?.accounts.filter((a) => !a.owner) ?? []);
@@ -245,6 +304,7 @@
       <div role="tablist" aria-label="Player details" class="tabs">
         <button type="button" role="tab" aria-selected={tab === 'trades'} onclick={() => (tab = 'trades')}>Trades</button>
         <button type="button" role="tab" aria-selected={tab === 'bank'} onclick={() => (tab = 'bank')}>Bank history</button>
+        <button type="button" role="tab" aria-selected={tab === 'notes'} onclick={() => (tab = 'notes')}>Banknotes and items</button>
       </div>
 
       {#if tab === 'trades'}
@@ -319,6 +379,41 @@
             </div>
           </section>
         {/if}
+      {:else if tab === 'notes'}
+        {#if !notes || !world}
+          <p class="small" aria-busy="true">Counting the banknotes…</p>
+        {:else}
+          <div class="pair">
+            <section class="card" aria-label="Banknotes">
+              <h2 class="h2 h3">Banknotes</h2>
+              {#if notes.reason !== null}
+                <p style="margin: 12px 0 0; color: var(--text2)">{notes.reason}</p>
+              {:else}
+                <div class="notes">
+                  {#each noteRows as r (r.label)}
+                    <div class="nrow" class:total={r.total}><span>{r.label}</span><span class="num" title={money(r.raw)}>{moneyShort(r.raw)}</span></div>
+                  {/each}
+                </div>
+                <p class="small" style="margin: 12px 0 0; text-wrap: pretty">Banknotes carry no owner and change hands, so these figures follow who withdrew and paid in, not who holds the notes now. They are estimates.</p>
+              {/if}
+            </section>
+            <section class="card" aria-label="Found on the player">
+              <h2 class="h2 h3">Found on the player</h2>
+              {#if carriedNote}<p class="where">{carriedNote}</p>{/if}
+              {#if carried.length}
+                <div class="notes">
+                  {#each carried as c (c.key)}
+                    <div class="nrow">
+                      <span class="who"><span style="font-weight: 500">{c.label}</span><span class="small">{c.sub}</span></span>
+                      <span class="num" title={money(c.raw)}>{c.raw > 0n ? moneyShort(c.raw) : 'no notes'}</span>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+              <p class="small" style="margin: 12px 0 0; text-wrap: pretty">From the player files as each copy was taken{world.scan.state === 'complete' || world.scan.state === 'partial' ? ', and the bank terminals the region scan found' : ''}. Valuables are items with a market.</p>
+            </section>
+          </div>
+        {/if}
       {:else}
         {#if main.generation === 'legacy'}
           <p class="small" style="margin: 0">This save was written by BankSystem 2.1.2, which did not log trades or admin actions, so changes without a log entry are expected.</p>
@@ -384,5 +479,10 @@
   .pair > .card { flex: 1 1 360px; min-width: 0; box-sizing: border-box; }
   .sdot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
   .entry.gap { border: 1px dashed var(--high); background: color-mix(in srgb, var(--high) 10%, transparent); }
+  .notes { display: flex; flex-direction: column; margin-top: 12px; }
+  .nrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .nrow > span:first-child:not(.who) { color: var(--text2); }
+  .nrow.total > span:first-child { color: var(--text); font-weight: 500; }
+  .where { margin: 12px 0 0; padding: 12px; border-radius: 10px; font-size: 13px; color: var(--text2); background: var(--raised); text-wrap: pretty; }
   .etime { flex: 0 0 170px; font-size: 13px; color: var(--text2); font-variant-numeric: tabular-nums; }
 </style>

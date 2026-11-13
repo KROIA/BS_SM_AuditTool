@@ -1,7 +1,7 @@
 // Items, bank log rows and gaps in plain words, for every screen that shows them.
 import type { Gap, ItemCheck, ItemRow, LedgerRow, Level } from '../../shared/api.ts';
 import { KIND, span } from '../../shared/finding.ts';
-import { at, items as quantity, money } from '../../shared/fmt.ts';
+import { at, count, items as quantity, money } from '../../shared/fmt.ts';
 
 export const tone = (raw: bigint) => (raw > 0n ? 'var(--up)' : raw < 0n ? 'var(--down)' : 'var(--text)');
 /** A level's colour; a gap's rating (low, medium, high) uses the same. */
@@ -54,4 +54,28 @@ export function words(itemRows: Map<number, ItemRow>) {
     /** When a gap happened: between its two snapshots. */
     gapWhen: (g: GapRow) => span(g.gap.from, g.gap.to),
   };
+}
+
+/** "minecraft:shulker_box" -> "Shulker box" */
+export function plainName(id: string): string {
+  const base = id.slice(id.indexOf(':') + 1).replaceAll('_', ' ');
+  return base.charAt(0).toUpperCase() + base.slice(1);
+}
+/** Stacks found in the world (player files, region scan): value is raw money for the whole stack, null for a valuable. */
+interface Held { path: string[]; item: string; count: number; value: bigint | null }
+/** "1'408 notes of $1'000'000.00, 30 notes of $1.00, also 64 Diamond, partly in a shulker box" */
+export function heldText(stacks: Held[]): string {
+  const notes = new Map<bigint, number>(), things = new Map<string, number>(), boxes = new Set<string>();
+  for (const s of stacks) {
+    if (s.value !== null && s.count > 0) { const each = s.value / BigInt(s.count); notes.set(each, (notes.get(each) ?? 0) + s.count); }
+    else if (s.value === null) things.set(s.item, (things.get(s.item) ?? 0) + s.count);
+    if (s.path.length) boxes.add(plainName(s.path.at(-1)!).toLowerCase());
+  }
+  const parts = [...notes].sort((a, b) => (b[0] > a[0] ? 1 : -1)).map(([each, n]) => `${count(n)} ${n === 1 ? 'note' : 'notes'} of ${money(each)}`);
+  // The three largest kinds of valuables, then how many more: a chest of odds and ends would fill the line.
+  const kinds = [...things].sort((a, b) => b[1] - a[1]).map(([item, n]) => `${count(n)} ${plainName(item)}`);
+  const other = kinds.length > 3 ? `${kinds.slice(0, 3).join(', ')} and ${count(kinds.length - 3)} more ${kinds.length === 4 ? 'kind' : 'kinds'}` : kinds.join(', ');
+  if (other) parts.push(parts.length ? 'also ' + other : other);
+  if (boxes.size) parts.push(`${stacks.every((s) => s.path.length) ? 'all' : 'partly'} in a ${[...boxes].join(' or ')}`);
+  return parts.join(', ');
 }

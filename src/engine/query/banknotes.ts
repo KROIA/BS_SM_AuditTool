@@ -153,9 +153,10 @@ export function banknotes(scope: Scope): BanknotesResult {
   // The refund and converter rows came with the same BankSystem change as NoteFlow (none of them is in 2.1.2).
   if (!hasFlow(main)) {
     missing.push('BankSystem 2.1.2 logged the amount a player asked to withdraw, also when notes that did not fit went back into the account, so the tool takes how far the balance actually fell (an estimate from the balance history).');
-    const all = ' (the server filter does not apply: a gap between two snapshots belongs to no server)';
-    if (appeared.length) missing.push(`Money also appeared on accounts without a log row${all}, each time at most the notes then outside the bank, so it could be notes paid back in through the ATM converter, which 2.1.2 did not log. It is not taken off the count.`);
-    if (tooLarge.length) missing.push(`Other money that appeared without a log row${all} is more than all notes outside the bank at that time: an admin action or another cause.`);
+    if (appeared.length) missing.push('Money also appeared on accounts without a log row, each time at most the notes then outside the bank, so it could be notes paid back in through the ATM converter, which 2.1.2 did not log. It is not taken off the count.');
+    if (tooLarge.length) missing.push('Other money that appeared without a log row is more than all notes outside the bank at that time: an admin action or another cause.');
+    // Said once, and only when it matters: with no server chosen there is nothing to not apply.
+    if (scope.server !== null && (appeared.length || tooLarge.length)) missing.push('The server filter does not apply to money that appeared without a log row: a gap between two snapshots belongs to no server.');
   }
   const absent = (main.knownSlaves ?? []).filter((n) => !saves.some((s) => s.name === n));
   if (absent.length) missing.push(`The ${absent.length === 1 ? 'slave' : 'slaves'} ${list(absent)} ${absent.length === 1 ? 'is' : 'are'} not loaded, so notes made or destroyed there outside the bank are not counted.`);
@@ -165,7 +166,7 @@ export function banknotes(scope: Scope): BanknotesResult {
     reason: null, outstanding, ledger, putBack, appeared, tooLarge, flow: [...flow.values()].sort((a, b) => (a.source < b.source ? -1 : 1)),
     accounts: [...accounts.values()].sort((a, b) => byNet(a, b) || a.account - b.account),
     players: [...players.values()].sort((a, b) => byNet(a, b) || (a.player.name < b.player.name ? -1 : 1)),
-    // ponytail: one point per distinct millisecond; thin it when the chart (AT-37) has to draw a real save's 10^5 rows.
+    // ponytail: one point per distinct millisecond (39 on the November copy); no screen draws it yet, thin it when one does.
     series: series(steps, scope), unclear, skipped, missing,
   };
 }

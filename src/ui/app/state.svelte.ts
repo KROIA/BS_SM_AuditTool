@@ -1,5 +1,5 @@
 // What the whole program shares: the open screen, the theme, the loaded saves and what is being loaded.
-import { DEFAULT_RULES, type CaseData, type Incident, type Mark, type Progress, type RemoteEngine, type RuleSettings, type SaveSummary, type Scope, type Workspace } from '../../shared/api.ts';
+import { DEFAULT_RULES, type CaseData, type Incident, type Mark, type Progress, type RemoteEngine, type RuleSettings, type SaveSummary, type ScanStatus, type Scope, type Workspace } from '../../shared/api.ts';
 
 interface Bridge {
   call(method: string, ...args: unknown[]): Promise<unknown>;
@@ -44,6 +44,10 @@ export const app = $state({
   marks: {} as Record<string, Mark>,
   /** "The incident" of the range menu and the Overview (ScopeMenus works it out); undefined while the rules run. */
   incident: undefined as Incident | null | undefined,
+  /** How far the region scan got (DESIGN_SPEC 6.7); kept here so the bar lives on while other screens are open. */
+  scan: null as ScanStatus | null,
+  /** Goes up when the scan's results change (a scan ended or was stopped): what shows them asks again. */
+  scanRound: 0,
 });
 
 function useCase(c: CaseData) {
@@ -76,8 +80,21 @@ export function setRange(range: Range, from: number | null = null, to: number | 
 }
 
 addEventListener('hashchange', () => (app.route = routeFromHash()));
-// The region scan reports on the same channel (Progress.scan); its bar is AT-37, and it must not take over the import's.
-bridge.onProgress((p) => { if (!p.scan) app.loading = p; });
+// The region scan reports on the import's channel (Progress.scan) and must not take over the import's bar.
+bridge.onProgress((p) => {
+  if (!p.scan) return void (app.loading = p);
+  app.scan = p.scan;
+  if (!p.scan.running) app.scanRound++;
+});
+
+/** Starts the region scan of every loaded save, or continues it; it runs in the engine's background. */
+export async function startScan() {
+  app.scan = await engine.startScan();
+}
+export async function stopScan() {
+  app.scan = await engine.stopScan();
+  app.scanRound++; // stopping sends no progress: what was done so far is the result now
+}
 
 export function toggleTheme() {
   app.theme = app.theme === 'dark' ? 'light' : 'dark';
@@ -95,6 +112,7 @@ async function run(call: () => Promise<Workspace>) {
     const w = await call();
     app.saves = w.saves;
     app.warnings = w.warnings;
+    app.scan = await engine.scanStatus(); // a save that came or went changes what there is to scan
     // Other saves move "the last 24 hours", and a server whose save is gone cannot be filtered for.
     if (app.range === 'day' || app.range === 'week') setRange(app.range);
     if (app.scope.server !== null && !app.saves.some((s) => s.name === app.scope.server)) app.scope = { ...app.scope, server: null };

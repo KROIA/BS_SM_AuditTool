@@ -138,9 +138,13 @@ test('2.1.2: the log alone, withdrawals cut to the balance drop, money that appe
   assert.deepEqual(r.missing, [
     '"old-world" has no banknote log (BankSystem 2.1.2 and older kept none), so notes made or destroyed there outside the bank (converter, villagers, creative mode, /give) are not counted.',
     'BankSystem 2.1.2 logged the amount a player asked to withdraw, also when notes that did not fit went back into the account, so the tool takes how far the balance actually fell (an estimate from the balance history).',
-    'Money also appeared on accounts without a log row (the server filter does not apply: a gap between two snapshots belongs to no server), each time at most the notes then outside the bank, so it could be notes paid back in through the ATM converter, which 2.1.2 did not log. It is not taken off the count.',
-    'Other money that appeared without a log row (the server filter does not apply: a gap between two snapshots belongs to no server) is more than all notes outside the bank at that time: an admin action or another cause.',
+    'Money also appeared on accounts without a log row, each time at most the notes then outside the bank, so it could be notes paid back in through the ATM converter, which 2.1.2 did not log. It is not taken off the count.',
+    'Other money that appeared without a log row is more than all notes outside the bank at that time: an admin action or another cause.',
   ]);
+  // With a server chosen, the filter's limit is said once, after both.
+  const filtered = api.banknotes({ ...ALL, server: 'old-world' }).missing;
+  assert.equal(filtered.filter((m) => m.includes('server filter')).length, 1);
+  assert.equal(filtered.at(-1), 'The server filter does not apply to money that appeared without a log row: a gap between two snapshots belongs to no server.');
   // A range after the withdrawal and before the converter deposit: the cut stays in what is outstanding (everything up
   // to minute 60, so without Ombrelune's $3M at minute 70), and neither the put-back nor the list is in the range.
   const later = api.banknotes({ from: T0 + 55 * MIN, to: T0 + 60 * MIN, server: null });

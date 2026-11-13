@@ -1,13 +1,14 @@
 <script lang="ts">
   // Saves and servers: what is loaded, what could be read, and what time each source covers.
-  // While nothing is loaded it is the start screen. Two tabs: the loaded saves, and the transfers between servers
-  // (#/saves/transfers). The world scan follows in M3.
+  // While nothing is loaded it is the start screen. Three tabs: the loaded saves, the transfers between servers
+  // (#/saves/transfers) and the world scan (#/saves/scan).
   import type { SaveSource, SaveSummary, SaveTable } from '../../shared/api.ts';
   import { bytes, count, time } from '../../shared/fmt.ts';
   import Icon from '../app/Icon.svelte';
   import { ICON } from '../app/nav.ts';
   import { app, browse, drop, folderName, removeSave } from '../app/state.svelte.ts';
   import Transfers from './Transfers.svelte';
+  import WorldScan from './WorldScan.svelte';
 
   let { tab }: { tab: string | null } = $props();
 
@@ -172,8 +173,9 @@
 
 {#if !empty}
   <div role="tablist" aria-label="Saves and servers" class="tabs">
-    <a role="tab" href="#/saves" aria-selected={tab !== 'transfers'}>Loaded saves</a>
+    <a role="tab" href="#/saves" aria-selected={tab !== 'transfers' && tab !== 'scan'}>Loaded saves</a>
     <a role="tab" href="#/saves/transfers" aria-selected={tab === 'transfers'}>Transfers between servers</a>
+    <a role="tab" href="#/saves/scan" aria-selected={tab === 'scan'}>World scan</a>
   </div>
 {/if}
 
@@ -185,7 +187,7 @@
     <p>The tool only reads copies of the files and never writes to a save.</p>
     <button type="button" class="btn primary" onclick={browse}>Open folder</button>
   </div>
-{:else if tab !== 'transfers'}
+{:else if tab !== 'transfers' && tab !== 'scan'}
   <div class="add" class:over role="region" aria-label="Drop a save folder here" ondragover={onOver} ondragleave={() => (over = false)} ondrop={onDrop}>
     <span style="color: var(--text3); display: flex"><Icon d={ICON.upload} size={22} /></span>
     <p>Drop a world folder here to add another save. The master and its slaves are matched by their server ids.</p>
@@ -202,6 +204,8 @@
 
 {#if !empty && tab === 'transfers'}
   <Transfers />
+{:else if !empty && tab === 'scan'}
+  <WorldScan />
 {:else if !empty}
   <div class="grid">
     {#each app.saves as save (save.path)}
