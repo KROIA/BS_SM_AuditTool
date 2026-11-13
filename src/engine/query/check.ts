@@ -197,13 +197,23 @@ export function checkAll(account: number | null, scope: Scope, settings: RuleSet
 
 export const check = (account: number, scope: Scope, settings: RuleSettings): ItemCheck[] => checkAll(account, scope, settings).get(account) ?? [];
 
-/** Every gap with a difference over all accounts and items, for the rule "Balance not explained". Not on the API. */
+/**
+ * Every gap with a difference over all accounts and items, for the rule "Balance not explained" and the banknote count.
+ * Not on the API. Worked out once per cache database (AT-52: about 150 ms, asked for twice per take-back); callers only
+ * read the list.
+ */
+const gapsKept = new WeakMap<DatabaseSync, (Gap & { account: number; item: number })[]>();
 export function allGaps(): (Gap & { account: number; item: number })[] {
   const db = mainData();
   if (!db) return [];
-  const { snaps, moves, rating } = read(db, null);
-  return [...snaps].flatMap(([key, s]) => {
-    const [account, item] = key.split(':').map(Number) as [number, number];
-    return join(gaps(s, moves.get(key) ?? [])).map((g) => ({ account, item, ...gap(g, rating) }));
-  });
+  let kept = gapsKept.get(db);
+  if (!kept) {
+    const { snaps, moves, rating } = read(db, null);
+    kept = [...snaps].flatMap(([key, s]) => {
+      const [account, item] = key.split(':').map(Number) as [number, number];
+      return join(gaps(s, moves.get(key) ?? [])).map((g) => ({ account, item, ...gap(g, rating) }));
+    });
+    gapsKept.set(db, kept);
+  }
+  return kept;
 }

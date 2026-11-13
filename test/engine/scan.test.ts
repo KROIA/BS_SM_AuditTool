@@ -131,12 +131,14 @@ test('the scan: every dimension in the background, progress per file, the finds 
   assert.deepEqual([s.files, s.filesTotal, s.chunks, s.notes, s.dropped], [SCAN.files, SCAN.files, SCAN.chunks.read, SCAN.blocks, 0]);
   assert.deepEqual(s.unreadable, { files: 0, damaged: SCAN.chunks.damaged, lz4: SCAN.chunks.lz4, tooLarge: 0 });
   assert.equal(s.bytes, s.bytesTotal);
-  // One event per file, then one when it ends; each carries the status for a bar.
+  // One event per write (the first file at once, then at most one a second), then one when it ends; each carries the
+  // status for a bar.
   const scans = events.filter((e) => e.scan);
-  assert.equal(scans.length, SCAN.files + 1);
-  assert.deepEqual(scans.map((e) => e.done), [1, 2, 3, 4, 5, 5]);
+  assert.equal(scans[0]!.done, 1);
+  assert.ok(scans.length >= 2 && scans.length <= SCAN.files + 1, String(scans.length));
+  assert.ok(scans.every((e, i) => i === 0 || e.done! >= scans[i - 1]!.done!));
   assert.ok(scans.every((e) => e.total === SCAN.files));
-  assert.equal(scans.at(-1)!.scan!.running, false);
+  assert.deepEqual([scans.at(-1)!.done, scans.at(-1)!.scan!.running], [SCAN.files, false]);
 
   const w = api.worldItems();
   assert.equal(w.blocks, SCAN.blocks);
@@ -169,13 +171,13 @@ test('stop keeps what is done; continue reads only the files not done; a changed
   assert.equal(stopped.state, 'partial');
   assert.ok(stopped.files >= 1 && stopped.files < SCAN.files, String(stopped.files));
   assert.equal(api.worldItems().scan.files, stopped.files);
-  // Continue: only the rest.
-  let read = 0;
-  init(path.join(fx.root, `workspace-${n}`), (p) => { if (p.scan?.running) read++; });
+  // Continue: only the rest. The first file written counts on from what was done.
+  let read = 0, first = 0;
+  init(path.join(fx.root, `workspace-${n}`), (p) => { if (p.scan?.running && !read++) first = p.done!; });
   addSave(fx.master);
   assert.equal(api.scanStatus().files, stopped.files); // kept in the cache across sessions
   await scanned();
-  assert.equal(read, SCAN.files - stopped.files);
+  assert.equal(first, stopped.files + 1);
   assert.equal(api.scanStatus().state, 'complete');
   assert.equal(api.scanStatus().notes, SCAN.blocks);
   // A file that changed on disk counts as not done and is read again, alone.

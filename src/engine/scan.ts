@@ -103,7 +103,11 @@ export function coverage(s: SaveSummary): { coverage: ScanCoverage; done: Set<st
 
 // ---- The job
 
-interface Job { queue: Task[]; workers: Set<Worker>; busy: Map<Worker, Task>; caches: Set<string>; names: [number, string][]; valuables: string[] }
+interface Job {
+  queue: Task[]; workers: Set<Worker>; busy: Map<Worker, Task>; caches: Set<string>; names: [number, string][]; valuables: string[];
+  /** Answers not written yet, the timer that writes them, and when the last write was. */
+  pending: [Task, ScanAnswer][]; timer: NodeJS.Timeout | null; wrote: number;
+}
 let job: Job | null = null;
 let stamp = 0;
 /**
@@ -131,28 +135,47 @@ const progress = (save: string) => {
   tell({ save, step: scan.running ? 'Scanning the region files' : 'Region scan finished', done: scan.files, total: scan.filesTotal, scan });
 };
 
-/** One file's finds into its save's cache, in place of what an earlier read of it left. */
-function write(t: Task, a: ScanAnswer) {
-  const db = new DatabaseSync(t.cache);
+/** Files' finds into one save's cache, each in place of what an earlier read of it left; one transaction. */
+function write(cache: string, answers: [Task, ScanAnswer][]) {
+  const db = new DatabaseSync(cache);
   try {
     db.exec('BEGIN');
-    db.prepare('DELETE FROM scan_item WHERE file = ?').run(t.rel);
-    let room = SCAN_LIMITS.rows - Number((db.prepare('SELECT count(*) AS n FROM scan_item').get() as { n: number }).n);
-    let dropped = 0, notes = 0n;
+    const clear = db.prepare('DELETE FROM scan_item WHERE file = ?'), count = db.prepare('SELECT count(*) AS n FROM scan_item');
     const insert = db.prepare(`INSERT INTO scan_item (file, dimension, x, y, z, place, source, owner, account, path, item, count, plain, worth)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    // Money first, so that the row limit drops valuables before notes.
-    for (const f of a.finds.sort((x, y) => Number(y.worth !== null) - Number(x.worth !== null))) {
-      if (room-- <= 0) { dropped++; continue; }
-      insert.run(t.rel, t.dimension, f.x, f.y, f.z, f.place, f.source, f.owner, f.account, JSON.stringify(f.path), f.item, f.count, +f.plain, f.worth);
-      if (f.plain && f.worth !== null && f.source !== 'offer') notes += BigInt(f.count) * f.worth;
+    const file = db.prepare('INSERT OR REPLACE INTO scan_file VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    for (const [t, a] of answers) {
+      clear.run(t.rel);
+      let room = SCAN_LIMITS.rows - Number((count.get() as { n: number }).n);
+      let dropped = 0, notes = 0n;
+      // Money first, so that the row limit drops valuables before notes.
+      for (const f of a.finds.sort((x, y) => Number(y.worth !== null) - Number(x.worth !== null))) {
+        if (room-- <= 0) { dropped++; continue; }
+        insert.run(t.rel, t.dimension, f.x, f.y, f.z, f.place, f.source, f.owner, f.account, JSON.stringify(f.path), f.item, f.count, +f.plain, f.worth);
+        if (f.plain && f.worth !== null && f.source !== 'offer') notes += BigInt(f.count) * f.worth;
+      }
+      file.run(t.rel, t.dimension, t.size, t.mtime, a.chunks, a.damaged, a.lz4, a.tooLarge, a.error, dropped, String(notes));
     }
-    db.prepare('INSERT OR REPLACE INTO scan_file VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(t.rel, t.dimension, t.size, t.mtime, a.chunks, a.damaged, a.lz4, a.tooLarge, a.error, dropped, String(notes));
     db.exec('COMMIT');
   } finally {
     db.close();
   }
+}
+
+/**
+ * Writes the answers collected so far. A commit per file stalled the engine's thread for up to seconds now and then
+ * (AT-52: flushing to disk), so a file is written at once only when the last write is a second ago, else with the next
+ * write within that second. A file's finds and its scan_file row stay in one transaction, so "continue" stays right.
+ */
+const EVERY_MS = 1000;
+function flush(j: Job) {
+  if (j.timer) clearTimeout(j.timer);
+  j.timer = null;
+  j.wrote = Date.now();
+  const by = new Map<string, [Task, ScanAnswer][]>();
+  for (const p of j.pending) if (j.caches.has(p[0].cache)) (by.get(p[0].cache) ?? by.set(p[0].cache, []).get(p[0].cache)!).push(p);
+  j.pending = [];
+  for (const [cache, answers] of by) write(cache, answers);
 }
 
 function spawn(j: Job) {
@@ -162,8 +185,12 @@ function spawn(j: Job) {
     const t = j.busy.get(w)!;
     j.busy.delete(w);
     if (!j.caches.has(t.cache)) return; // the save was removed or read in again meanwhile
-    write(t, a);
-    progress(t.save.name);
+    j.pending.push([t, a]);
+    const wait = EVERY_MS - (Date.now() - j.wrote);
+    if (wait <= 0) {
+      flush(j);
+      progress(t.save.name);
+    } else j.timer ??= setTimeout(() => { if (job === j) { flush(j); progress(t.save.name); } }, wait);
   };
   w.on('message', (a: ScanAnswer) => {
     if (job !== j) return; // stopped meanwhile
@@ -187,6 +214,7 @@ function next(j: Job, w: Worker) {
     j.workers.delete(w);
     void w.terminate();
     if (j.busy.size === 0) {
+      flush(j);
       job = null;
       stamp++;
       progress('');
@@ -213,7 +241,7 @@ export function startScan(save?: string): ScanStatus {
   const names = db ? all(db, 'SELECT id, name FROM item').flatMap((r): [number, string][] => (worthOf(String(r.name)) !== null ? [[num(r.id)!, String(r.name)]] : [])) : [];
   const markets = db ? marketItems(db) : new Set<number>();
   const valuables = db ? all(db, 'SELECT id, name FROM item WHERE plain = 1').filter((r) => markets.has(num(r.id)!) && !money.has(num(r.id)!)).map((r) => String(r.name)) : [];
-  const j: Job = { queue, workers: new Set(), busy: new Map(), caches: new Set(targets.map((s) => cacheFile(s.path))), names, valuables };
+  const j: Job = { queue, workers: new Set(), busy: new Map(), caches: new Set(targets.map((s) => cacheFile(s.path))), names, valuables, pending: [], timer: null, wrote: 0 };
   job = j;
   const count = Math.min(Math.max(1, os.availableParallelism() - 1), 4, queue.length);
   for (let i = 0; i < count; i++) next(j, spawn(j));
@@ -223,6 +251,7 @@ export function startScan(save?: string): ScanStatus {
 /** Stops the workers; what they finished stays in the caches. */
 export function stopScan(): ScanStatus {
   if (job) {
+    flush(job);
     for (const w of job.workers) void w.terminate();
     job = null;
     stamp++;
@@ -242,6 +271,7 @@ export function dropScan(picked: string) {
 
 /** Ends any scan when the workspace changes; nothing is reported. */
 export function resetScan() {
+  if (job?.timer) clearTimeout(job.timer); // the answers not written yet are read again next time
   if (job) for (const w of job.workers) void w.terminate();
   job = null;
   listed.clear();
