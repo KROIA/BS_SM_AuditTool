@@ -11,8 +11,11 @@ It only reads. It works on copies, never writes into a save and never connects t
 Windows 10 or 11, 64-bit. Nothing else is needed.
 
 - **Installer**: `Audit Tool Setup 1.0.0.exe` installs for the current user, without admin rights, and adds a Start
-  menu entry. Uninstall it like any program. Your workspace in `%APPDATA%\audit-tool` stays, so delete that folder too
-  if you want everything gone.
+  menu entry and a desktop shortcut. You choose the folder; the default is `%LOCALAPPDATA%\Programs\Audit Tool`. The
+  program always gets a folder of its own named `Audit Tool`: if you pick `D:\Tools`, it goes to `D:\Tools\Audit Tool`,
+  because uninstalling deletes that folder with everything in it. A silent install takes `/S /D=<folder>` the same way.
+  Uninstall it like any program. Your workspace in `%APPDATA%\audit-tool` stays, so delete that folder too if you want
+  everything gone.
 - **Without installing**: unpack `Audit Tool-1.0.0-win.zip` anywhere and start `Audit Tool.exe`.
 
 The files are not code-signed, so Windows SmartScreen may warn on the first start ("More info", then "Run anyway").

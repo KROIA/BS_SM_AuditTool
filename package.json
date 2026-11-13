@@ -76,8 +76,9 @@
       "icon": "build/icon.png"
     },
     "nsis": {
-      "oneClick": true,
-      "perMachine": false
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
     },
     "electronFuses": {
       "runAsNode": false,
