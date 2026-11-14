@@ -63,7 +63,9 @@ function createWindow() {
   // The tool is offline: the window never opens another page and never leaves its own.
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
-  win.once('ready-to-show', () => win?.show());
+  // The screen tests show the window without taking the focus: keys a person types meanwhile stay in their own window
+  // instead of landing in the test (an Enter on a focused menu button opens the menu the next step expects closed).
+  win.once('ready-to-show', () => (process.env.AUDIT_TOOL_BACKGROUND ? win?.showInactive() : win?.show()));
   void win.loadFile(path.join(here, '../../ui/index.html'));
 }
 
