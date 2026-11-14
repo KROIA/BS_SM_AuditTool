@@ -265,8 +265,11 @@ export function allTransfers(): TransferRow[] {
     const account = req?.account ?? e.rows[0]?.account ?? null;
     const c = classify({ steps: e.steps, rows: e.rows, flags: e.flags, gap, copy, money, unlocks: account === null ? [] : unlocks.get(account) ?? [] });
     const player = e.steps.find((s) => s.player !== null && UUID.test(s.player))?.player ?? (account === null ? null : owner.get(account) ?? null);
+    // With no journal row, a deletion payout or loss still names its way: its id is a slave's leg of the master's drop.
+    const deletion = e.rows.some((r) => r.kind === 'ACCOUNT_DELETE_PAYOUT' || r.kind === 'ACCOUNT_DELETE_LOSS');
     out.push({
-      id, start, end, direction: (req?.direction ?? null) as TransferRow['direction'], path: (e.steps.find((s) => s.path)?.path ?? null) as TransferRow['path'],
+      id, start, end, direction: (req?.direction ?? (deletion ? 'FROM_MASTER' : null)) as TransferRow['direction'],
+      path: (e.steps.find((s) => s.path)?.path ?? (deletion ? 'DROP' : null)) as TransferRow['path'],
       server: e.server, account, player: player === null ? null : { uuid: player, name: nameOf(player) }, steps: e.steps.slice(0, 50).map((s) => s.step),
       items: c.items, ledger: [...e.rows.map((r) => r.id), ...(c.unlock === null ? [] : [c.unlock])], flags: e.flags.map((f) => f.id),
       locked: c.locked, class: c.class, why: c.why,

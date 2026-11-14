@@ -142,6 +142,9 @@ export function findInChunk(nbt: NbtCompound, keep: (f: Found) => boolean, money
 
 function entity(e: Nbt, depth: number, keep: (f: Found) => boolean, add: (f: Find) => void) {
   if (!isCompound(e) || depth > REGION_LIMITS.passengers) return;
+  // A dropped item no one can ever pick up: /give leaves a copy of what it handed over for the pickup animation
+  // (ItemEntity.makeFakeItem, gone a tick later unless the chunk stops ticking first). Counting it would count the note twice.
+  if (str(e, 'id') === 'minecraft:item' && num(e, 'PickupDelay') === 32767) return;
   const pos = list(e, 'Pos');
   const [x, y, z] = pos.map((v) => (typeof v === 'number' && Number.isFinite(v) ? Math.floor(v) : NaN));
   if (pos.length !== 3 || [x, y, z].some((v) => !Number.isSafeInteger(v))) return;

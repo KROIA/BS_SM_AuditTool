@@ -8,7 +8,7 @@ import zlib from 'node:zlib';
 import { after, before, test } from 'node:test';
 import { api } from '../../src/engine/api.ts';
 import { worthOf } from '../../src/engine/save/players.ts';
-import { readRegion, scanRegion, type Find } from '../../src/engine/save/region.ts';
+import { findInChunk, readRegion, scanRegion, type Find } from '../../src/engine/save/region.ts';
 import { addSave, init, removeSave } from '../../src/engine/workspace.ts';
 import { DEFAULT_RULES, type Progress, type Scope } from '../../src/shared/api.ts';
 import { describe } from '../../src/shared/finding.ts';
@@ -78,6 +78,13 @@ test('the reader on entities: a dropped note, a minecart and its rider, a villag
     ['minecraft:villager', 'offer', -881, 64, -1011, 'banksystem:money100', 3],
     ['minecraft:villager', 'offer', -881, 64, -1011, 'minecraft:wheat', 1],
   ].sort());
+});
+
+test('the reader skips the copy /give leaves for its pickup animation: no one can ever pick it up', () => {
+  const dropped = (PickupDelay: number) => ({ id: 'minecraft:item', Pos: [10.5, -58.7, -5.5], PickupDelay, Age: 5999, Item: { id: 'banksystem:money100', count: 1 } });
+  const got: Find[] = [];
+  findInChunk({ Entities: [dropped(32767), dropped(40)] }, keep, () => undefined, (f) => got.push(f));
+  assert.deepEqual(got.map((f) => [f.place, f.item, f.count]), [['minecraft:item', 'banksystem:money100', 1]]);
 });
 
 test('the reader\'s limits: a file shorter than its header, sectors outside the file, a missing .mcc, too much unpacked or nested', () => {
