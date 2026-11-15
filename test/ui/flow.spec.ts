@@ -195,6 +195,13 @@ test.describe('the timeline', () => {
     await plot.hover();
     await page.mouse.wheel(0, -500);
     await expect(plot).not.toHaveAttribute('aria-label', label!);
+    // All the way in, the axis counts milliseconds, and more wheel steps leave the time where it is (no sideways slide).
+    for (let i = 0; i < 250; i++) await page.mouse.wheel(0, -200);
+    const ticks = page.locator('.xaxis span');
+    await expect(ticks.first()).toHaveText(/:\d\d\.\d{3}$/);
+    const atMax = await ticks.allTextContents();
+    for (let i = 0; i < 10; i++) await page.mouse.wheel(0, -200);
+    await expect(ticks).toHaveText(atMax);
     await plot.press('Control+Space');
     await expect(plot).toHaveAttribute('aria-label', label!);
   });

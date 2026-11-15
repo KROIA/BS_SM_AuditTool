@@ -82,7 +82,7 @@
   const bounds = $derived.by(() => {
     if (!moves.length) return { from: 0, to: 1, minSpan: 1 };
     const lo = moves[0]!.m.time, hi = Math.max(...moves.map((x) => x.m.until ?? x.m.time)), pad = Math.max(30_000, (hi - lo) * 0.03);
-    return { from: lo - pad, to: hi + pad, minSpan: 10_000 };
+    return { from: lo - pad, to: hi + pad, minSpan: 50 }; // the log times are in ms; moves a few ms apart still part
   });
   let manual = $derived((void moves, null as View | null));
   const cur = $derived(manual ?? { x0: bounds.from, x1: bounds.to, y0: 0, y1: 1 });

@@ -15,6 +15,10 @@ test('the wheel zooms both axes around the pointer; Ctrl only the values, Shift 
   // Zooming out stops at the data, zooming in at the shortest span.
   assert.deepEqual(wheel(V, { ...up, deltaY: 100 }, 0.5, 0.5, B).x1 - wheel(V, { ...up, deltaY: 100 }, 0.5, 0.5, B).x0, 1000);
   assert.equal(clampX({ ...V, x0: 500, x1: 510 }, B).x1 - clampX({ ...V, x0: 500, x1: 510 }, B).x0, 50);
+  // At the shortest span the time stays put, and the last step in keeps the point under the pointer: no sideways slide.
+  const at = { ...V, x0: 100, x1: 150 }, near = wheel({ ...V, x0: 100, x1: 155 }, up, 0.5, 0.5, B);
+  assert.deepEqual(wheel(at, { ...up, shiftKey: true }, 0.2, 0.5, B), at);
+  assert.ok(Math.abs(near.x1 - near.x0 - 50) < 1e-9 && Math.abs(near.x0 + near.x1 - 255) < 1e-9);
 });
 
 test('dragging moves the content with the pointer and stays inside the data in time', () => {
@@ -25,6 +29,7 @@ test('dragging moves the content with the pointer and stays inside the data in t
 
 test('time axis labels say as much as the span shown needs', () => {
   const t = Date.UTC(2026, 10, 4, 11, 30, 15), MIN = 60_000, DAY = 86_400_000;
+  assert.equal(timeTick(t + 42, 1_000, true), '11:30:15.042');
   assert.equal(timeTick(t, MIN, true), '11:30:15');
   assert.equal(timeTick(t, DAY, true), '11:30');
   assert.equal(timeTick(t, 2 * DAY, true), '4 Nov, 11:30');

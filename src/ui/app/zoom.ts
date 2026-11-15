@@ -27,8 +27,9 @@ export function wheel(v: View, e: { deltaX: number; deltaY: number; ctrlKey: boo
   const f = delta < 0 ? 0.9 : 1.1;
   let { x0, x1, y0, y1 } = v;
   if (!e.ctrlKey) {
-    const ax = x0 + rx * (x1 - x0);
-    [x0, x1] = [ax - (ax - x0) * f, ax + (x1 - ax) * f];
+    // Zooming in stops at the shortest span around the pointer; leaving that to clampX would slide the view sideways.
+    const ax = x0 + rx * (x1 - x0), k = Math.max(f, Math.min(b.minSpan, b.to - b.from) / (x1 - x0));
+    [x0, x1] = [ax - (ax - x0) * k, ax + (x1 - ax) * k];
   }
   if (!e.shiftKey) {
     const ay = y0 + ry * (y1 - y0);
@@ -43,10 +44,11 @@ export function pan(v: View, dx: number, dy: number, w: number, h: number, b: Bo
   return clampX({ x0: v.x0 - sx, x1: v.x1 - sx, y0: v.y0 + sy, y1: v.y1 + sy }, b);
 }
 
-/** A time axis label for t when span ms are shown: the clock with seconds within ten minutes, without them within a day,
- *  day and clock up to four days, else the day. */
+/** A time axis label for t when span ms are shown: the clock with milliseconds within ten seconds, with seconds within ten
+ *  minutes, without them within a day, day and clock up to four days, else the day. */
 export function timeTick(t: number, span: number, utc = false): string {
   const [date, clock] = time(t, utc).split(', ') as [string, string], day = date.replace(/ \d{4}$/, '');
+  if (span <= 10_000) return `${clock}.${String(Math.floor(t) % 1000).padStart(3, '0')}`;
   if (span <= 600_000) return clock;
   return span <= 86_400_000 ? clock.slice(0, 5) : span <= 4 * 86_400_000 ? `${day}, ${clock.slice(0, 5)}` : day;
 }
