@@ -8,6 +8,7 @@
   import FindingLinks from '../app/FindingLinks.svelte';
   import { app, engine, setRange } from '../app/state.svelte.ts';
   import { LEVEL_COLOR, tone, words } from '../app/words.ts';
+  import { HINT } from '../app/zoom.ts';
 
   let { selected }: { selected: number | null } = $props();
 
@@ -266,7 +267,8 @@
           {:else}
             <span>Pick a player below to see their orders on the chart.</span>
           {/if}
-          <span style="color: var(--text3)">Scroll to zoom, drag to move. Close is taken from the next candle's open. Volume bars use a square-root scale.
+          <span style="color: var(--text3)">{HINT} A grey line: no candle in the save, so no prices were made and the price stayed until the next candle opened.
+            Close is taken from the next candle's open. Volume bars use a square-root scale.
             Volume counts every trade in the market: players, the price bot and the virtual order book together. The bot's own orders cannot be shown.</span>
         </div>
       </section>

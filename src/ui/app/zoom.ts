@@ -1,0 +1,45 @@
+// Zoom and pan of a chart as in StockMarket's own charts: the wheel zooms both axes around the pointer (Ctrl: the
+// values only, Shift: the time only), dragging moves both, Space fits the values to what is shown, Ctrl+Space shows
+// everything. x is time in epoch ms, y is in the chart's own units (a log chart passes logarithms).
+
+/** What the chart shows: x0..x1 left to right, y0..y1 bottom to top. */
+export interface View { x0: number; x1: number; y0: number; y1: number }
+
+/** How far one can go: the time the data covers, and the shortest time span worth showing. */
+export interface Bounds { from: number; to: number; minSpan: number }
+
+/** Keeps the time span inside the data and at least minSpan wide; the values are not bounded. */
+export function clampX(v: View, b: Bounds): View {
+  const full = b.to - b.from;
+  const span = Math.min(full, Math.max(Math.min(b.minSpan, full), v.x1 - v.x0));
+  const x0 = Math.min(b.to - span, Math.max(b.from, v.x0));
+  return { ...v, x0, x1: x0 + span };
+}
+
+/**
+ * One wheel step. rx, ry: where the pointer is, 0..1 from the left and from the bottom; that point stays put.
+ * Up zooms in by 10 %, down zooms out by 10 %, as in the game.
+ */
+export function wheel(v: View, e: { deltaX: number; deltaY: number; ctrlKey: boolean; shiftKey: boolean }, rx: number, ry: number, b: Bounds): View {
+  const delta = e.deltaY || e.deltaX; // Shift turns the wheel sideways in Chromium
+  if (!delta) return v;
+  const f = delta < 0 ? 0.9 : 1.1;
+  let { x0, x1, y0, y1 } = v;
+  if (!e.ctrlKey) {
+    const ax = x0 + rx * (x1 - x0);
+    [x0, x1] = [ax - (ax - x0) * f, ax + (x1 - ax) * f];
+  }
+  if (!e.shiftKey) {
+    const ay = y0 + ry * (y1 - y0);
+    [y0, y1] = [ay - (ay - y0) * f, ay + (y1 - ay) * f];
+  }
+  return clampX({ x0, x1, y0, y1 }, b);
+}
+
+/** A drag by dx, dy pixels on a plot of width w and height h: the content follows the pointer. */
+export function pan(v: View, dx: number, dy: number, w: number, h: number, b: Bounds): View {
+  const sx = (dx / w) * (v.x1 - v.x0), sy = (dy / h) * (v.y1 - v.y0);
+  return clampX({ x0: v.x0 - sx, x1: v.x1 - sx, y0: v.y0 + sy, y1: v.y1 + sy }, b);
+}
+
+export const HINT = 'Scroll to zoom (Ctrl: values only, Shift: time only), drag to move, Space fits the values to what is shown, Ctrl+Space shows everything.';

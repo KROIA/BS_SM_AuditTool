@@ -1,8 +1,11 @@
 <script lang="ts">
-  // Candles with their volume below, a readout of the candle under the pointer, zoom with the wheel and pan by dragging.
+  // Candles on a time axis with their volume below, a readout of the candle under the pointer, and zoom and pan as in
+  // StockMarket's own chart (zoom.ts). Where the save has no candle, the server made no prices: the price stayed until
+  // the next candle opened, and a grey line holds it there, as the game fills such gaps with flat candles.
   // Prices are bigints; only the drawing goes through a float.
   import type { Candle } from '../../shared/api.ts';
   import { count, countShort, money, time } from '../../shared/fmt.ts';
+  import { pan, wheel, type View } from './zoom.ts';
 
   interface Mark { time: number; price: bigint; buy: boolean }
   let {
@@ -23,17 +26,45 @@
 
   const W = 1000, H = 340, VH = 64;
   const iv = $derived(minutes * 60_000);
-  // Which candles are shown: a window of `size` candles from `start`. New candles show all of them again.
-  let start = $derived((void candles, 0));
-  let size = $derived(candles.length);
-  let hover = $state<number | null>(null);
-  let box = $state<HTMLDivElement>();
+  const tr = (p: number) => (log ? Math.log(Math.max(p, 1)) : p);
+  const inv = (y: number) => (log ? Math.exp(y) : y);
+  const bounds = $derived(candles.length ? { from: candles[0]!.time, to: candles.at(-1)!.time + iv, minSpan: 10 * iv } : { from: 0, to: 1, minSpan: 1 });
 
-  const shown = $derived(candles.slice(start, start + size));
+  /** The first candle that ends after t. */
+  function firstAfter(t: number) {
+    let lo = 0, hi = candles.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (candles[mid]!.time + iv <= t) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+  /** The candle t falls into, or -1 when t is in a gap or outside. */
+  function candleAt(t: number) {
+    const i = firstAfter(t);
+    return i < candles.length && candles[i]!.time <= t ? i : -1;
+  }
+  /** The value range for a time span: the candles in it, and the price held over a gap. */
+  function fitY(x0: number, x1: number): { y0: number; y1: number } {
+    let lo = Infinity, hi = 0;
+    const from = Math.max(0, firstAfter(x0) - 1);
+    for (let i = from; i < candles.length && candles[i]!.time < x1; i++) [lo, hi] = [Math.min(lo, Number(candles[i]!.low)), Math.max(hi, Number(candles[i]!.high))];
+    if (hi === 0) return { y0: 0, y1: 1 };
+    lo = Math.max(lo, 1); // a price of 0 has no place on a log scale
+    if (log) return { y0: Math.log(lo * 0.7), y1: Math.log(hi * 1.4) };
+    return { y0: hi / lo > 20 ? 0 : lo * 0.98, y1: hi * 1.04 };
+  }
+
+  // What is shown: null follows the data (everything, values fitted); zooming or dragging sets it. New candles show everything again.
+  let manual = $derived((void candles, void log, null as View | null));
+  const cur = $derived(manual ?? { x0: bounds.from, x1: bounds.to, ...fitY(bounds.from, bounds.to) });
   $effect(() => {
-    const last = shown.at(-1);
-    view = size < candles.length && last ? { from: shown[0]!.time, to: last.time + iv - 1 } : null;
+    view = candles.length && cur.x1 - cur.x0 < bounds.to - bounds.from - 1 ? { from: Math.floor(cur.x0), to: Math.ceil(cur.x1) - 1 } : null;
   });
+
+  let hover = $state<number | null>(null); // the time under the pointer
+  let box = $state<HTMLDivElement>();
 
   /** "4 Nov 2026, 10:21:07" taken apart; day candles are UTC days, so they are named in UTC. */
   function when(ms: number) {
@@ -41,123 +72,141 @@
     return { date, day: date.replace(/ \d+$/, ''), clock: clock.slice(0, 5) };
   }
   /** Axis labels: whole dollars from $100 on. */
-  const axis = (v: number) => (v >= 10_000 ? '$' + count(Math.round(v / 100)) : money(BigInt(Math.round(v))));
+  const axis = (v: number) => (v >= 10_000 ? '$' + count(Math.round(v / 100)) : money(BigInt(Math.round(Math.max(0, v)))));
 
   const draw = $derived.by(() => {
-    const n = shown.length;
-    if (n === 0) return null;
-    let lo0 = Infinity, hi0 = 0, vmax = 0;
-    for (const c of shown) [lo0, hi0, vmax] = [Math.min(lo0, Number(c.low)), Math.max(hi0, Number(c.high)), Math.max(vmax, c.volume)];
-    lo0 = Math.max(lo0, 1); // a price of 0 has no place on a log scale
-    let Y: (p: number) => number, ticks: number[] = [];
-    if (log) {
-      const a = Math.log(lo0 * 0.7), b = Math.log(hi0 * 1.4);
-      Y = (p) => ((b - Math.log(Math.max(p, 1))) / (b - a)) * H;
-      for (let e = Math.ceil(a / Math.LN10); e <= Math.floor(b / Math.LN10); e++) ticks.push(10 ** e);
-      if (ticks.length < 3) ticks = [0, 1, 2, 3, 4].map((k) => Math.exp(a + ((b - a) * (k + 0.5)) / 5));
-    } else {
-      const lo = hi0 / lo0 > 20 ? 0 : lo0 * 0.98, hi = hi0 * 1.04;
-      Y = (p) => ((hi - p) / (hi - lo)) * H;
-      ticks = [0, 1, 2, 3, 4].map((k) => lo + ((hi - lo) * (k + 0.5)) / 5);
+    if (!candles.length) return null;
+    const { x0, x1, y0, y1 } = cur;
+    const X = (t: number) => ((t - x0) / (x1 - x0)) * W;
+    const Y = (p: number) => ((y1 - tr(p)) / (y1 - y0)) * H;
+    const f = (v: number) => v.toFixed(1);
+    const slot = (iv / (x1 - x0)) * W, bw = slot * 0.6;
+    const first = firstAfter(x0);
+    let last = first;
+    while (last < candles.length && candles[last]!.time < x1) last++;
+    let vmax = 0;
+    for (let i = first; i < last; i++) vmax = Math.max(vmax, candles[i]!.volume);
+    let up = '', down = '', wickUp = '', wickDown = '', vol = '', gaps = '', line = '', pen = 'M';
+    // A gap ends at the next candle's open: the price did not move while no prices were made.
+    for (let i = Math.max(1, first); i <= Math.min(last, candles.length - 1); i++) {
+      const a = candles[i - 1]!, b = candles[i]!;
+      if (b.time > a.time + iv) gaps += `M${f(X(a.time + iv))} ${f(Y(Number(b.open)))}H${f(X(b.time))}`;
     }
-    const slot = W / n, bw = slot * 0.6, f = (v: number) => v.toFixed(1);
-    let up = '', down = '', wickUp = '', wickDown = '', vol = '';
-    shown.forEach((c, i) => {
-      const cx = (i + 0.5) * slot, x = cx - bw / 2, o = Number(c.open), cl = Number(c.close ?? c.open);
+    for (let i = first; i < last; i++) {
+      const c = candles[i]!, cx = X(c.time + iv / 2), x = cx - bw / 2, o = Number(c.open), cl = Number(c.close ?? c.open);
       const top = Math.min(Y(o), Y(cl)), h = Math.max(1.5, Math.abs(Y(o) - Y(cl)));
       const body = `M${f(x)} ${f(top)}h${f(bw)}v${f(h)}h-${f(bw)}Z`, wick = `M${f(cx)} ${f(Y(Number(c.high)))}V${f(Y(Number(c.low)))}`;
       if (cl >= o) (up += body), (wickUp += wick);
       else (down += body), (wickDown += wick);
       const vh = vmax > 0 ? Math.max(1, Math.sqrt(c.volume / vmax) * VH) : 0;
       if (vh) vol += `M${f(x)} ${VH}v-${f(vh)}h${f(bw)}v${f(vh)}Z`;
-    });
-    // The usual price follows the market: a line through one point per shown candle, broken where it is not known.
-    // Points far off the plot are pulled in to its edge; the svg clips them.
-    let line = '', pen = 'M';
-    for (let i = 0; i < n; i++) {
-      const u = usual?.[start + i];
-      if (u === null || u === undefined) (pen = 'M');
-      else (line += `${pen}${f((i + 0.5) * slot)} ${f(Math.min(2 * H, Math.max(-H, Y(Number(u)))))}`), (pen = 'L');
+      // The usual price: a line through one point per candle, broken where it is not known. Points far off are pulled to the edge.
+      const u = usual?.[i];
+      if (u === null || u === undefined) pen = 'M';
+      else (line += `${pen}${f(cx)} ${f(Math.min(2 * H, Math.max(-H, Y(Number(u)))))}`), (pen = 'L');
     }
-    const span = shown.at(-1)!.time + iv - shown[0]!.time, step = Math.max(1, Math.round(n / 6));
-    const pct = (v: number) => `${((v / H) * 100).toFixed(2)}%`;
-    const at = (i: number) => `${(((i + 0.5) / n) * 100).toFixed(2)}%`;
+    let ticks: number[] = [];
+    if (log) for (let e = Math.ceil(y0 / Math.LN10); e <= Math.floor(y1 / Math.LN10); e++) ticks.push(e * Math.LN10);
+    if (ticks.length < 3 || ticks.length > 8) ticks = [0, 1, 2, 3, 4].map((k) => y0 + ((y1 - y0) * (k + 0.5)) / 5);
+    const pct = (px: number, of: number) => `${((px / of) * 100).toFixed(2)}%`;
+    const span = x1 - x0;
     // A marker sits on the candle its time falls into, at the order's average price.
     const markers = marks.flatMap((m) => {
-      const i = shown.findIndex((c) => m.time >= c.time && m.time < c.time + iv);
-      return i < 0 ? [] : [{ left: at(i), top: Math.min(H, Math.max(0, Y(Number(m.price)))).toFixed(1) + 'px', buy: m.buy }];
+      if (m.time < x0 || m.time >= x1) return [];
+      const i = candleAt(m.time), y = Y(Number(m.price));
+      return y < 0 || y > H ? [] : [{ left: pct(X(i < 0 ? m.time : candles[i]!.time + iv / 2), W), top: y.toFixed(1) + 'px', buy: m.buy }];
     });
     return {
-      up, down, wickUp, wickDown, vol, markers, slot,
-      // Two thirds of a candle's body (which is 0.6 of its slot), between 10 and 30 px.
-      markWidth: `clamp(10px, ${(40 / n).toFixed(3)}%, 30px)`,
-      grid: ticks.map((t) => `M0 ${f(Y(t))}H${W}`).join(''),
-      usual: line,
-      yticks: ticks.map((t) => ({ top: pct(Y(t)), label: axis(t) })),
-      xticks: shown.flatMap((c, i) => (i % step === step >> 1 ? [{ left: at(i), label: span < 86_400_000 ? when(c.time).clock : when(c.time).day }] : [])),
+      up, down, wickUp, wickDown, vol, gaps, usual: line, markers, X,
+      // Two thirds of a candle's body, between 10 and 30 px.
+      markWidth: `clamp(10px, ${((bw * 2) / 3 / W * 100).toFixed(3)}%, 30px)`,
+      grid: ticks.map((t) => `M0 ${f(((y1 - t) / (y1 - y0)) * H)}H${W}`).join(''),
+      yticks: ticks.map((t) => ({ top: pct(((y1 - t) / (y1 - y0)) * H, H), label: axis(inv(t)) })),
+      xticks: [0, 1, 2, 3, 4, 5].map((k) => {
+        const t = x0 + (span * (k + 0.5)) / 6;
+        return { left: pct(((k + 0.5) / 6) * W, W), label: span < 86_400_000 ? when(t).clock : when(t).day };
+      }),
     };
   });
 
-  const picked = $derived(hover !== null && hover >= start && hover < start + size ? candles[hover]! : shown.at(-1));
+  // The candle under the pointer, else the newest one shown; between candles, the gap and its price.
   const readout = $derived.by(() => {
-    const c = picked;
-    if (!c) return null;
-    const w = when(c.time);
+    if (!candles.length) return null;
+    const t = hover ?? Math.min(cur.x1, bounds.to) - 1;
+    const i = candleAt(t);
+    if (i < 0) {
+      const next = firstAfter(t);
+      if (next === 0 || next >= candles.length) return null;
+      const a = candles[next - 1]!, b = candles[next]!;
+      return { gap: true as const, x: draw?.X(t) ?? 0, from: time(a.time + iv), to: time(b.time), price: money(b.open) };
+    }
+    const c = candles[i]!, w = when(c.time);
     return {
+      gap: false as const, x: draw?.X(c.time + iv / 2) ?? 0,
       time: minutes >= 1440 ? w.date : `${w.date}, ${w.clock}`,
       open: money(c.open), high: money(c.high), low: money(c.low), close: c.close === null ? 'not known yet' : money(c.close),
       volume: countShort(c.volume), more: describe(c.time, c.time + iv),
     };
   });
 
-  // ---- Pointer ----
-  let drag: { x: number; start: number } | null = null;
-  const rel = (e: MouseEvent) => {
-    const r = box!.getBoundingClientRect();
-    return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-  };
+  // ---- Pointer and keys ----
+  let drag: { x: number; y: number } | null = null;
+  const rect = () => box!.getBoundingClientRect();
+  const relX = (e: MouseEvent) => Math.min(1, Math.max(0, (e.clientX - rect().left) / rect().width));
   function move(e: PointerEvent) {
     if (drag) {
-      const shift = Math.round(((drag.x - e.clientX) / box!.getBoundingClientRect().width) * size);
-      start = Math.min(candles.length - size, Math.max(0, drag.start + shift));
+      manual = pan(cur, e.clientX - drag.x, e.clientY - drag.y, rect().width, H, bounds);
+      drag = { x: e.clientX, y: e.clientY };
     }
-    hover = start + Math.min(size - 1, Math.floor(rel(e) * size));
+    hover = cur.x0 + relX(e) * (cur.x1 - cur.x0);
+  }
+  function key(e: KeyboardEvent) {
+    if (e.key !== ' ') return;
+    e.preventDefault(); // the page would scroll
+    manual = e.ctrlKey ? null : { ...cur, ...fitY(cur.x0, cur.x1) };
   }
   $effect(() => {
     const el = box;
     if (!el) return;
-    const wheel = (e: WheelEvent) => {
-      e.preventDefault(); // the page would scroll instead
-      const r = rel(e), anchor = start + r * size;
-      const next = Math.min(candles.length, Math.max(Math.min(10, candles.length), Math.round(size * (e.deltaY > 0 ? 1.25 : 0.8))));
-      start = Math.min(candles.length - next, Math.max(0, Math.round(anchor - r * next)));
-      size = next;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault(); // the page would scroll, or zoom with Ctrl
+      const ry = 1 - Math.min(1, Math.max(0, (e.clientY - rect().top) / H));
+      manual = wheel(cur, e, relX(e), ry, bounds);
     };
-    el.addEventListener('wheel', wheel, { passive: false });
-    return () => el.removeEventListener('wheel', wheel);
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('keydown', key);
+    return () => (el.removeEventListener('wheel', onWheel), el.removeEventListener('keydown', key));
   });
 </script>
 
 {#if readout}
   <div class="readout">
-    <span style="font-weight: 600; color: var(--text)">{readout.time}</span>
-    <span>Open {readout.open}</span>
-    <span>High {readout.high}</span>
-    <span>Low {readout.low}</span>
-    <span>Close {readout.close}</span>
-    <span>Volume {readout.volume}</span>
-    {#if readout.more}<span style="color: var(--text)">{readout.more}</span>{/if}
+    {#if readout.gap}
+      <span style="font-weight: 600; color: var(--text)">{readout.from} to {readout.to}</span>
+      <span>No candle in the save: no prices were made, the price stayed at {readout.price}</span>
+    {:else}
+      <span style="font-weight: 600; color: var(--text)">{readout.time}</span>
+      <span>Open {readout.open}</span>
+      <span>High {readout.high}</span>
+      <span>Low {readout.low}</span>
+      <span>Close {readout.close}</span>
+      <span>Volume {readout.volume}</span>
+      {#if readout.more}<span style="color: var(--text)">{readout.more}</span>{/if}
+    {/if}
   </div>
 {/if}
 {#if draw}
   <div class="chart">
     <div style="flex: 1 1 0; min-width: 0">
+      <!-- The chart takes the wheel, drags, Space and Ctrl+Space itself. -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <div
-        class="plot" bind:this={box} role="img" aria-label={label}
+        class="plot" bind:this={box} role="img" aria-label={label} tabindex="0"
         onpointermove={move}
         onpointerdown={(e) => {
-          drag = { x: e.clientX, start };
+          drag = { x: e.clientX, y: e.clientY };
           box!.setPointerCapture(e.pointerId);
+          box!.focus();
         }}
         onpointerup={() => (drag = null)}
         onpointerleave={() => (drag ? null : (hover = null))}
@@ -165,7 +214,8 @@
         <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" aria-hidden="true" style="height: {H}px">
           <path d={draw.grid} class="grid" />
           <path d={draw.usual} class="usual" />
-          {#if picked && hover !== null}<path d="M{((hover - start + 0.5) * draw.slot).toFixed(1)} 0V{H}" class="cross" />{/if}
+          {#if hover !== null && readout}<path d="M{readout.x.toFixed(1)} 0V{H}" class="cross" />{/if}
+          <path d={draw.gaps} class="gap" />
           <path d={draw.wickUp} class="wick" style="stroke: var(--up)" />
           <path d={draw.wickDown} class="wick" style="stroke: var(--down)" />
           <path d={draw.up} style="fill: var(--up)" />
@@ -194,11 +244,13 @@
 <style>
   .readout { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 16px; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text2); }
   .chart { display: flex; gap: 12px; margin-top: 12px; }
-  .plot { position: relative; cursor: crosshair; touch-action: none; user-select: none; }
+  .plot { position: relative; overflow: hidden; cursor: crosshair; touch-action: none; user-select: none; border-radius: 4px; }
+  .plot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .plot svg { display: block; width: 100%; }
   .grid { fill: none; stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .usual { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 6 5; vector-effect: non-scaling-stroke; }
   .cross { fill: none; stroke: var(--text3); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .gap { fill: none; stroke: var(--text3); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
   .wick { fill: none; stroke-width: 1; vector-effect: non-scaling-stroke; }
   .vol { fill: var(--text3); fill-opacity: 0.45; }
   /* A halo in the card's colour keeps a marker apart from the candle under it. */
