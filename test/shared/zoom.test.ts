@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { clampX, pan, wheel } from '../../src/ui/app/zoom.ts';
+import { clampX, pan, timeTick, wheel } from '../../src/ui/app/zoom.ts';
 
 const B = { from: 0, to: 1000, minSpan: 50 };
 const V = { x0: 0, x1: 1000, y0: 0, y1: 100 };
@@ -21,4 +21,12 @@ test('dragging moves the content with the pointer and stays inside the data in t
   const v = { x0: 200, x1: 400, y0: 0, y1: 100 };
   assert.deepEqual(pan(v, 100, 50, 1000, 500, B), { x0: 180, x1: 380, y0: 10, y1: 110 });
   assert.deepEqual(pan(v, 10_000, 0, 1000, 500, B), { x0: 0, x1: 200, y0: 0, y1: 100 });
+});
+
+test('time axis labels say as much as the span shown needs', () => {
+  const t = Date.UTC(2026, 10, 4, 11, 30, 15), MIN = 60_000, DAY = 86_400_000;
+  assert.equal(timeTick(t, MIN, true), '11:30:15');
+  assert.equal(timeTick(t, DAY, true), '11:30');
+  assert.equal(timeTick(t, 2 * DAY, true), '4 Nov, 11:30');
+  assert.equal(timeTick(t, 30 * DAY, true), '4 Nov');
 });

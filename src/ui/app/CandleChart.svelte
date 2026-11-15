@@ -5,7 +5,7 @@
   // Prices are bigints; only the drawing goes through a float.
   import type { Candle } from '../../shared/api.ts';
   import { count, countShort, money, time } from '../../shared/fmt.ts';
-  import { pan, wheel, type View } from './zoom.ts';
+  import { pan, timeTick, wheel, type View } from './zoom.ts';
 
   interface Mark { time: number; price: bigint; buy: boolean }
   let {
@@ -124,7 +124,7 @@
       yticks: ticks.map((t) => ({ top: pct(((y1 - t) / (y1 - y0)) * H, H), label: axis(inv(t)) })),
       xticks: [0, 1, 2, 3, 4, 5].map((k) => {
         const t = x0 + (span * (k + 0.5)) / 6;
-        return { left: pct(((k + 0.5) / 6) * W, W), label: span < 86_400_000 ? when(t).clock : when(t).day };
+        return { left: pct(((k + 0.5) / 6) * W, W), label: timeTick(t, span, minutes >= 1440) };
       }),
     };
   });
@@ -170,6 +170,7 @@
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault(); // the page would scroll, or zoom with Ctrl
+      el.focus({ preventScroll: true }); // so Space and Ctrl+Space work after zooming, without a click first
       const ry = 1 - Math.min(1, Math.max(0, (e.clientY - rect().top) / H));
       manual = wheel(cur, e, relX(e), ry, bounds);
     };

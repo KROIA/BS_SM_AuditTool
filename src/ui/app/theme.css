@@ -8,6 +8,7 @@
   --text: #eceef1; --text2: #aab1bc; --text3: #8a929e; --accent: #8fa2ff; --onaccent: #0e1013;
   --up: #4fd1b5; --down: #f2686f; --crit: #ff6b6b; --high: #ffa94d; --med: #ffd43b; --low: #74a8ff;
   --buy: #6ea8ff; --sell: #ffa94d;
+  --series-l: 0.76; /* lightness of the chart lines that take a hue each (balance chart) */
   --font: 'Inter Variable', system-ui, sans-serif;
   --font-head: 'Space Grotesk Variable', 'Inter Variable', sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
@@ -19,6 +20,7 @@
   /* crit, high/sell and med darker than at first: at least 4.5:1 for small text on every surface and on the level tags (AT-52, user 2026-11-13) */
   --up: #0b7a64; --down: #c92a3a; --crit: #bd2828; --high: #9e4f00; --med: #7e6400; --low: #2b5fc7;
   --buy: #2b5fc7; --sell: #9e4f00;
+  --series-l: 0.52;
   color-scheme: light;
 }
 

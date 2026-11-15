@@ -4,7 +4,8 @@
   import type { AccountDetail, AccountListRow, AccountRow, Gap, ItemCheck, ItemRow, LedgerRow, Point, Rating } from '../../shared/api.ts';
   import { GAP_SAYS, span } from '../../shared/finding.ts';
   import { count, items as quantity, money, moneyShort, time } from '../../shared/fmt.ts';
-  import StepChart from '../app/StepChart.svelte';
+  import BalanceChart from '../app/BalanceChart.svelte';
+  import { HINT } from '../app/zoom.ts';
   import { app, engine } from '../app/state.svelte.ts';
   import CsvButton from '../app/CsvButton.svelte';
   import { entries, gapRows, LEVEL_COLOR, words, type Entry } from '../app/words.ts';
@@ -18,8 +19,8 @@
   let history = $state<LedgerRow[]>([]);
   let checks = $state<ItemCheck[]>([]);
   let loadedFor = $state<number | null>(null); // the account the detail above was asked for; detail is null when it is unknown
-  let picked = $state<number | null>(null); // the item chip the user picked
-  let points = $state<Point[] | null>(null);
+  let picked = $state<number | null>(null); // the item the user picked for the check
+  let points = $state<Map<number, Point[]> | null>(null); // balance snapshots per item
   let filter = $state<keyof typeof FILTERS>('all');
   let showAll = $state(false);
   let historyCard = $state<HTMLElement | null>(null);
@@ -55,18 +56,21 @@
     return () => (stale = true);
   });
 
-  // The chart and the check show the picked item, else the account's money, else its first item. A deleted account has no
-  // slots left, its items come from the check.
-  const itemIds = $derived([...new Set([...(shown?.items ?? []).map((s) => s.item), ...checks.map((c) => c.item)])]);
-  const item = $derived(itemIds.find((i) => i === picked) ?? itemIds.find((i) => isMoney(i)) ?? itemIds[0] ?? null);
+  // The chart shows every item, money first. The check shows the picked item, else the money, else the first item. A
+  // deleted account has no slots left, its items come from the check.
+  const itemIds = $derived([...new Set([...(shown?.items ?? []).map((s) => s.item), ...checks.map((c) => c.item)])]
+    .sort((a, b) => Number(isMoney(b)) - Number(isMoney(a))));
+  const item = $derived(itemIds.find((i) => i === picked) ?? itemIds[0] ?? null);
   const current = $derived(checks.find((c) => c.item === item) ?? null);
   $effect(() => {
-    const scope = $state.snapshot(app.scope), n = number, i = item;
-    if (n === null || i === null) return;
+    const scope = $state.snapshot(app.scope), n = number, ids = itemIds;
+    if (n === null || !ids.length) return;
     let stale = false;
-    void engine.balances(n, i, scope).then((p) => !stale && (points = p));
+    void Promise.all(ids.map((i) => engine.balances(n, i, scope))).then((p) => !stale && (points = new Map(ids.map((i, k) => [i, p[k]!]))));
     return () => ((stale = true), (points = null));
   });
+  const series = $derived(itemIds.map((i) => ({ id: i, name: isMoney(i) ? 'Money' : itemName(i), points: points?.get(i) ?? [], fmt: isMoney(i) ? moneyShort : quantity,
+    bands: (checks.find((c) => c.item === i)?.gaps ?? []).map((g): [number, number] => [g.from, g.to]) })));
 
   // ---- The check ----
   const RANK: Record<Rating, number> = { low: 0, medium: 1, high: 2 };
@@ -116,7 +120,6 @@
       says: `How much this says: ${GAP_SAYS[r].short.split(':')[0]!.toLowerCase()}.` + (r === 'low' ? '' : ` ${GAP_SAYS[r].why}`) }; // low: the sub line says why
   });
   const others = $derived(checks.filter((c) => c.item !== item && c.gaps.length));
-  const bands = $derived((current?.gaps ?? []).map((g): [number, number] => [g.from, g.to]));
 
   function showGaps() {
     [filter, showAll] = ['gap', false];
@@ -240,7 +243,14 @@
 
       {#if item !== null && current && verdict}
         <section class="card" aria-label="Does the log explain the balance?">
-          <h2 class="h2 h3">Does the log explain the balance?</h2>
+          <div class="cardhead" style="align-items: center">
+            <h2 class="h2 h3" style="flex: 1 1 auto">Does the log explain the balance?</h2>
+            {#if itemIds.length > 1}
+              <select aria-label="Item to check" value={item} onchange={(e) => (picked = Number(e.currentTarget.value))}>
+                {#each itemIds as i (i)}<option value={i}>{isMoney(i) ? 'Money' : itemName(i)}</option>{/each}
+              </select>
+            {/if}
+          </div>
           <p class="small" style="margin: 2px 0 0">
             {isMoney(item) ? 'Money' : itemName(item)}{current.from !== null && current.to !== null && current.to > current.from ? `, ${span(current.from, current.to)}` : ''}.
             The log is every entry the bank wrote. The balance comes from the bank's own snapshots.
@@ -282,25 +292,17 @@
       {/if}
 
       <section class="card">
-        <div class="cardhead" style="align-items: center">
-          <h2 class="h2 h3" style="flex: 1 1 auto">Balance over time</h2>
-          {#if itemIds.length > 1}
-            <div role="group" aria-label="What to chart" class="chips">
-              {#each itemIds as i (i)}
-                <button type="button" aria-pressed={i === item} onclick={() => (picked = i)}>{isMoney(i) ? 'Money' : itemName(i)}</button>
-              {/each}
-            </div>
-          {/if}
-        </div>
+        <h2 class="h2 h3">Balance over time</h2>
         {#if item === null}
           <p class="small" style="margin: 12px 0 0">This account has no item slots in the bank files.</p>
-        {:else if points && points.length}
-          <StepChart points={points} label="{isMoney(item) ? 'Money' : itemName(item)} on account {shown.number}" fmt={isMoney(item) ? moneyShort : quantity} {bands} />
-          {#if bands.length}
-            <p class="legend"><span class="swatch" aria-hidden="true"></span>Orange band: the balance changed and the log has no entry for it.</p>
-          {/if}
+        {:else if points && series.some((s) => s.points.length)}
+          <BalanceChart {series} label="Balances on account {shown.number}" />
+          <p class="legend">
+            {#if series.some((s) => s.bands.length)}<span class="swatch" aria-hidden="true"></span>Orange band: the balance changed and the log has no entry for it.{/if}
+            {HINT}
+          </p>
         {:else if points}
-          <p class="small" style="margin: 12px 0 0">No balance snapshots of {isMoney(item) ? 'money' : itemName(item)} on this account in this time range.</p>
+          <p class="small" style="margin: 12px 0 0">No balance snapshots on this account in this time range.</p>
         {/if}
       </section>
 
@@ -387,9 +389,7 @@
   .vvalue { font-family: var(--font-head); font-size: 24px; line-height: 30px; font-weight: 600; color: var(--c); font-variant-numeric: tabular-nums; }
   .legend { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: 13px; color: var(--text2); }
   .swatch { flex: none; width: 12px; height: 12px; border-radius: 3px; background: var(--high); opacity: 0.6; }
-  .chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
-  .chips button { height: 32px; padding: 0 12px; border: 0; border-radius: 7px; font-weight: 500; background: transparent; color: var(--text2); }
-  .chips button[aria-pressed='true'] { background: var(--raised); color: var(--text); }
+  select { height: 36px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line2); background: var(--card); color: var(--text); font: inherit; }
   .pills { display: flex; flex-wrap: wrap; gap: 8px; }
   .pills button { height: 36px; padding: 0 12px; border-radius: 18px; font-weight: 500; border: 1px solid var(--line2); background: transparent; color: var(--text2); }
   .pills button[aria-pressed='true'] { border-color: var(--accent); background: var(--accent); color: var(--onaccent); }

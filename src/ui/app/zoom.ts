@@ -1,6 +1,7 @@
 // Zoom and pan of a chart as in StockMarket's own charts: the wheel zooms both axes around the pointer (Ctrl: the
 // values only, Shift: the time only), dragging moves both, Space fits the values to what is shown, Ctrl+Space shows
 // everything. x is time in epoch ms, y is in the chart's own units (a log chart passes logarithms).
+import { time } from '../../shared/fmt.ts';
 
 /** What the chart shows: x0..x1 left to right, y0..y1 bottom to top. */
 export interface View { x0: number; x1: number; y0: number; y1: number }
@@ -40,6 +41,14 @@ export function wheel(v: View, e: { deltaX: number; deltaY: number; ctrlKey: boo
 export function pan(v: View, dx: number, dy: number, w: number, h: number, b: Bounds): View {
   const sx = (dx / w) * (v.x1 - v.x0), sy = (dy / h) * (v.y1 - v.y0);
   return clampX({ x0: v.x0 - sx, x1: v.x1 - sx, y0: v.y0 + sy, y1: v.y1 + sy }, b);
+}
+
+/** A time axis label for t when span ms are shown: the clock with seconds within ten minutes, without them within a day,
+ *  day and clock up to four days, else the day. */
+export function timeTick(t: number, span: number, utc = false): string {
+  const [date, clock] = time(t, utc).split(', ') as [string, string], day = date.replace(/ \d{4}$/, '');
+  if (span <= 600_000) return clock;
+  return span <= 86_400_000 ? clock.slice(0, 5) : span <= 4 * 86_400_000 ? `${day}, ${clock.slice(0, 5)}` : day;
 }
 
 export const HINT = 'Scroll to zoom (Ctrl: values only, Shift: time only), drag to move, Space fits the values to what is shown, Ctrl+Space shows everything.';

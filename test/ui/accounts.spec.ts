@@ -53,7 +53,7 @@ test.describe('the invented network', () => {
     await expect(check).toContainText('In that time the log has entries without a direction, which may explain it.');
     await expect(check).toContainText('How much this says: some. In the mod version this server ran');
     await expect(page.locator('.chart path.band')).toHaveCount(1);
-    await expect(page.locator('.legend')).toHaveText('Orange band: the balance changed and the log has no entry for it.');
+    await expect(page.locator('.legend')).toContainText('Orange band: the balance changed and the log has no entry for it. Scroll to zoom');
 
     await check.getByRole('button', { name: 'Show it in the history' }).click();
     await expect(page.getByRole('group', { name: 'Filter the history' }).getByRole('button', { name: 'No log entry' })).toHaveAttribute('aria-pressed', 'true');
@@ -92,8 +92,29 @@ test.describe('the invented network', () => {
     await expect(page.locator('.facts')).toContainText('Owner: Tavrik');
     await expect(page.locator('.fvalue')).toHaveText(["$940'830.00", '64', '2']);
     await expect(page.locator('.verdict')).toContainText('The log explains every change of money on this account in this time range.');
-    await expect(page.getByRole('group', { name: 'What to chart' }).getByRole('button')).toHaveText(['Money', 'Diamond']);
-    await expect(page.getByRole('img', { name: /^Money on account 11 from / })).toBeVisible();
+    // AT-56: every item in one chart, each switched on and off in the list beside it.
+    const lines = page.getByRole('group', { name: 'Items on the chart' }).getByRole('button');
+    await expect(lines).toHaveText(['Money', 'Diamond']);
+    await expect(page.getByRole('img', { name: /^Balances on account 11 from / })).toBeVisible();
+    await expect(page.locator('.chart path.line')).toHaveCount(2);
+    await expect(page.locator('.readout')).toContainText("Money $940'830.00");
+    await expect(page.locator('.readout')).toContainText('Diamond 0'); // at the end of the range: the diamonds are sold
+    await lines.filter({ hasText: 'Diamond' }).click();
+    await expect(lines.filter({ hasText: 'Diamond' })).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('.chart path.line')).toHaveCount(1);
+    await page.getByRole('searchbox', { name: 'Find an item on the chart' }).fill('dia');
+    await expect(lines).toHaveText(['Diamond']);
+    await page.getByRole('button', { name: 'Show all items' }).click();
+    await page.getByRole('searchbox', { name: 'Find an item on the chart' }).fill('');
+    await expect(page.locator('.chart path.line')).toHaveCount(2);
+    // Zoom in with the wheel over the chart, Ctrl+Space shows everything again.
+    const plot = page.getByRole('img', { name: /^Balances on account 11 from / });
+    const before = await plot.getAttribute('aria-label');
+    await plot.hover();
+    for (let i = 0; i < 5; i++) await page.mouse.wheel(0, -200);
+    await expect(plot).not.toHaveAttribute('aria-label', before!);
+    await page.keyboard.press('Control+Space');
+    await expect(plot).toHaveAttribute('aria-label', before!);
 
     const rows = page.locator('tbody tr');
     await expect(rows).toHaveCount(10);
@@ -118,12 +139,12 @@ test.describe('the invented network', () => {
     await expect(page.locator('main')).toContainText('No entries of this kind in the selected time range.');
     await page.getByRole('button', { name: 'Trades' }).click();
     await expect(rows).toHaveCount(10);
-    await page.getByRole('button', { name: 'Show all' }).click();
+    await page.getByRole('button', { name: 'Show all', exact: true }).click();
     await expect(rows).toHaveCount(60);
 
-    await page.getByRole('button', { name: 'Diamond' }).click();
-    await expect(page.getByRole('img', { name: /^Diamond on account 11 from / })).toBeVisible();
-    await expect(page.locator('.chart')).toContainText('3\'000');
+    await page.getByRole('combobox', { name: 'Item to check' }).selectOption('Diamond');
+    await expect(page.getByRole('region', { name: 'Does the log explain the balance?' })).toContainText('Diamond');
+    await expect(page.locator('.verdict')).toContainText('The log explains every change of Diamond on this account in this time range.');
   });
 
   test('admin actions and transfers link to the other account', async () => {
