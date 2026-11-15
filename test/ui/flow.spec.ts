@@ -161,7 +161,9 @@ test.describe('the timeline', () => {
     await expect(page.locator('.dtext')).toContainText(`left account ${PLAYERS.Tavrik.account} as banknotes and the same amount was paid into account ${SHARED.account} 1 min later, by the same player, Tavrik.`);
     await expect(page.locator('.detail .badge')).toHaveText('Estimate');
     await expect(page.locator('.detail tbody tr')).toHaveCount(2);
-    await expect(page.locator('path.band.dash')).not.toHaveCount(0);
+    await expect(page.locator('g.band path.dash')).not.toHaveCount(0);
+    // Straight pieces only, no curves (their slanted flat ends looked like corners).
+    expect(await page.locator('g.band path').evaluateAll((l) => l.every((p) => /^M[\d.-]+ [\d.-]+[VH][\d.-]+$/.test(p.getAttribute('d')!)))).toBe(true);
     await shot('flow-timeline');
 
     // The time only zooms; Ctrl+Space shows everything again.

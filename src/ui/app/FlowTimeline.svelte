@@ -83,12 +83,14 @@
   });
   const width = (g: Band) => Math.min(MAXW, Math.max(2, Math.sqrt(Number(g.amount) / Number(most)) * MAXW));
   const world = $derived(laneIndex.get('world'));
-  function path(g: Band): string[] {
+  /** Straight pieces with flat ends: [path, dashed]. A move is one vertical band at its time. */
+  function path(g: Band): [string, boolean][] {
     const ya = yOf(g.a), yb = yOf(g.b), f = (v: number) => v.toFixed(1);
-    if (!g.carried || world === undefined) return [`M${f(g.xa - 12)} ${ya}C${f(g.xa)} ${ya} ${f(g.xa)} ${yb} ${f(Math.max(g.xa, g.xb) + 12)} ${yb}`];
-    const yw = yOf(world), m1 = g.xa + 12, m2 = Math.max(m1, g.xb - 12);
-    // Down to the world, along it while the notes were out (dashed: matched by the amount), and up into the other account.
-    return [`M${f(g.xa - 12)} ${ya}C${f(g.xa)} ${ya} ${f(g.xa)} ${yw} ${f(m1)} ${yw}`, `M${f(m1)} ${yw}H${f(m2)}`, `M${f(m2)} ${yw}C${f(m2 + 12)} ${yw} ${f(m2 + 12)} ${yb} ${f(m2 + 24)} ${yb}`];
+    if (!g.carried) return [[`M${f(g.xa)} ${ya}V${yb}`, false]];
+    // Down to the world row (the other row when it is off), along it while the notes were out (dashed: matched by the
+    // amount), up into the other account. The verticals reach half a width past the row to fill the corners.
+    const yv = yOf(world ?? g.b), h = width(g) / 2, down = (x: number, y: number): [string, boolean][] => (y === yv ? [] : [[`M${f(x)} ${y}V${f(yv + Math.sign(yv - y) * h)}`, false]]);
+    return [...down(g.xa, ya), [`M${f(g.xa)} ${yv}H${f(g.xb)}`, true], ...down(g.xb, yb)];
   }
   const COLOR: Record<TimelineMove['kind'], string> = { notes: 'var(--high)', trade: 'var(--buy)', transfer: 'var(--accent)', admin: 'var(--crit)', other: 'var(--text3)', unexplained: 'var(--med)' };
   const KIND: Record<TimelineMove['kind'], string> = { notes: 'Notes', trade: 'Trading', transfer: 'Transfer', admin: 'Admin', other: 'Other entries', unexplained: 'Not explained' };
@@ -225,10 +227,10 @@
         <svg width={cw} height={H} aria-hidden="true">
           {#each lanes as r, i (r.id)}<path d="M0 {yOf(i)}H{cw}" class="lane" class:place={!r.id.includes(':')} />{/each}
           {#each bands as g (g.key)}
-            {@const d = path(g)}
-            {#each d as p, k (k)}
-              <path d={p} class="band" class:hot={hover?.key === g.key || pick?.key === g.key} class:dash={d.length > 1 && k === 1} style:stroke={COLOR[g.kind]} style:stroke-width="{width(g).toFixed(1)}px" />
-            {/each}
+            <!-- One group, its opacity on the whole: the pieces overlap at the corners without a darker square. -->
+            <g class="band" class:hot={hover?.key === g.key || pick?.key === g.key} style:stroke={COLOR[g.kind]} style:stroke-width="{width(g).toFixed(1)}px">
+              {#each path(g) as [d, dash], k (k)}<path {d} class:dash />{/each}
+            </g>
           {/each}
         </svg>
         {#each lanes as r, i (r.id)}<span class="name" style:top="{yOf(i) - 22}px" title={r.name}>{r.name}</span>{/each}
@@ -286,9 +288,9 @@
   .plot svg { position: absolute; left: 0; top: 0; }
   .lane { stroke: var(--line2); stroke-width: 1; }
   .lane.place { stroke-dasharray: 2 4; }
-  .band { fill: none; stroke-opacity: 0.55; stroke-linecap: butt; }
-  .band.hot { stroke-opacity: 0.95; }
-  .band.dash { stroke-dasharray: 6 5; }
+  .band { fill: none; opacity: 0.55; stroke-linecap: butt; }
+  .band.hot { opacity: 0.95; }
+  .dash { stroke-dasharray: 6 5; }
   .name { position: absolute; left: 0; max-width: 60%; padding: 0 6px 0 0; font-size: 13px; line-height: 18px; color: var(--text2); background: var(--card); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
   .xaxis { position: relative; height: 16px; margin-top: 8px; font-size: 12px; line-height: 16px; color: var(--text3); }
   .xaxis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
