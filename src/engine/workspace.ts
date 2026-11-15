@@ -322,6 +322,13 @@ function add(picked: string): Workspace {
   return state();
 }
 
+/** Reads every loaded folder again: a save whose files changed is imported anew, the others come from the cache. A zip's copy cannot change. */
+export function reload(): Workspace {
+  closeMaster();
+  saves = saves.map((s) => (fromZip.has(s.path) ? s : load(s.path)));
+  return state();
+}
+
 export function removeSave(picked: string): Workspace {
   closeMaster();
   saves = saves.filter((s) => !isSame(s, picked));

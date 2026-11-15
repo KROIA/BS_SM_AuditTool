@@ -7,7 +7,7 @@
   import CsvButton from '../app/CsvButton.svelte';
   import Icon from '../app/Icon.svelte';
   import { ICON } from '../app/nav.ts';
-  import { app, browse, drop, folderName, removeSave } from '../app/state.svelte.ts';
+  import { app, browse, drop, folderName, reload, removeSave } from '../app/state.svelte.ts';
   import Transfers from './Transfers.svelte';
   import WorldScan from './WorldScan.svelte';
 
@@ -227,6 +227,8 @@
     <p>Drop a world folder or a zip here to add another save. The master and its slaves are matched by their server ids.</p>
     <button type="button" class="btn ghost" onclick={() => browse()}>Open folder</button>
     <button type="button" class="btn ghost" onclick={() => browse(true)}>Open zip</button>
+    <button type="button" class="btn ghost" disabled={app.busy || app.queue.length > 0} onclick={() => reload()}
+      title="Reads the loaded world folders again, for a world that is still being played. A zip stays as it was.">Read again</button>
   </div>
 {/if}
 

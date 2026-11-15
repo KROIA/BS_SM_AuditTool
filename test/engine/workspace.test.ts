@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
-import { addSave, init, mainData, removeSave, workspace } from '../../src/engine/workspace.ts';
+import { addSave, init, mainData, reload, removeSave, workspace } from '../../src/engine/workspace.ts';
 import type { Progress } from '../../src/shared/api.ts';
 import { buildFixtures, type Fixtures } from '../fixtures/build.ts';
 
@@ -56,6 +56,16 @@ test('a changed file of a save makes it be read again, even while its cache is o
   const later = new Date(Date.now() + 60_000);
   fs.utimesSync(path.join(save, 'data/BankSystem/Bank_data/users/chunk_0.nbt'), later, later);
   addSave(save);
+  assert.ok(events.length > 0);
+  assert.equal((mainData()!.prepare('SELECT count(*) AS n FROM player').get() as { n: number }).n, 6);
+
+  // Read again (the Saves screen's button): unchanged, it comes from the cache; changed, it is imported anew.
+  events.length = 0;
+  assert.deepEqual(reload().saves.map((s) => s.path), [save]);
+  assert.deepEqual(events, []);
+  const latest = new Date(Date.now() + 120_000);
+  fs.utimesSync(path.join(save, 'data/BankSystem/Bank_data/users/chunk_0.nbt'), latest, latest);
+  reload();
   assert.ok(events.length > 0);
   assert.equal((mainData()!.prepare('SELECT count(*) AS n FROM player').get() as { n: number }).n, 6);
 });

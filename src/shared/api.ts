@@ -991,6 +991,8 @@ export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player'
   workspace(): Workspace;
   /** A save folder, or a .zip that holds one or several; a zip is unpacked first, so it answers later. */
   addSave(path: string): Workspace | Promise<Workspace>;
+  /** Every loaded folder read again; only a save whose files changed is imported anew. */
+  reload(): Workspace;
   removeSave(path: string): Workspace;
   selfCheck(): EngineCheck;
   /** The marks and rule settings of case.json; the defaults when it has none or cannot be read. */

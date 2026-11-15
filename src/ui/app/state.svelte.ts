@@ -164,6 +164,12 @@ export function removeSave(path: string) {
   return run(() => engine.removeSave(path));
 }
 
+/** Reads the loaded folders again, for a world that is still being played. */
+export function reload() {
+  app.errors = [];
+  return run(() => engine.reload());
+}
+
 /** zip: a .zip file instead of a folder (one dialog cannot offer both on Windows). */
 export async function browse(zip = false) {
   const path = await bridge.pickFolder(zip);

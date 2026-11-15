@@ -75,12 +75,22 @@ Menu.setApplicationMenu(null);
 ipcMain.handle('engine', (_e, method, args) => callEngine(method, args));
 ipcMain.handle('startupPaths', () => startupPaths());
 // Windows cannot pick a folder and a file in one dialog: zip asks for a .zip file instead of a folder.
+// Each dialog starts where it was last used: in the last folder picked, or in the folder of the last zip (a new export gets a new name).
+const lastPicked = () => path.join(app.getPath('userData'), 'last-picked.json');
 ipcMain.handle('pickFolder', async (_e, zip: unknown) => {
   if (!win) return null;
-  const r = await dialog.showOpenDialog(win, zip === true
-    ? { title: 'Open a zipped save', properties: ['openFile'], filters: [{ name: 'Zip (*.zip)', extensions: ['zip'] }] }
-    : { title: 'Open a save', properties: ['openDirectory'] });
-  return r.canceled ? null : (r.filePaths[0] ?? null);
+  const kind = zip === true ? 'zip' : 'folder';
+  let last: Record<string, unknown> = {};
+  try {
+    last = JSON.parse(await fs.readFile(lastPicked(), 'utf8'));
+  } catch { /* first use, or the file was removed */ }
+  const prev = last[kind], before = typeof prev === 'string' ? (kind === 'zip' ? path.dirname(prev) : prev) : undefined;
+  const r = await dialog.showOpenDialog(win, kind === 'zip'
+    ? { title: 'Open a zipped save', defaultPath: before, properties: ['openFile'], filters: [{ name: 'Zip (*.zip)', extensions: ['zip'] }] }
+    : { title: 'Open a save', defaultPath: before, properties: ['openDirectory'] });
+  const picked = r.canceled ? null : (r.filePaths[0] ?? null);
+  if (picked) await fs.writeFile(lastPicked(), JSON.stringify({ ...last, [kind]: picked })).catch(() => {});
+  return picked;
 });
 
 /** A path with links and junctions resolved; a file that does not exist yet by its folder. */
