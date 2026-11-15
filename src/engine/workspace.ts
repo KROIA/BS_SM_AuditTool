@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { bytes } from '../shared/fmt.ts';
+import { bytes, setCurrency } from '../shared/fmt.ts';
 import { DEFAULT_RULES, type Answer, type CaseChoices, type CaseData, type Cutoff, type Mark, type Progress, type RuleSettings, type SaveSummary, type Workspace } from '../shared/api.ts';
 import { cachedSummary, importSave } from './save/import.ts';
 import { findDataDir } from './save/locate.ts';
@@ -267,7 +267,11 @@ function networkWarnings(): string[] {
   }
   return out;
 }
-const state = (): Workspace => ({ saves, warnings: networkWarnings(), ...(waiting.length ? { unpack: [...new Set(waiting.map((p) => zipOf(p)!))] } : {}) });
+const state = (): Workspace => {
+  const currency = mainSave()?.currency ?? '$';
+  setCurrency(currency); // for the sentences and reports the engine writes; the screens set it from the result
+  return { saves, warnings: networkWarnings(), currency, ...(waiting.length ? { unpack: [...new Set(waiting.map((p) => zipOf(p)!))] } : {}) };
+};
 
 /** Sets where the workspace lives and who hears about progress. Called once, before anything else. */
 export function init(dir: string, onProgress: (p: Progress) => void = () => {}) {

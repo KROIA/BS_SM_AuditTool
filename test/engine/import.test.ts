@@ -216,6 +216,19 @@ function marketCopy(name: string, change: (file: string) => void) {
   return load(dir).save;
 }
 
+test("money is the market's currency from StockMarket's settings.json; banknotes stay BankSystem money", () => {
+  const flags = (cache: string) => query(cache, 'SELECT id, money, bank FROM item WHERE id IN (1, 2) ORDER BY id').map((r) => [r.id, r.money, r.bank].map(Number));
+  const plain = load(fx.master);
+  assert.equal(plain.save.currency, '$'); // no settings.json: BankSystem money
+  assert.deepEqual(flags(plain.cache), [[ITEM.money, 1, 1], [ITEM.diamond, 0, 0]]);
+  const dir = path.join(fx.root, 'diamond-currency');
+  fs.cpSync(fx.master, dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'data/StockMarket/settings.json'), JSON.stringify({ ServerMarket: { CURRENCY: { id: 'minecraft:diamond', count: 1 } } }));
+  const diamond = load(dir);
+  assert.equal(diamond.save.currency, 'Diamond');
+  assert.deepEqual(flags(diamond.cache), [[ITEM.money, 0, 1], [ITEM.diamond, 1, 0]]);
+});
+
 test('rows past the id that sqlite_sequence recorded are copied too', () => {
   const save = marketCopy('stale-sequence', (file) => {
     const db = new DatabaseSync(file);

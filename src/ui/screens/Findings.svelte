@@ -126,7 +126,7 @@
     return { columns, rows };
   }
   const candleTable = (list: Candle[], market: number) => ({
-    columns: [['Minute', 'time'], ['Market', 'text'], ['Item id', 'id'], ['Open ($)', 'money'], ['High ($)', 'money'], ['Low ($)', 'money'], ['Close ($)', 'money'], ['Volume', 'number']] as const,
+    columns: [['Minute', 'time'], ['Market', 'text'], ['Item id', 'id'], ['Open', 'money'], ['High', 'money'], ['Low', 'money'], ['Close', 'money'], ['Volume', 'number']] as const,
     rows: list.map((c) => [c.time, w.itemName(market), market, c.open, c.high, c.low, c.close, c.volume]),
   });
 

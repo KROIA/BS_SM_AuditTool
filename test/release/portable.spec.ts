@@ -67,7 +67,7 @@ test('the packaged program opens the network as folders: Overview figures, findi
   const scan = page.getByRole('region', { name: 'Region scan' });
   await scan.getByRole('button', { name: 'Start the region scan' }).click();
   await expect(scan).toContainText('Every region file was read: 5 files', { timeout: 30_000 });
-  await expect(page.locator('.lead')).toHaveText("$980'962.00 in banknotes should be outside the bank; $839'180.00 was found, so $141'782.00 was not found.");
+  await expect(page.locator('.lead')).toHaveText("980'962.00 $ in banknotes should be outside the bank; 839'180.00 $ was found, so 141'782.00 $ was not found.");
   await page.screenshot({ path: 'test-results/release-scan-dark.png' });
 });
 

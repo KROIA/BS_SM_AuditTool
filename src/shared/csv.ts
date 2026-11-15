@@ -1,7 +1,7 @@
 // Tables as CSV files (AT-44): RFC 4180 with CRLF line ends, UTF-8 with a byte order mark so Excel reads the
 // characters right. Every number goes through fmt.ts, in full: 1'532.05. Save data is untrusted: a text cell that a
 // spreadsheet would read as a formula gets a leading apostrophe. Number cells are typed and never changed.
-import { amount, count, items } from './fmt.ts';
+import { amount, count, currency, items } from './fmt.ts';
 
 /** The separator: ";", so the file opens straight in Swiss and German Excel (user, 2026-11-13). The numbers never hold it. */
 export const SEP = ';';
@@ -43,10 +43,10 @@ function cell(v: Cell, kind: Kind): string {
 }
 const quote = (s: string) => (s.includes(SEP) || /["\r\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s);
 
-/** The whole file: the byte order mark, the header (time columns name the zone), then one line per row, each ending in CRLF. */
+/** The whole file: the byte order mark, the header (time columns name the zone, money columns the currency), then one line per row, each ending in CRLF. */
 export function csv({ columns, rows }: Table): string {
   const z = zone();
-  const head = columns.map(([h, kind]) => quote(cell(kind === 'time' ? `${h} (${z})` : h, 'text')));
+  const head = columns.map(([h, kind]) => quote(cell(kind === 'time' ? `${h} (${z})` : kind === 'money' ? `${h} (${currency()})` : h, 'text')));
   return '﻿' + [head, ...rows.map((r) => columns.map(([, kind], i) => quote(cell(r[i], kind))))].map((l) => l.join(SEP) + '\r\n').join('');
 }
 

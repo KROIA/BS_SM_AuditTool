@@ -4,7 +4,7 @@
   // the next candle opened, and a grey line holds it there, as the game fills such gaps with flat candles.
   // Prices are bigints; only the drawing goes through a float.
   import type { Candle } from '../../shared/api.ts';
-  import { count, countShort, money, time } from '../../shared/fmt.ts';
+  import { count, countShort, currency, money, time } from '../../shared/fmt.ts';
   import { pan, timeTick, wheel, type View } from './zoom.ts';
 
   interface Mark { time: number; price: bigint; buy: boolean }
@@ -71,8 +71,8 @@
     const [date, clock] = time(ms, minutes >= 1440).split(', ') as [string, string];
     return { date, day: date.replace(/ \d+$/, ''), clock: clock.slice(0, 5) };
   }
-  /** Axis labels: whole dollars from $100 on. */
-  const axis = (v: number) => (v >= 10_000 ? '$' + count(Math.round(v / 100)) : money(BigInt(Math.round(Math.max(0, v)))));
+  /** Axis labels: whole units of the currency from 100 on. */
+  const axis = (v: number) => (v >= 10_000 ? `${count(Math.round(v / 100))} ${currency()}` : money(BigInt(Math.round(Math.max(0, v)))));
 
   const draw = $derived.by(() => {
     if (!candles.length) return null;

@@ -29,16 +29,16 @@ test.describe('the invented network', () => {
     await expect(page.locator('aside .pick .ellipsis')).toHaveText(['Diamond', 'Emerald', 'Coal', 'Gold ingot', 'Wheat', 'Oak log', 'Iron ingot', 'Redstone']);
     await expect(page.locator('aside')).toContainText('most findings first');
     await expect(page.locator('aside .pick .dot')).toHaveCount(3);
-    await expect(page.locator('aside .pick').first()).toContainText(/60 orders · \$52\.92\s*40\.91×/);
+    await expect(page.locator('aside .pick').first()).toContainText(/60 orders · 52\.92 \$\s*40\.91×/);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Diamond');
     await expect(page.locator('.lead')).toHaveText('In this time range the highest price was 40.91× the lowest.');
-    await expect(page.locator('.mvalue')).toHaveText(['$52.70', '$48.36', "$1'978.42", "390'669", '1', '$52.92']);
+    await expect(page.locator('.mvalue')).toHaveText(['52.70 $', '48.36 $', "1'978.42 $", "390'669", '1', '52.92 $']);
     const standouts = page.getByRole('region', { name: 'What stands out' }).locator('a.link-row');
     await expect(standouts).toHaveCount(5); // the first five of 6, with the market alert on the diamond buys (SM-316)
     await page.getByRole('region', { name: 'What stands out' }).getByRole('button', { name: 'Show all 6' }).click();
     await expect(standouts).toHaveCount(6);
-    await expect(standouts.first()).toContainText('$5.44M trading profit within one hour');
-    await expect(standouts.last()).toContainText("The diamond price swung between $329.74 and $1'978.42 inside one minute");
+    await expect(standouts.first()).toContainText('5.44M $ trading profit within one hour');
+    await expect(standouts.last()).toContainText("The diamond price swung between 329.74 $ and 1'978.42 $ inside one minute");
     await standouts.last().click();
     await expect(page).toHaveURL(/#\/findings\/price-spike%3A/);
     await page.goBack();
@@ -63,7 +63,7 @@ test.describe('the invented network', () => {
     const plot = page.locator('.plot');
     const box = (await plot.boundingBox())!;
     await page.mouse.move(box.x + box.width / 6, box.y + 100); // the first of three hour candles
-    await expect(page.locator('.readout')).toContainText("Open $49.74 High $1'978.42 Low $48.36 Close $50.17 Volume 143'248");
+    await expect(page.locator('.readout')).toContainText("Open 49.74 $ High 1'978.42 $ Low 48.36 $ Close 50.17 $ Volume 143'248");
 
     await page.getByRole('group', { name: 'Price scale' }).getByRole('button', { name: 'Linear' }).click();
     await expect(page.locator('.yaxis')).toContainText('$');
@@ -82,7 +82,7 @@ test.describe('the invented network', () => {
     const lengths = page.getByRole('group', { name: 'Candle length' });
     await lengths.getByRole('button', { name: '1 min' }).click();
     await expect(page.locator('.trow')).toHaveCount(1);
-    await expect(page.locator('.trow')).toContainText(/Tavrik\s*bought for \$440'370\.00, sold for \$5\.88M\s*\+\$5\.44M/);
+    await expect(page.locator('.trow')).toContainText(/Tavrik\s*bought for 440'370\.00 \$, sold for 5\.88M \$\s*\+5\.44M \$/);
     await expect(page.locator('main')).toContainText('Pick a player below to see their orders on the chart.');
     await page.getByRole('button', { name: 'Show on chart' }).click();
     await expect(page.locator('.mark')).toHaveCount(60);
@@ -93,7 +93,7 @@ test.describe('the invented network', () => {
     await page.locator('.plot').scrollIntoViewIfNeeded();
     const box = (await page.locator('.plot').boundingBox())!;
     await page.mouse.move(box.x + (box.width * 21.5) / 160, box.y + 100);
-    await expect(page.locator('.readout')).toContainText("Tavrik bought 3'000 at $");
+    await expect(page.locator('.readout')).toContainText(/Tavrik bought 3'000 at [\d'.]+ \$/);
     await expect(page.locator('.readout')).toContainText('orders that finished in this candle');
     await page.setViewportSize({ width: 1440, height: 1300 });
     await page.screenshot({ path: 'test-results/markets-dark.png' });

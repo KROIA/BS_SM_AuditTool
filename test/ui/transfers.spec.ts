@@ -55,7 +55,7 @@ test.describe('the invented network', () => {
     await expect(swap).toContainText("mining-1 took 500 Iron ingot, survival-main credited 500 Diamond.");
     await expect(swap.getByRole('link', { name: 'AdmiralNoor' })).toHaveAttribute('href', /^#\/players\//);
     await expect(swap.getByRole('link', { name: 'account 10' })).toHaveAttribute('href', '#/accounts/10');
-    await expect(rows.nth(1)).toContainText("mining-1 took $700.00, survival-main credited $1'400.00.");
+    await expect(rows.nth(1)).toContainText("mining-1 took 700.00 $, survival-main credited 1'400.00 $.");
     await expect(page.locator('.foot')).toContainText('2 transfers of 17, newest first. Pick the tile again to show them all.');
     await page.screenshot({ path: 'test-results/transfers-twice-dark.png' });
     await page.getByRole('button', { name: 'Switch to the light theme' }).click();

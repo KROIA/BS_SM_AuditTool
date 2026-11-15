@@ -56,7 +56,7 @@ test('the strongest incident: where the money stands, the evidence, the table an
   await page.getByRole('link', { name: 'Case: 2 pinned' }).click();
 
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Case: .*Tavrik.* on the diamond market$/);
-  await expect(section('Where the money stands').locator('h2')).toHaveText(/^Where the \$[\d.]+M stands$/);
+  await expect(section('Where the money stands').locator('h2')).toHaveText(/^Where the [\d.]+M \$ stands$/);
   await expect(section('Where the money stands').locator('.lg')).toContainText(['Taken back by this plan', 'Spent on items, removed as items']);
   await expect(section('Where the money stands').getByRole('link', { name: 'Open the money flow' })).toHaveAttribute('href', `#/flow/${encodeURIComponent(PUMP)}`);
 
@@ -70,7 +70,7 @@ test('the strongest incident: where the money stands, the evidence, the table an
   await expect(cut(/^The end of/)).toContainText('Recommended');
   const rows = section('What to take back').locator('table').first().locator(':scope > tbody > tr');
   await expect(rows.locator('td:first-child a.name')).toHaveText(['Tavrik', 'Ombrelune', 'Brindle']); // the incident's own players first
-  await expect(rows.filter({ hasText: 'Brindle' })).toContainText("likely paid in $1'500'000.00 of Tavrik's notes");
+  await expect(rows.filter({ hasText: 'Brindle' })).toContainText("likely paid in 1'500'000.00 $ of Tavrik's notes");
   await expect(rows.last()).toContainText('Total');
   await rows.filter({ hasText: 'Tavrik' }).getByRole('button', { name: /^and [\d']+ items$/ }).click();
   await expect(section('What to take back').locator('tr.items')).toContainText('Coal');
@@ -95,7 +95,7 @@ test('the 2.1.2 removal asks the admins; the answer, the cutoff and the order su
   await expect(section('Evidence').locator('.pin').first()).toContainText('Bought fast');
   await page.getByRole('combobox').selectOption(QUENBY);
   await expect(page).toHaveURL(new RegExp(`#/case/${encodeURIComponent(QUENBY)}$`));
-  await expect(page.locator('h3.step', { hasText: 'Did an admin remove' })).toHaveText(/Did an admin remove \$200'000\.00 from Quenby on/);
+  await expect(page.locator('h3.step', { hasText: 'Did an admin remove' })).toHaveText(/Did an admin remove 200'000\.00 \$ from Quenby on/);
   const answers = page.getByRole('group', { name: /^Answer for account 7 on/ });
   await expect(answers.getByRole('button', { name: 'Not sure' })).toHaveAttribute('aria-pressed', 'true');
   await expect(section('Where the money stands')).toContainText('Left the account, not confirmed');

@@ -139,7 +139,10 @@ function join(list: RawGap[]): RawGap[] {
 
 const gap = (g: RawGap, rating: (from: number) => Rating): Gap => ({ from: g.from, to: g.to, difference: g.diff, labels: g.labels, rating: rating(g.from), after: g.after });
 
+/** The market's currency: what trades settle in and what the tool calls money. */
 export const moneyItems = (db: DatabaseSync) => new Set(all(db, 'SELECT id FROM item WHERE money = 1').map((r) => num(r.id)!));
+/** BankSystem's own money, what banknotes are worth and are paid in and out as; the currency unless the market trades in another item. */
+export const bankMoneyItems = (db: DatabaseSync) => new Set(all(db, 'SELECT id FROM item WHERE bank = 1').map((r) => num(r.id)!));
 /**
  * Items that have a market on this save: in the market list (MarketManager), or with prices in the market database. The
  * real November copy has no market list the tool reads, only prices, so both count (AT-36).
@@ -151,10 +154,10 @@ export const marketItems = (db: DatabaseSync) => new Set(all(db, 'SELECT item AS
  */
 // ponytail: denominations are told apart by name only; one with extra components would count as money too.
 export function noteWorth(db: DatabaseSync): Map<number, bigint> {
-  const out = new Map([...moneyItems(db)].map((id) => [id, 100n]));
+  const out = new Map([...bankMoneyItems(db)].map((id) => [id, 100n]));
   for (const r of all(db, `SELECT id, name FROM item WHERE name GLOB 'banksystem:money*'`)) {
     const name = String(r.name), w = worthOf(name);
-    if (w !== null && name !== 'banksystem:money') out.set(num(r.id)!, w); // the plain base item is in moneyItems; one with components is no money
+    if (w !== null && name !== 'banksystem:money') out.set(num(r.id)!, w); // the plain base item is in bankMoneyItems; one with components is no money
   }
   return out;
 }

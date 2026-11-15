@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { csv, csvName, SEP, stamp, zone, type Column } from '../../src/shared/csv.ts';
+import { setCurrency } from '../../src/shared/fmt.ts';
 
 const lines = (text: string) => text.slice(1).split('\r\n');
 
@@ -14,7 +15,7 @@ test('the byte order mark, CRLF after every line, quotes only where a field need
 });
 
 test('numbers in full through fmt, negative numbers untouched, times in this computer\'s zone named in the header', () => {
-  const columns: Column[] = [['Take back ($)', 'money'], ['Items', 'quantity'], ['Orders', 'count'], ['Swing', 'number'], ['When', 'time'], ['Account', 'id']];
+  const columns: Column[] = [['Take back', 'money'], ['Items', 'quantity'], ['Orders', 'count'], ['Swing', 'number'], ['When', 'time'], ['Account', 'id']];
   const big = 1_154_255_602_798_123_456n; // more than 15 digits: a double would lose the last ones
   const t = new Date(2026, 10, 4, 9, 5, 7).getTime();
   const out = lines(csv({ columns, rows: [[-153205n, 1250n, 14100254, 12.345, t, 1234], [big, 64000n, 0, 2, null, null]] }));
@@ -22,6 +23,10 @@ test('numbers in full through fmt, negative numbers untouched, times in this com
   assert.equal(out[1], "-1'532.05;12.5;14'100'254;12.35;2026-11-04 09:05:07;1234");
   assert.equal(out[2], "11'542'556'027'981'234.56;640;0;2;;");
   assert.equal(stamp(t), '2026-11-04 09:05:07');
+  // Money columns name the server's currency.
+  setCurrency('Diamond');
+  assert.equal(lines(csv({ columns: [['Take back', 'money']], rows: [] }))[0], 'Take back (Diamond)');
+  setCurrency('$');
 });
 
 test('a text cell a spreadsheet would run as a formula starts with an apostrophe; ids and names that are fine stay', () => {

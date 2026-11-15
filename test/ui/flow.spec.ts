@@ -41,7 +41,7 @@ test.describe('the invented network', () => {
   test.afterAll(() => program.close());
 
   test('the answer first, then where the money came from, who got it and where it is now', async () => {
-    await expect(page.locator('.lead')).toHaveText("Of the $15.33M these players had or got since the incident's start ($5.46M of it made on the diamond market), $10.32M is still in the bank, $4M was taken out as banknotes and $1M was sent to other accounts.");
+    await expect(page.locator('.lead')).toHaveText("Of the 15.33M $ these players had or got since the incident's start (5.46M $ of it made on the diamond market), 10.32M $ is still in the bank, 4M $ was taken out as banknotes and 1M $ was sent to other accounts.");
 
     // The start first on the left, the bank first on the right, the rest largest first.
 
@@ -91,7 +91,7 @@ test.describe('the invented network', () => {
     await expect(node('Ombrelune')).toHaveCount(1);
     await expect(node('Notes paid in')).toHaveCount(1);
     // Her diamond gain is under 1% of her money, yet the answer names that market, so it stays on its own.
-    await expect(page.locator('.lead')).toHaveText(/^Of the \$[\d.]+M Ombrelune had or got since the incident's start \(\$18'136\.10 of it made on the diamond market\), \$4\.12M is still in the bank\.$/);
+    await expect(page.locator('.lead')).toHaveText(/^Of the [\d.]+M \$ Ombrelune had or got since the incident's start \(18'136\.10 \$ of it made on the diamond market\), 4\.12M \$ is still in the bank\.$/);
     await expect(node('Diamond market')).toHaveCount(1);
     await page.screenshot({ path: 'test-results/flow-player-dark.png' });
 
@@ -132,7 +132,7 @@ test.describe('the invented network', () => {
 });
 
 test.describe('the timeline', () => {
-  // Tavrik pays $2M of notes into the shared account a minute after taking $2M out of his own (minute 51).
+  // Tavrik pays 2M $ of notes into the shared account a minute after taking 2M $ out of his own (minute 51).
   test.beforeAll(() => {
     const save = path.resolve('test-results/fixtures-flow/carried');
     fs.rmSync(save, { recursive: true, force: true });
@@ -147,7 +147,7 @@ test.describe('the timeline', () => {
 
   test('notes carried from one account into another run through the world', async () => {
     await page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Timeline' }).click();
-    await expect(page.locator('.lead')).toContainText('$2M likely went from one account to another as banknotes, each time carried by the same player.');
+    await expect(page.locator('.lead')).toContainText('2M $ likely went from one account to another as banknotes, each time carried by the same player.');
     const rows = page.getByRole('group', { name: 'Rows on the chart' }).getByRole('button');
     await expect(rows.filter({ hasText: /^Tavrik$/ })).toHaveCount(1);
     await expect(rows.filter({ hasText: `Account ${SHARED.account} · ${SHARED.name}` })).toHaveCount(1); // a shared account keeps its own row
@@ -206,11 +206,11 @@ test.describe('an old 2.1.2 save', () => {
   });
 
   test('notes another player likely paid in get a row of their own (AT-41)', async () => {
-    // The $1.5M that appeared on Brindle's account is exactly what Tavrik took out at minute 51.
+    // The 1.5M $ that appeared on Brindle's account is exactly what Tavrik took out at minute 51.
     await page.getByRole('group', { name: 'Whose money to follow' }).getByRole('button', { name: 'Tavrik' }).click();
     await node('Taken out as notes').click();
     await expect(page.locator('.mname')).toHaveText(['Tavrik', 'Paid in again', 'Likely paid in by Brindle', 'In their own files', 'Not in their own files']);
-    await expect(page.locator('.mrow', { hasText: 'Likely paid in by Brindle' })).toContainText("$1'500'000.00");
+    await expect(page.locator('.mrow', { hasText: 'Likely paid in by Brindle' })).toContainText("1'500'000.00 $");
     await expect(page.getByRole('link', { name: 'Likely paid in by Brindle' })).toHaveAttribute('href', `#/players/${encodeURIComponent(uuidText(PLAYERS.Brindle.n))}`);
     await page.locator('.detail').screenshot({ path: 'test-results/flow-legacy-likely-dark.png' });
   });

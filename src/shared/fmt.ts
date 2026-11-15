@@ -52,26 +52,32 @@ export function plain(raw: bigint): string {
   return text.endsWith('.00') ? text.slice(0, -3) : text;
 }
 
-/** Raw money in full:153205n -> $1'532.05, -153205n -> -$1'532.05 */
+// The unit of money: the market's currency of the loaded save, "$" for BankSystem money, else the item's name.
+let unit = '$';
+/** Set by the engine and the screens when the loaded saves change (SaveSummary.currency). */
+export const setCurrency = (label: string) => void (unit = label);
+export const currency = () => unit;
+
+/** Raw money in full, the unit after it: 153205n -> 1'532.05 $, -153205n -> -1'532.05 $ */
 export function money(raw: bigint): string {
-  return (raw < 0n ? '-$' : '$') + amount(abs(raw));
+  return amount(raw) + ' ' + unit;
 }
 
 const MILLION = 100_000_000n; // one million dollars in raw units
 const BILLION = 100_000_000_000n;
 
-/** Raw money shortened for headlines: $29.43B, $192M. Below a million it stays in full. Exports never use this. */
+/** Raw money shortened for headlines: 29.43B $, 192M $. Below a million it stays in full. Exports never use this. */
 export function moneyShort(raw: bigint): string {
   const a = abs(raw);
   if (a < MILLION) return money(raw);
-  let unit = a >= BILLION ? BILLION : MILLION;
-  let hundredths = (a * 100n + unit / 2n) / unit; // rounded to two decimals, in whole numbers
-  if (unit === MILLION && hundredths >= 100_000n) {
-    unit = BILLION; // 999.996M rounds up to 1B, not to 1000M
-    hundredths = (a * 100n + unit / 2n) / unit;
+  let step = a >= BILLION ? BILLION : MILLION;
+  let hundredths = (a * 100n + step / 2n) / step; // rounded to two decimals, in whole numbers
+  if (step === MILLION && hundredths >= 100_000n) {
+    step = BILLION; // 999.996M rounds up to 1B, not to 1000M
+    hundredths = (a * 100n + step / 2n) / step;
   }
   const decimals = (hundredths % 100n).toString().padStart(2, '0').replace(/0+$/, '');
-  return (raw < 0n ? '-$' : '$') + group((hundredths / 100n).toString()) + (decimals ? '.' + decimals : '') + (unit === BILLION ? 'B' : 'M');
+  return (raw < 0n ? '-' : '') + group((hundredths / 100n).toString()) + (decimals ? '.' + decimals : '') + (step === BILLION ? 'B ' : 'M ') + unit;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

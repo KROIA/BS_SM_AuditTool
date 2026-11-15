@@ -142,8 +142,8 @@
 
   const sub = (r: LedgerRow) => rowDetail(r, main?.name);
   const listTable = () => ({
-    columns: [['Account', 'id'], ['Name', 'text'], ['Kind', 'text'], ['Owner', 'text'], ['Owner uuid', 'id'], ['Company', 'text'], ['Money ($)', 'money'],
-      ['Unexplained ($)', 'money'], ['Gaps', 'count'], ['How much the gaps say', 'text'], ['Log entries', 'count'], ['Frozen', 'text'], ['Deleted', 'text']] as const,
+    columns: [['Account', 'id'], ['Name', 'text'], ['Kind', 'text'], ['Owner', 'text'], ['Owner uuid', 'id'], ['Company', 'text'], ['Money', 'money'],
+      ['Unexplained', 'money'], ['Gaps', 'count'], ['How much the gaps say', 'text'], ['Log entries', 'count'], ['Frozen', 'text'], ['Deleted', 'text']] as const,
     rows: (list ?? []).map((a) => [a.number, a.name, kind(a), a.ownerName, a.owner, a.company, a.money, a.unexplained, a.gaps, a.rating ? GAP_SAYS[a.rating].short : null, a.rows, a.frozen, a.deleted]),
   });
 

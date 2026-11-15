@@ -53,7 +53,7 @@ test('accounts: most money first where the log explains everything, money from t
 test('accounts: the money the log does not explain first; deleted accounts are listed and checked', () => {
   open(fx.master);
   const head = (settings: RuleSettings, scope = ALL) => api.accounts(scope, settings).slice(0, 3).map((a) => [a.number, a.unexplained, a.gaps, a.rating, a.deleted]);
-  // Only gaps above the threshold count: the pair's two gaps are exactly $1'000, the default.
+  // Only gaps above the threshold count: the pair's two gaps are exactly 1'000 $, the default.
   assert.deepEqual(head(DEFAULT_RULES), [[CHECK.set, 1_000_000n, 1, 'medium', true], [CHECK.gain, 500_000n, 1, 'medium', true], [COMPANY.account, 0n, 0, null, false]]);
   const every: RuleSettings = { ...DEFAULT_RULES, balance: { on: true, money: 0n, items: 0n } };
   assert.deepEqual(head(every), [[CHECK.set, 1_000_000n, 1, 'medium', true], [CHECK.gain, 500_000n, 1, 'medium', true], [CHECK.pair, 200_000n, 2, 'medium', true]]);
@@ -77,7 +77,7 @@ test('one account: company and shared accounts, users with names, every item slo
     { uuid: uuid('Tavrik'), name: 'Tavrik', permissions: 7 },
     { uuid: uuid('Quenby'), name: 'Quenby', permissions: 3 },
   ]);
-  // Brindle's coal is saved under the old and the current id; the slots come back merged. Money includes the $1'500 of transfer case 5.
+  // Brindle's coal is saved under the old and the current id; the slots come back merged. Money includes the 1'500 $ of transfer case 5.
   const brindle = api.account(PLAYERS.Brindle.account, ALL)!;
   assert.deepEqual(brindle.items.map((i) => [i.item, i.balance]),
     [[ITEM.money, 11_424_848n], [ITEM.iron, -1_600n], [ALIAS.to, fx.balances.master.get(`3:${ITEM.coal}`)!]]);

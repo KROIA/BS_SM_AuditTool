@@ -67,7 +67,7 @@ test('a pair that cancels within 15 minutes is joined to nothing, one 38 minutes
 
 test('the verdict counts a gap only above the "Balance not explained" threshold', () => {
   open(fx.master);
-  // The pair's two gaps are exactly $1'000, the default threshold: not above it. The total difference stays.
+  // The pair's two gaps are exactly 1'000 $, the default threshold: not above it. The total difference stays.
   const pair = money(CHECK.pair, ALL, DEFAULT_RULES);
   assert.deepEqual([pair.gaps, pair.verdict, pair.unexplained], [[], 'explained', 0n]);
   assert.equal(money(CHECK.gain, ALL, DEFAULT_RULES).verdict, 'unexplained');
@@ -111,7 +111,7 @@ test('legacy save: orders stand in for trades; the unlogged admin actions, a put
     [PLAYERS.Brindle.account, at(63), at(81), 150_000_000n, 'low'], // notes paid in through the ATM converter: 2.1.2 wrote no row
     [PLAYERS.Quenby.account, at(61), at(121), -20_000_000n, 'low'],
     [PLAYERS.AdmiralNoor.account, at(-24 * 60), at(126), -2_500_000n, 'low'],
-    [PLAYERS.Tavrik.account, at(51), at(52), 50_000_000n, 'low'], // the $500'000 of notes that did not fit, put back without a row
+    [PLAYERS.Tavrik.account, at(51), at(52), 50_000_000n, 'low'], // the 500'000 $ of notes that did not fit, put back without a row
     [PLAYERS.Mikko_82.account, at(13), at(91), 1_000_000_000n, 'low'], // an admin raised the balance, unlogged
   ]);
 });

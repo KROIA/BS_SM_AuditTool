@@ -46,7 +46,7 @@ test('which money rows of the log hand notes out (+), take them in (-), or neith
   assert.equal(noteChange('UNKNOWN_LEGACY', 500n, 'rejected code 25 from slave mining-1', null), null);
 });
 
-test('what one note is worth: the base item $1, banksystem:money100 $100; a money item with components is no note', () => {
+test('what one note is worth: the base item 1 $, banksystem:money100 100 $; a money item with components is no note', () => {
   open(fx.master);
   const worth = noteWorth(mainData()!);
   assert.equal(worth.get(ITEM.money), 100n);
@@ -59,13 +59,13 @@ test('the network: log rows plus NoteFlow of every server, per account (proven) 
   open(fx.master, ...fx.slaves);
   const r = api.banknotes(ALL);
   assert.equal(r.reason, null);
-  // Out: Tavrik's two withdrawals ($2M each), Mikko_82's drop of $5'000 less its $2'000 refund, Quenby's $50 delete payout.
+  // Out: Tavrik's two withdrawals (2M $ each), Mikko_82's drop of 5'000 $ less its 2'000 $ refund, Quenby's 50 $ delete payout.
   // Back: every money deposit.
   assert.deepEqual(r.ledger, { out: 400_305_000n, back: 302_300_000n });
   assert.deepEqual([r.putBack, r.appeared, r.tooLarge], [0n, [], []]); // the cut to the balance drop is for 2.1.2 only
   assert.deepEqual(r.flow, [
-    { source: 'banksystem:converter_in', created: 0n, destroyed: 2_400n }, // 12 x $1 on each slave
-    { source: 'banksystem:converter_out', created: 34_000n, destroyed: 0n }, // 40 x $1, and 3 x $100 on mining-1
+    { source: 'banksystem:converter_in', created: 0n, destroyed: 2_400n }, // 12 x 1 $ on each slave
+    { source: 'banksystem:converter_out', created: 34_000n, destroyed: 0n }, // 40 x 1 $, and 3 x 100 $ on mining-1
     { source: 'banksystem:creative_create', created: 50_000n, destroyed: 0n },
     { source: 'banksystem:creative_destroy', created: 0n, destroyed: 10_000n },
     { source: 'banksystem:give', created: 20_000n, destroyed: 0n }, // the diamonds given on mining-1 are no money: skipped
@@ -102,7 +102,7 @@ test('the time range limits the movements; outstanding and the series count ever
   const r = api.banknotes({ from: T0 + 40 * MIN, to: T0 + 50 * MIN + 600, server: null });
   assert.deepEqual(r.ledger, { out: 200_000_000n, back: 150_000n }); // Tavrik's first withdrawal, Brindle's deposit at minute 45
   assert.deepEqual(r.flow, []);
-  // Before minute 40: Ombrelune's two deposits, Brindle's $12'000 and the slaves' NoteFlow of minutes 20 to 23.
+  // Before minute 40: Ombrelune's two deposits, Brindle's 12'000 $ and the slaves' NoteFlow of minutes 20 to 23.
   assert.deepEqual(r.series, [[T0 + 40 * MIN, -1_312_300n], [T0 + 45 * MIN + 1000, -1_462_300n], [T0 + 50 * MIN + 500, 198_537_700n]]);
   assert.equal(r.outstanding, 198_537_700n);
 });
@@ -126,18 +126,18 @@ test('2.1.2: the log alone, withdrawals cut to the balance drop, money that appe
   open(fx.legacy);
   const r = api.banknotes(ALL);
   assert.equal(r.reason, null);
-  // Tavrik's second withdrawal asked for $2M; $500'000 of it went back without a row, so the balance fell $1.5M.
-  // Back: Ombrelune's $3M. 2.1.2 created accounts with their starting balance and no row.
+  // Tavrik's second withdrawal asked for 2M $; 500'000 $ of it went back without a row, so the balance fell 1.5M $.
+  // Back: Ombrelune's 3M $. 2.1.2 created accounts with their starting balance and no row.
   assert.deepEqual([r.ledger, r.putBack], [{ out: 350_000_000n, back: 300_000_000n }, 50_000_000n]);
   assert.deepEqual([r.flow, r.skipped], [[], 0]);
   assert.equal(r.outstanding, 50_000_000n);
   assert.deepEqual(r.accounts.filter((a) => a.out > 0n).map((a) => [a.account, a.out, a.basis]), [[PLAYERS.Tavrik.account, 350_000_000n, 'estimate']]);
   assert.ok(r.accounts.filter((a) => a.out === 0n).every((a) => a.basis === 'proven'));
-  // Brindle's $1.5M paid in through the ATM converter: no row, and at most the $3.5M of notes outside the bank at the
+  // Brindle's 1.5M $ paid in through the ATM converter: no row, and at most the 3.5M $ of notes outside the bank at the
   // gap's start, so it could be notes coming back. Listed, not taken off the count.
   const gap = (a: BanknoteGap) => [a.account, a.owner?.name, a.from, a.to, a.amount];
   assert.deepEqual(r.appeared.map(gap), [[PLAYERS.Brindle.account, 'Brindle', T0 + 63 * MIN, T0 + 81 * MIN, 150_000_000n]]);
-  // An admin raised Mikko_82's balance by $10M, unlogged: no note was outside the bank when that gap began (minute 13).
+  // An admin raised Mikko_82's balance by 10M $, unlogged: no note was outside the bank when that gap began (minute 13).
   assert.deepEqual(r.tooLarge.map(gap), [[PLAYERS.Mikko_82.account, 'Mikko_82', T0 + 13 * MIN, T0 + 91 * MIN, 1_000_000_000n]]);
   assert.deepEqual(r.missing, [
     '"old-world" has no banknote log (BankSystem 2.1.2 and older kept none), so notes made or destroyed there outside the bank (converter, villagers, creative mode, /give) are not counted.',
@@ -150,7 +150,7 @@ test('2.1.2: the log alone, withdrawals cut to the balance drop, money that appe
   assert.equal(filtered.filter((m) => m.includes('server filter')).length, 1);
   assert.equal(filtered.at(-1), 'The server filter does not apply to money that appeared without a log row: a gap between two snapshots belongs to no server.');
   // A range after the withdrawal and before the converter deposit: the cut stays in what is outstanding (everything up
-  // to minute 60, so without Ombrelune's $3M at minute 70), and neither the put-back nor the list is in the range.
+  // to minute 60, so without Ombrelune's 3M $ at minute 70), and neither the put-back nor the list is in the range.
   const later = api.banknotes({ from: T0 + 55 * MIN, to: T0 + 60 * MIN, server: null });
   assert.deepEqual([later.putBack, later.appeared, later.outstanding], [0n, [], r.outstanding + 300_000_000n]);
 });

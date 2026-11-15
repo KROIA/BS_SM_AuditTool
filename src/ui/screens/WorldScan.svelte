@@ -113,7 +113,7 @@
 
   // CSV (AT-44): every place, also those with valuables only, and the places' coordinates.
   const placeTable = (list: Row[]) => () => ({
-    columns: [['Where', 'text'], ['Server', 'text'], ['What', 'text'], ['Banknotes ($)', 'money'], ['Valuables (pieces)', 'count'], ['Player uuid', 'id'], ['Account', 'id'],
+    columns: [['Where', 'text'], ['Server', 'text'], ['What', 'text'], ['Banknotes', 'money'], ['Valuables (pieces)', 'count'], ['Player uuid', 'id'], ['Account', 'id'],
       ['Block or entity', 'id'], ['Dimension', 'id'], ['X', 'count'], ['Y', 'count'], ['Z', 'count']] as const,
     rows: list.map((r) => [r.label, r.server, r.sub, r.notes, r.pieces, r.uuid, r.account, r.at?.place, r.at?.dimension, r.at?.x, r.at?.y, r.at?.z]),
   });

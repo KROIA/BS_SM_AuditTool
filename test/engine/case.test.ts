@@ -91,7 +91,7 @@ test('orphans: a pinned finding the rules no longer raise is reported with its s
   const id = `hour-profit:${uuidText(PLAYERS.Tavrik.n)}@${T0}`;
   api.mark(id, mark({ pinned: true, title: 'Profit in one hour' }));
   assert.deepEqual(api.incidents(ALL, DEFAULT_RULES).orphans, []);
-  const higher = { ...DEFAULT_RULES, 'hour-profit': { on: true, money: 1_000_000_000n } }; // $10M, Tavrik made $5.44M
+  const higher = { ...DEFAULT_RULES, 'hour-profit': { on: true, money: 1_000_000_000n } }; // 10M $, Tavrik made 5.44M $
   const r = api.incidents(ALL, higher);
   assert.deepEqual(r.orphans, [id]);
   assert.ok(!r.incidents.some((i) => i.findings.includes(id)));

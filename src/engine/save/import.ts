@@ -7,12 +7,13 @@ import { DatabaseSync } from 'node:sqlite';
 import type { SaveSource, SaveSummary, SaveTable } from '../../shared/api.ts';
 import { count, time } from '../../shared/fmt.ts';
 import { placeInTime, readAuditLog } from './audit.ts';
-import { readBankAudit, readFiles, readUserCache } from './files.ts';
+import { plainName } from '../../shared/finding.ts';
+import { BANK_MONEY, readBankAudit, readFiles, readUserCache } from './files.ts';
 import { findDataDir, readIdentity, readLevel, readManifest } from './locate.ts';
 import { readPlayerFiles } from './players.ts';
 
 /** Raise when the layout or the content of the cache changes: caches written by an older version are rebuilt. */
-export const CACHE_VERSION = 13;
+export const CACHE_VERSION = 14;
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -34,7 +35,7 @@ CREATE TABLE player (uuid TEXT PRIMARY KEY, name TEXT NOT NULL, bank_admin INTEG
 CREATE TABLE account (number INTEGER PRIMARY KEY, name TEXT NOT NULL, frozen INTEGER NOT NULL, created_ms INTEGER, owner TEXT, company TEXT);
 CREATE TABLE account_user (account INTEGER NOT NULL, uuid TEXT NOT NULL, permissions INTEGER NOT NULL, PRIMARY KEY (account, uuid)) WITHOUT ROWID;
 CREATE TABLE balance (account INTEGER NOT NULL, item INTEGER NOT NULL, balance INTEGER NOT NULL, locked INTEGER NOT NULL, PRIMARY KEY (account, item)) WITHOUT ROWID;
-CREATE TABLE item (id INTEGER PRIMARY KEY, name TEXT NOT NULL, money INTEGER NOT NULL, plain INTEGER NOT NULL);
+CREATE TABLE item (id INTEGER PRIMARY KEY, name TEXT NOT NULL, money INTEGER NOT NULL, bank INTEGER NOT NULL, plain INTEGER NOT NULL);
 CREATE TABLE market (item INTEGER PRIMARY KEY, price INTEGER, default_price INTEGER, maintenance INTEGER NOT NULL);
 CREATE TABLE player_file (uuid TEXT PRIMARY KEY, ok INTEGER NOT NULL);
 CREATE TABLE world_item (id INTEGER PRIMARY KEY, player TEXT NOT NULL, place TEXT NOT NULL, path TEXT NOT NULL, item TEXT NOT NULL, item_id INTEGER, count INTEGER NOT NULL, plain INTEGER NOT NULL, worth INTEGER);
@@ -115,7 +116,7 @@ const SOURCE_IDS = Object.keys(FILES) as (keyof typeof FILES)[];
 // A database's -wal and -journal hold changes its main file does not show yet; the NBT folders and level.dat feed the summary too.
 const FINGERPRINT_FILES = [
   ...Object.values(FILES).flatMap((f) => [f, f + '-wal', f + '-journal']),
-  'ModUtilities/server_identity.json', 'BankSystem/ItemIDs.nbt', 'BankSystem/Meta_data.nbt', 'BankSystem/settings.json', '../level.dat', '../manifest.json', '../../usercache.json',
+  'ModUtilities/server_identity.json', 'BankSystem/ItemIDs.nbt', 'BankSystem/Meta_data.nbt', 'BankSystem/settings.json', 'StockMarket/settings.json', '../level.dat', '../manifest.json', '../../usercache.json',
 ];
 const FINGERPRINT_DIRS = ['BankSystem/audit', 'BankSystem/Bank_data', 'BankSystem/Companies', 'StockMarket/MarketManager', '../playerdata'];
 /** Whether the tool reads a file, by its path relative to the data folder (../level.dat for one beside it). */
@@ -393,7 +394,7 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
     add('account', files.accounts.map((a) => ({ number: a.number, name: a.name, frozen: +a.frozen, created_ms: a.createdMs, owner: a.owner, company: a.company })));
     add('account_user', files.accounts.flatMap((a) => a.users.map((u) => ({ account: a.number, uuid: u.uuid, permissions: u.permissions }))));
     add('balance', files.accounts.flatMap((a) => a.balances.map((b) => ({ account: a.number, item: b.item, balance: b.balance, locked: b.locked }))));
-    add('item', files.items.map((i) => ({ id: i.id, name: i.name, money: +i.money, plain: +i.plain })));
+    add('item', files.items.map((i) => ({ id: i.id, name: i.name, money: +i.money, bank: +i.bank, plain: +i.plain })));
     add('market', files.markets.map((m) => ({ item: m.item, price: m.price, default_price: m.defaultPrice, maintenance: +m.maintenance })));
     // An alert names the market by the number it had then: an old number goes to the one that replaced it.
     db.prepare(`UPDATE trade_alert SET item = (SELECT json_extract(value, '$[1]') FROM json_each(:map) WHERE json_extract(value, '$[0]') = trade_alert.item)
@@ -455,6 +456,7 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
       lastPlayedMs: manifest?.createdMs ?? level?.lastPlayedMs ?? null, minecraft: level?.version ?? manifest?.minecraft ?? null,
       bankVersion: files.bankVersion ?? manifest?.bankVersion ?? null, marketVersion: manifest?.marketVersion ?? null, exported: manifest !== null,
       players: files.players.length, accounts: files.accounts.length, sources, warnings,
+      currency: files.currency === BANK_MONEY ? '$' : plainName(files.currency),
     };
     const put = db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)');
     put.run('summary', JSON.stringify(summary));

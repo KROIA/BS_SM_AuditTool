@@ -1,4 +1,5 @@
 // What the whole program shares: the open screen, the theme, the loaded saves and what is being loaded.
+import { setCurrency } from '../../shared/fmt.ts';
 import { DEFAULT_RULES, type CaseChoices, type CaseData, type Incident, type Mark, type Progress, type RemoteEngine, type ReportOptions, type RuleSettings, type SaveSummary, type ScanStatus, type Scope, type Workspace } from '../../shared/api.ts';
 
 interface Bridge {
@@ -120,6 +121,7 @@ async function run(call: () => Promise<Workspace>) {
   app.busy = true;
   try {
     const w = await call();
+    setCurrency(w.currency); // before the screens draw the new saves' amounts
     app.saves = w.saves;
     app.warnings = w.warnings;
     app.scan = await engine.scanStatus(); // a save that came or went changes what there is to scan

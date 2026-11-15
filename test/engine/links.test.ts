@@ -46,7 +46,7 @@ after(() => {
 test('proven: the shared account and the transfer; a transfer outside the range is no link', () => {
   open(fx.master);
   const l = api.links(id('Tavrik'), ALL);
-  // Ombrelune paid in $3M of notes, Tavrik withdrew $2M twice: the amount is off, so no note link.
+  // Ombrelune paid in 3M $ of notes, Tavrik withdrew 2M $ twice: the amount is off, so no note link.
   assert.deepEqual(brief(l), [['Ombrelune', 'proven', ['transfer']], ['Quenby', 'proven', ['account']]]);
   assert.deepEqual(l[0]!.ways[0], { kind: 'transfer', sent: 100_000_000n, received: 0n, transfers: 1 });
   assert.equal(l[0]!.records.ledger.length, 2, 'both sides of the transfer');
@@ -62,11 +62,11 @@ test('likely: notes paid in at the exact amount another player withdrew shortly 
   const l = api.links(id('Tavrik'), ALL);
   const brindle = l.find((x) => x.player.name === 'Brindle')!;
   assert.equal(brindle.strength, 'likely');
-  // Tavrik withdrew $2M at minute 50 and 51: the latest before the deposit is the one.
+  // Tavrik withdrew 2M $ at minute 50 and 51: the latest before the deposit is the one.
   assert.deepEqual(brindle.ways, [{ kind: 'notes', amount: LINKS.paidIn.amount, tookOut: true, withdrawn: [{ account: PLAYERS.Tavrik.account, ts: T0 + 51 * MIN + 500 }],
     paidIn: { account: PLAYERS.Brindle.account, from: LINKS.paidIn.ts, to: LINKS.paidIn.ts, logged: true } }]);
   assert.equal(brindle.records.ledger.length, 2);
-  assert.ok(!l.find((x) => x.player.name === 'Ombrelune')!.ways.some((w) => w.kind === 'notes'), 'her $3M is off by $1M');
+  assert.ok(!l.find((x) => x.player.name === 'Ombrelune')!.ways.some((w) => w.kind === 'notes'), 'her 3M $ is off by 1M $');
   // Both sides must be in the range.
   assert.ok(!api.links(id('Tavrik'), { from: T0 + 52 * MIN, to: null, server: null }).some((x) => x.player.name === 'Brindle'));
 });
@@ -74,7 +74,7 @@ test('likely: notes paid in at the exact amount another player withdrew shortly 
 test('likely on 2.1.2: money that appeared without a row counts as notes paid in', () => {
   open(fx.legacy);
   const brindle = api.links(id('Tavrik'), ALL).find((x) => x.player.name === 'Brindle')!;
-  // The $2M asked for at minute 51 was cut to $1.5M by the put-back; the converter's $1.5M appeared on Brindle's account.
+  // The 2M $ asked for at minute 51 was cut to 1.5M $ by the put-back; the converter's 1.5M $ appeared on Brindle's account.
   assert.deepEqual([brindle.strength, brindle.ways], ['likely', [{ kind: 'notes', amount: 150_000_000n, tookOut: true, withdrawn: [{ account: PLAYERS.Tavrik.account, ts: T0 + 51 * MIN + 500 }],
     paidIn: { account: PLAYERS.Brindle.account, from: T0 + 63 * MIN, to: T0 + 81 * MIN, logged: false } }]]);
   assert.deepEqual(api.links(id('Brindle'), ALL).find((x) => x.player.name === 'Tavrik')!.ways[0], { ...brindle.ways[0]!, tookOut: false });
@@ -95,9 +95,9 @@ test('weak: the same market in sessions that overlap, with the minutes; sessions
 
 test('likely: a run of withdrawals that adds up to the deposit; a withdrawal goes to one deposit only', () => {
   withNotes('runs', [
-    // Quenby takes out $1M and $500'000; Mikko_82 pays in $1.5M: a run of two.
+    // Quenby takes out 1M $ and 500'000 $; Mikko_82 pays in 1.5M $: a run of two.
     ['Quenby', 'WITHDRAW', 100_000_000n, 100], ['Quenby', 'WITHDRAW', 50_000_000n, 101], ['Mikko_82', 'DEPOSIT', 150_000_000n, 105],
-    // Ombrelune takes out $700'000 once; Mikko_82 and then AdmiralNoor pay in $700'000: the older deposit gets it.
+    // Ombrelune takes out 700'000 $ once; Mikko_82 and then AdmiralNoor pay in 700'000 $: the older deposit gets it.
     ['Ombrelune', 'WITHDRAW', 70_000_000n, 110], ['Mikko_82', 'DEPOSIT', 70_000_000n, 111], ['AdmiralNoor', 'DEPOSIT', 70_000_000n, 112],
   ]);
   const mikko = api.links(id('Mikko_82'), ALL);

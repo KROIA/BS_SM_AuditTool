@@ -4,7 +4,7 @@
 import type { SQLInputValue } from 'node:sqlite';
 import { DEFAULT_RULES, type BanknoteAccount, type BanknoteGap, type BanknotePlayer, type BanknotesResult, type SaveSummary, type Scope } from '../../shared/api.ts';
 import { loadedSaves, mainData, mainSave, saveData } from '../workspace.ts';
-import { allGaps, moneyItems, noteWorth } from './check.ts';
+import { allGaps, bankMoneyItems, noteWorth } from './check.ts';
 import { all, big, names, num, series, text } from './db.ts';
 import { change, onServer } from './players.ts';
 import { isSlaveOf } from './transfers.ts';
@@ -56,7 +56,9 @@ export const banknotes = (scope: Scope): BanknotesResult => countNotes(scope).re
 export function countNotes(scope: Scope): { result: BanknotesResult; moves: NoteMove[] } {
   const db = mainData(), main = mainSave();
   if (!db || !main) return { result: empty('No save with bank data is loaded, so no note can be counted.'), moves: [] };
-  const money = moneyItems(db), worth = noteWorth(db);
+  // Notes are BankSystem money, whatever the market trades in.
+  // ponytail: the screens print these amounts with the market's unit; wrong only on a server whose market trades in another item.
+  const money = bankMoneyItems(db), worth = noteWorth(db);
   if (!money.size) return { result: empty('The save does not say which item is money (ItemIDs.nbt), so no note can be counted.'), moves: [] };
   const inRange = (ts: number) => scope.from === null || ts >= scope.from;
   const params: Record<string, SQLInputValue> = { money: JSON.stringify([...money]) };

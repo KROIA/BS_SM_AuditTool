@@ -96,7 +96,7 @@ test('a zip64 zip of a world folder at the top opens; an unpacked copy deleted s
   assert.deepEqual(findings(), folder);
   init(dir);
   fs.rmSync(path.join(dir, 'zips'), { recursive: true });
-  assert.deepEqual(workspace(), { saves: [], warnings: [], unpack: [zip] });
+  assert.deepEqual(workspace(), { saves: [], warnings: [], currency: '$', unpack: [zip] });
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'case.json'), 'utf8')).saves, [zip], 'kept until it is opened again');
   assert.deepEqual((await addZip(zip)).saves.map((s) => s.name), ['survival-main']);
 });

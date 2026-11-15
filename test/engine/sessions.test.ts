@@ -47,9 +47,9 @@ test('a session ends at a gap of 5 minutes: 4:59 joins, 5:00 starts a new one', 
 
 test('profit carries the average cost across sessions; sales without a purchase stay apart', () => {
   const list = [
-    order(T0, 1000n, 1000n, 'survival-main'), // 10 bought for $10.00
-    order(T0 + HOUR, -500n, -1500n, 'mining-1'), // 5 sold for $15.00: cost $5.00, profit $10.00
-    order(T0 + 2 * HOUR, -1000n, -2000n, 'mining-1', ITEM.diamond), // 10 sold, only 5 held: profit $5.00, $10.00 without a purchase
+    order(T0, 1000n, 1000n, 'survival-main'), // 10 bought for 10.00 $
+    order(T0 + HOUR, -500n, -1500n, 'mining-1'), // 5 sold for 15.00 $: cost 5.00 $, profit 10.00 $
+    order(T0 + 2 * HOUR, -1000n, -2000n, 'mining-1', ITEM.diamond), // 10 sold, only 5 held: profit 5.00 $, 10.00 $ without a purchase
     order(T0 + 2 * HOUR + MIN, 200n, 300n, 'survival-main', ITEM.coal),
   ];
   const got = split(list, null);

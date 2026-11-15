@@ -64,12 +64,16 @@ export interface SaveSummary {
   accounts: number;
   sources: SaveSource[];
   warnings: string[];
+  /** What amounts of the market's currency are written with: "$" for BankSystem money, else the item's name ("Diamond"). */
+  currency: string;
 }
 
 /** The loaded saves of one network, and what is odd about how they fit together. */
 export interface Workspace {
   saves: SaveSummary[];
   warnings: string[];
+  /** The main save's SaveSummary.currency, "$" when none is loaded. */
+  currency: string;
   /** Zips of the last session whose unpacked copy is gone: the window opens them again, with their progress. */
   unpack?: string[];
 }

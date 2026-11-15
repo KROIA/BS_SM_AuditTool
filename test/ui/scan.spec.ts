@@ -37,10 +37,10 @@ test.describe('the invented network', () => {
     await page.evaluate("location.hash = '#/saves/scan'");
     await expect(page.getByRole('tab', { name: 'World scan' })).toHaveAttribute('aria-selected', 'true');
     // The fixtures' count (WORLD): 980'962.00 should be outside, the player files hold 806'240.00.
-    await expect(page.locator('.lead')).toHaveText("$980'962.00 in banknotes should be outside the bank; $806'240.00 was found, so $174'722.00 was not found.");
+    await expect(page.locator('.lead')).toHaveText("980'962.00 $ in banknotes should be outside the bank; 806'240.00 $ was found, so 174'722.00 $ was not found.");
     await expect(page.locator('.tile .tlabel')).toHaveText(['Withdrawn as banknotes', 'Paid back in', 'Made or destroyed outside the bank', 'Should be outside the bank', 'Found', 'Not found']);
     // Full amounts in every tile, so they add up on screen.
-    await expect(page.locator('.tile .tvalue')).toHaveText(["$4'003'050.00", "-$3'023'000.00", '+$912.00',"$980'962.00", "$806'240.00", "$174'722.00"]);
+    await expect(page.locator('.tile .tvalue')).toHaveText(["4'003'050.00 $", "-3'023'000.00 $", '+912.00 $',"980'962.00 $", "806'240.00 $", "174'722.00 $"]);
     const scan = page.getByRole('region', { name: 'Region scan' });
     await expect(scan).toContainText('Chests, other blocks and entities have not been looked at yet. The region scan reads the 5 region files');
     await expect(page.getByRole('region', { name: 'Where the tool could not look' })).toContainText('The region scan has not been run.');
@@ -61,12 +61,12 @@ test.describe('the invented network', () => {
     await expect(scan).toContainText('Every region file was read: 5 files', { timeout: 30_000 });
     await expect(scan.getByRole('button')).toHaveCount(0); // nothing left to start
     // Blocks and entities add 32'940.00 (SCAN.blocks); the villager's offers (320.00) are prices and not counted.
-    await expect(page.locator('.lead')).toHaveText("$980'962.00 in banknotes should be outside the bank; $839'180.00 was found, so $141'782.00 was not found.");
+    await expect(page.locator('.lead')).toHaveText("980'962.00 $ in banknotes should be outside the bank; 839'180.00 $ was found, so 141'782.00 $ was not found.");
     const found = page.getByRole('region', { name: 'Where banknotes were found' });
     await expect(found.locator('.item')).toHaveCount(5); // the top five, then "Show all"
-    await expect(found.locator('.item').first()).toContainText(/Ender chest of Quenby\s*survival-main, 7 notes of \$100'000\.00, partly in a shulker box\s*\$700'000\.00/);
+    await expect(found.locator('.item').first()).toContainText(/Ender chest of Quenby\s*survival-main, 7 notes of 100'000\.00 \$, partly in a shulker box\s*700'000\.00 \$/);
     await expect(found).toContainText("Chest at the overworld, -884 28 -1'024");
-    await expect(found).toContainText("survival-main, 20 notes of $1'000.00, also 64 Diamond");
+    await expect(found).toContainText("survival-main, 20 notes of 1'000.00 $, also 64 Diamond");
     // Places with only valuables wait behind one line; "Show all" counts the rows with notes.
     await expect(found).not.toContainText('Barrel at vaultmod:deep_vault');
     await found.getByRole('button', { name: /^Show all/ }).click();
@@ -78,7 +78,7 @@ test.describe('the invented network', () => {
     await expect(found).toContainText('Barrel at vaultmod:deep_vault');
     await expect(found).toContainText("1'024 Diamond");
     const offers = page.getByRole('region', { name: "Prices in villagers' offers" });
-    await expect(offers).toContainText("the $320.00 named here are not counted");
+    await expect(offers).toContainText("the 320.00 $ named here are not counted");
     await expect(offers).toContainText("Offers of a villager at the overworld, -881 64 -1'011");
     await expect(page.getByRole('region', { name: 'Where the tool could not look' })).toContainText('Could not be read: 2 chunks damaged, 1 chunk packed with LZ4');
     await shoot('scan-after-dark');
@@ -91,7 +91,7 @@ test.describe('the invented network', () => {
 
   test('the finding says the same as the screen', async () => {
     await page.getByRole('link', { name: 'Open the finding' }).click();
-    await expect(page.locator('main')).toContainText("The bank's log says $980'962.00 in banknotes should be outside the bank; $839'180.00 was found.");
+    await expect(page.locator('main')).toContainText("The bank's log says 980'962.00 $ in banknotes should be outside the bank; 839'180.00 $ was found.");
     await expect(page.locator('main')).toContainText('every region file');
   });
 
@@ -101,9 +101,9 @@ test.describe('the invented network', () => {
     await page.locator('#server-menu').getByRole('button', { name: /^mining-1/ }).click();
     const found = page.getByRole('region', { name: 'Where banknotes were found' });
     await expect(found.locator('.item')).toHaveCount(1);
-    await expect(found.locator('.item')).toContainText(/Ender chest of Mikko_82\s*mining-1, 1 note of \$100'000\.00/);
+    await expect(found.locator('.item')).toContainText(/Ender chest of Mikko_82\s*mining-1, 1 note of 100'000\.00 \$/);
     await expect(page.locator('main')).toContainText('Only what was found on mining-1 is listed.');
-    await expect(page.locator('.lead')).toContainText("$839'180.00 was found");
+    await expect(page.locator('.lead')).toContainText("839'180.00 $ was found");
     await page.getByRole('button', { name: 'Server: mining-1' }).click();
     await page.locator('#server-menu').getByRole('button', { name: 'All servers' }).click();
   });
@@ -114,9 +114,9 @@ test.describe('the invented network', () => {
     await page.getByRole('tab', { name: 'Banknotes and items' }).click();
     const carried = page.getByRole('region', { name: 'Found on the player' });
     await expect(carried.locator('.nrow')).toHaveCount(3);
-    await expect(carried).toContainText(/Ender chest on survival-main\s*7 notes of \$100'000\.00, partly in a shulker box\s*\$700'000\.00/);
-    await expect(carried).toContainText(/Inventory on survival-main\s*30 notes of \$100\.00, also 64 Diamond, partly in a bundle\s*\$3'000\.00/);
-    await expect(carried).toContainText(/Slots at a bank terminal at the overworld, -876 64 -1'018\s*survival-main, 10 notes of \$100\.00/);
+    await expect(carried).toContainText(/Ender chest on survival-main\s*7 notes of 100'000\.00 \$, partly in a shulker box\s*700'000\.00 \$/);
+    await expect(carried).toContainText(/Inventory on survival-main\s*30 notes of 100\.00 \$, also 64 Diamond, partly in a bundle\s*3'000\.00 \$/);
+    await expect(carried).toContainText(/Slots at a bank terminal at the overworld, -876 64 -1'018\s*survival-main, 10 notes of 100\.00 \$/);
     const notes = page.getByRole('region', { name: 'Banknotes' });
     await expect(notes.locator('.nrow').first()).toContainText('Withdrawn as banknotes');
     await expect(notes.locator('.nrow').last()).toContainText('Still outside the bank, if nobody else used them');
@@ -142,11 +142,11 @@ test.describe('an old 2.1.2 save', () => {
 
   test('the count matches what was found, and the player\'s notes are in the inventory', async () => {
     await page.evaluate("location.hash = '#/saves/scan'");
-    await expect(page.locator('.lead')).toHaveText("$500'000.00 in banknotes should be outside the bank, and exactly that was found.");
+    await expect(page.locator('.lead')).toHaveText("500'000.00 $ in banknotes should be outside the bank, and exactly that was found.");
     await expect(page.getByRole('region', { name: 'Region scan' })).toContainText('The loaded saves have no region files');
     await page.evaluate(`location.hash = '${player('Tavrik')}'`);
     await page.getByRole('tab', { name: 'Banknotes and items' }).click();
-    await expect(page.getByRole('region', { name: 'Found on the player' })).toContainText(/Inventory on \S+\s*5 notes of \$100'000\.00\s*\$500'000\.00/);
+    await expect(page.getByRole('region', { name: 'Found on the player' })).toContainText(/Inventory on \S+\s*5 notes of 100'000\.00 \$\s*500'000\.00 \$/);
     await expect(page.getByRole('region', { name: 'Banknotes' })).toContainText('Withdrawn as banknotes');
     await shoot('players-notes-legacy-dark');
   });

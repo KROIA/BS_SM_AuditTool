@@ -114,14 +114,14 @@
   const itemLines = $derived(itemList(rows, w.itemName));
   // CSV (AT-44): the table per account and every item of every account, with the ids.
   const takeTable = () => ({
-    columns: [['Player', 'text'], ['Player uuid', 'id'], ['Account', 'id'], ['Likely paid in notes of', 'text'], ['Their uuid', 'id'], ['Those notes ($)', 'money'],
-      ['Balance at the cutoff ($)', 'money'], ['Snapshot used', 'time'], ['Other markets since ($)', 'money'], ['Has now ($)', 'money'], ['May keep ($)', 'money'], ['Take back ($)', 'money'],
-      ['Items to remove', 'quantity'], ['Left without a log row ($)', 'money']] as const,
+    columns: [['Player', 'text'], ['Player uuid', 'id'], ['Account', 'id'], ['Likely paid in notes of', 'text'], ['Their uuid', 'id'], ['Those notes', 'money'],
+      ['Balance at the cutoff', 'money'], ['Snapshot used', 'time'], ['Other markets since', 'money'], ['Has now', 'money'], ['May keep', 'money'], ['Take back', 'money'],
+      ['Items to remove', 'quantity'], ['Left without a log row', 'money']] as const,
     rows: rows.map((r) => [r.player.name, r.player.uuid, r.account, r.via?.name, r.via?.uuid, r.via?.notes, r.start, r.from, r.other, r.now, r.keep, r.take, nItems(r), sum(r.removed.map((g) => g.amount))]),
   });
   const itemTable = () => ({
     columns: [['Player', 'text'], ['Player uuid', 'id'], ['Account', 'id'], ['Item', 'text'], ['Item id', 'id'], ['At the cutoff', 'quantity'], ['Bought since', 'quantity'],
-      ['Money spent ($)', 'money'], ['Now', 'quantity'], ['Remove', 'quantity']] as const,
+      ['Money spent', 'money'], ['Now', 'quantity'], ['Remove', 'quantity']] as const,
     rows: rows.flatMap((r) => r.items.map((i) => [r.player.name, r.player.uuid, r.account, w.itemName(i.item), i.item, i.before, i.bought, i.spent, i.now, i.remove])),
   });
   let copied = $state('');

@@ -52,7 +52,7 @@ test('float parts: each part a 32-bit float holds exactly, together the amount',
     assert.equal(parts.reduce((s, p) => s + p, 0n), raw, String(raw));
     for (const p of parts) assert.equal(BigInt(Math.round(Math.fround(Number(p) / 100) * 100)), p, `${p} survives a float`);
   }
-  assert.deepEqual(floatParts(1_154_251_539_898n), [1_154_251_468_800n, 71_098n]); // $11'542'514'688 and $710.98
+  assert.deepEqual(floatParts(1_154_251_539_898n), [1_154_251_468_800n, 71_098n]); // 11'542'514'688 $ and 710.98 $
   assert.deepEqual(floatParts(0n), []);
 });
 
@@ -60,7 +60,7 @@ test('commands: money by name in both versions, set to 0 when nothing is kept, 2
   const r = (account: number, name: string, take: bigint, keep = 1n, items: TakeBackRow['items'] = []): TakeBackRow =>
     ({ account, player: { uuid: '', name }, via: null, from: 0, start: 0n, now: take + keep, other: 0n, keep, take, removed: [], items });
   const coal = { item: ITEM.coal, before: 0n, bought: 300n, spent: 1n, now: 500n, remove: 300n };
-  // Brindle ends at 0: removing the last $1.23 would be refused (the float 1.23 is a bit more than the balance), so set.
+  // Brindle ends at 0: removing the last 1.23 $ would be refused (the float 1.23 is a bit more than the balance), so set.
   const rows = [r(11, 'Tavrik', 829_034_508n), r(24, 'Ombrelune', 0n, 1n, [coal]), r(7, 'Quenby', 0n), r(3, 'Brindle', 19_229_241_723n, 0n)];
   const money = ['/money remove Tavrik 8290345', '/money remove Tavrik 0.08', '/money set Brindle 0'];
   assert.deepEqual(commands(rows, '2.1.2'), money);
@@ -79,7 +79,7 @@ test('current save: the incident players keep their balance at the cutoff; one h
   const tav = row(t.rows, PLAYERS.Tavrik.account);
   assert.deepEqual([tav.start, tav.keep], [50_000_000n, 50_000_000n]); // coal lost money: nothing kept from it
   assert.deepEqual(tav.items.map((i) => [i.item, i.before, i.bought, i.now, i.remove]), [[ITEM.coal, 0n, 1_000_000n, 1_000_000n, 1_000_000n]]);
-  // Quenby: an admin took $200'000 after the cutoff, so she holds less than then. Nothing to take back from the bank.
+  // Quenby: an admin took 200'000 $ after the cutoff, so she holds less than then. Nothing to take back from the bank.
   const q = row(take(QUENBY).rows, PLAYERS.Quenby.account);
   assert.ok(q.now < q.start);
   assert.deepEqual([q.keep, q.take], [q.now, 0n]);
@@ -90,9 +90,9 @@ test('gains on other markets are kept, and what the player held at the cutoff st
   const save = path.join(fx.root, 'edges');
   fs.cpSync(fx.master, save, { recursive: true });
   const bank = new DatabaseSync(path.join(save, 'data/BankSystem/Database/banksystem.db'));
-  // A cutoff before Tavrik's coal: he held 4'000 coal then, and sells wheat after it for $50'000 (a market
+  // A cutoff before Tavrik's coal: he held 4'000 coal then, and sells wheat after it for 50'000 $ (a market
   // outside the incident). Both after the incident's first finding, so the incident keeps its id.
-  const at = T0 + 125 * MIN + 30_000; // before the admin's $5M (minute 126), which is taken back
+  const at = T0 + 125 * MIN + 30_000; // before the admin's 5M $ (minute 126), which is taken back
   bank.prepare(`INSERT INTO TransactionLog (account_number, actor_uuid, actor_name, kind, type_code, item_id, amount, ts, source_kind, tag, money_amount, price, currency_item)
     VALUES (?, ?, 'Tavrik', 'TRADE_SELL', 5, ?, 1000, ?, 'STOCKMARKET', 'CLOSE', 5000000, 500000, ?)`).run(PLAYERS.Tavrik.account, tavrik, ITEM.wheat, at + MIN, ITEM.money);
   bank.prepare('INSERT INTO BalanceHistory (account_number, item_id, balance, locked_balance, time) VALUES (?, ?, 400000, 0, ?)').run(PLAYERS.Tavrik.account, ITEM.coal, at - 1);
@@ -114,7 +114,7 @@ test('2.1.2: the admin removal is a question, its answer is stored and changes n
   assert.equal(api.caseData().choices.answers[q.removed[0]!.key], 'yes');
   assert.deepEqual(take(QUENBY), t);
 
-  // Brindle paid in $1.5M of the notes Tavrik took out after the cutoff: that is what traces to the incident, nothing else
+  // Brindle paid in 1.5M $ of the notes Tavrik took out after the cutoff: that is what traces to the incident, nothing else
   // of their account (they did not trade its markets).
   const b = take().rows.at(-1)!;
   assert.deepEqual([b.account, b.via?.uuid, b.via?.notes, b.removed, b.items], [PLAYERS.Brindle.account, tavrik, 150_000_000n, [], []]);

@@ -31,13 +31,13 @@ test('the list is sorted by suspicion, then by profit, and the first player open
   await expect(page.locator('aside .count').nth(1)).toHaveAttribute('title', '4 open findings, the highest critical');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tavrik');
   await expect(page.locator('.uuid')).toHaveText('a1b2c3d4-e5f6-4a7b-8c9d-000000000001');
-  await expect(page.locator('.lead')).toHaveText('Tavrik made $5.44M trading profit in this time range, on the Diamond market.');
-  await expect(page.locator('.fvalue')).toHaveText(['+$5.44M', '60', "$940'830.00", '7']);
+  await expect(page.locator('.lead')).toHaveText('Tavrik made 5.44M $ trading profit in this time range, on the Diamond market.');
+  await expect(page.locator('.fvalue')).toHaveText(['+5.44M $', '60', "940'830.00 $", '7']);
   await expect(page.locator('.figure').nth(3)).toContainText(/Open findings\s*7\s*2 high, 5 medium/);
   const flagged = page.getByRole('region', { name: 'What was flagged' }).locator('a.link-row');
   await expect(flagged).toHaveCount(5); // the first five of 7
   await expect(page.getByRole('region', { name: 'What was flagged' }).getByRole('button', { name: 'Show all 7' })).toBeVisible();
-  await expect(flagged.first()).toContainText("$5.44M trading profit within one hour");
+  await expect(flagged.first()).toContainText("5.44M $ trading profit within one hour");
   await flagged.first().click();
   await expect(page).toHaveURL(/#\/findings\/hour-profit%3A/);
   await page.goBack();
@@ -50,15 +50,15 @@ test('the trades tab: profit by market, trading sessions and the latest orders',
   await expect(page.locator('.market')).toHaveCount(1);
   const sessions = page.locator('.session');
   await expect(sessions).toHaveCount(2);
-  await expect(sessions.first()).toContainText(/4 Nov 2026, \d\d:40:00 · Diamond\s*30 orders, 20 ms apart\s*\+\$5\.44M/);
+  await expect(sessions.first()).toContainText(/4 Nov 2026, \d\d:40:00 · Diamond\s*30 orders, 20 ms apart\s*\+5\.44M \$/);
   await expect(sessions.first().locator('.sdot')).toHaveAttribute('style', /var\(--high\)/); // the hour's profit finding lies in it
-  await expect(sessions.nth(1)).toContainText(/· Diamond\s*30 orders, 20 ms apart\s*\$0\.00/);
-  await expect(page.locator('.market')).toContainText("60 orders, bought for $440'370.00, sold for $5.88M");
+  await expect(sessions.nth(1)).toContainText(/· Diamond\s*30 orders, 20 ms apart\s*0\.00 \$/);
+  await expect(page.locator('.market')).toContainText("60 orders, bought for 440'370.00 $, sold for 5.88M $");
   const rows = page.locator('tbody tr');
   await expect(rows).toHaveCount(10);
   await expect(page.locator('main')).toContainText('the latest 10 of 60');
   // SM-317: a filled order says nothing more; only a cancelled one gets a line under its quantity.
-  await expect(rows.first().locator('td')).toHaveText([/^\d+ Nov 2026, \d\d:\d\d:\d\d\.580$/, 'Diamond', 'Sell', 'Market', '100', "$1'960.40", "$196'040.00", 'survival-main']);
+  await expect(rows.first().locator('td')).toHaveText([/^\d+ Nov 2026, \d\d:\d\d:\d\d\.580$/, 'Diamond', 'Sell', 'Market', '100', "1'960.40 $", "196'040.00 $", 'survival-main']);
   await page.setViewportSize({ width: 1440, height: 1500 });
   await page.screenshot({ path: 'test-results/players-dark.png' });
   await page.getByRole('button', { name: 'Show all', exact: true }).click();
@@ -72,10 +72,10 @@ test('the bank history tab: the log of the player\'s accounts in words', async (
   await expect(entries).toHaveCount(10);
   await expect(entries.first()).toContainText('Transfer');
   await expect(entries.first()).toContainText('Account 11 · to account 24');
-  await expect(entries.first()).toContainText("-$1'000'000.00");
+  await expect(entries.first()).toContainText("-1'000'000.00 $");
   await expect(entries.nth(1)).toContainText("Withdrawal");
   await expect(entries.nth(3)).toContainText('Sold 100 Diamond');
-  await expect(entries.nth(3)).toContainText("+$196'040.00");
+  await expect(entries.nth(3)).toContainText("+196'040.00 $");
   // BS-256 and BS-258: a slave's row names its server (the master's rows do not), and where the player stood.
   await expect(entries.first()).not.toContainText('on survival-main');
   await expect(entries.nth(1)).toContainText('on mining-1');
@@ -88,13 +88,13 @@ test('a player picked from the list gets an address; sales without a purchase ar
   await expect(page).toHaveURL(/#\/players\/a1b2c3d4-e5f6-4a7b-8c9d-000000000004$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Mikko_82');
   await expect(page.locator('.lead')).toContainText('made no realised trading profit');
-  await expect(page.locator('.lead')).toContainText("Items worth $115.84 were sold that the player had not bought on the market.");
-  await expect(page.locator('.figure').first()).toContainText('plus $115.84 sold without a purchase');
+  await expect(page.locator('.lead')).toContainText("Items worth 115.84 $ were sold that the player had not bought on the market.");
+  await expect(page.locator('.figure').first()).toContainText('plus 115.84 $ sold without a purchase');
   // The bank tab stays picked; an admin's balance change shows from and to
   await page.getByRole('link', { name: /AdmiralNoor/ }).click();
   await expect(page.locator('.entry').first()).toContainText("Set by an admin");
-  await expect(page.locator('.entry').first()).toContainText("from $100'000.00 to $75'000.00");
-  await expect(page.locator('.entry').first()).toContainText("-$25'000.00");
+  await expect(page.locator('.entry').first()).toContainText("from 100'000.00 $ to 75'000.00 $");
+  await expect(page.locator('.entry').first()).toContainText("-25'000.00 $");
   await page.getByRole('tab', { name: 'Trades' }).click();
   await expect(page.locator('.empty')).toHaveText('No orders in the selected time range.');
 });
@@ -102,7 +102,7 @@ test('a player picked from the list gets an address; sales without a purchase ar
 test('orders (SM-317): the limit price, less filled than wanted, and how the order ended', async () => {
   await page.getByRole('link', { name: /Ombrelune/ }).click();
   await page.getByRole('tab', { name: 'Trades' }).click();
-  await expect(page.locator('tbody tr').first().locator('td').nth(3)).toHaveText("Limit at $10.00");
+  await expect(page.locator('tbody tr').first().locator('td').nth(3)).toHaveText("Limit at 10.00 $");
   await expect(page.locator('tbody tr').first().locator('td').nth(4)).toHaveText('8 of 16cancelled by the player'); // volumes are in hundredths of an item
   await page.screenshot({ path: 'test-results/players-orders-end-dark.png' });
   await page.getByRole('link', { name: /Mikko_82/ }).click();
@@ -128,7 +128,7 @@ test.describe('an old 2.1.2 save', () => {
     await old.getByRole('tab', { name: 'Bank history' }).click();
     const gap = old.locator('.entry.gap');
     await expect(gap).toHaveCount(1);
-    await expect(gap).toContainText(/Balance fell with no log entry\s*Account 7 · Seen between two balance snapshots\s*-\$200'000\.00/);
+    await expect(gap).toContainText(/Balance fell with no log entry\s*Account 7 · Seen between two balance snapshots\s*-200'000\.00 \$/);
     await gap.getByRole('link', { name: 'Account 7' }).scrollIntoViewIfNeeded();
     await old.screenshot({ path: 'test-results/players-legacy-bank-dark.png' });
     await gap.getByRole('link', { name: 'Account 7' }).click();
@@ -139,7 +139,7 @@ test.describe('an old 2.1.2 save', () => {
     await old.evaluate(`location.hash = '#/players/${uuidText(PLAYERS.Tavrik.n)}'`);
     await old.getByRole('tab', { name: /^Connected players/ }).click();
     const brindle = old.locator('.link-item', { hasText: 'Brindle' });
-    await expect(brindle).toContainText("$1'500'000.00 appeared on Brindle's account without a log row, at most 30 minutes after Tavrik withdrew exactly that amount.");
+    await expect(brindle).toContainText("1'500'000.00 $ appeared on Brindle's account without a log row, at most 30 minutes after Tavrik withdrew exactly that amount.");
     await brindle.scrollIntoViewIfNeeded();
     await old.screenshot({ path: 'test-results/players-legacy-links-dark.png' });
   });
@@ -186,10 +186,10 @@ test.describe('connected players (AT-41)', () => {
     await expect(p.getByRole('tab', { name: /^Connected players/ })).toHaveText('Connected players (3)');
     await expect(rows().locator('.lname')).toHaveText(['Ombrelune', 'Quenby', 'Brindle']);
     await expect(rows().locator('.strength')).toHaveText(['Proven', 'Proven', 'Likely']);
-    await expect(rows().nth(0)).toContainText('Tavrik sent Ombrelune $1M in 1 transfer.');
+    await expect(rows().nth(0)).toContainText('Tavrik sent Ombrelune 1M $ in 1 transfer.');
     await expect(rows().nth(1)).toContainText('Both use account 30, Tavrik and Quenby.');
     await expect(rows().nth(1).getByRole('button')).toHaveCount(0); // a shared account has no log row behind it
-    await expect(rows().nth(2)).toContainText("Brindle paid in $2'000'000.00 of banknotes 1 minute after Tavrik withdrew exactly that amount.");
+    await expect(rows().nth(2)).toContainText("Brindle paid in 2'000'000.00 $ of banknotes 1 minute after Tavrik withdrew exactly that amount.");
     await expect(p.locator('main')).toContainText('Proven: a shared account or a transfer in the bank\'s log. Likely: banknotes one withdrew and the other paid in within a day, to the exact amount. Weak: both traded the same market at the same time.');
     await rows().nth(2).getByRole('button', { name: 'Show the records' }).click();
     await expect(rows().nth(2).locator('tbody tr')).toHaveCount(2); // the withdrawal and the deposit

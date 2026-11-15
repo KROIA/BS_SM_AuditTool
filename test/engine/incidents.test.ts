@@ -86,15 +86,15 @@ test('title and sentence: plain English, every number through fmt', () => {
   const [tavrik] = api.incidents(ALL, DEFAULT_RULES).incidents;
   const day = time(T0).split(',')[0];
   assert.equal(incidentTitle(tavrik!, name), 'Tavrik on the diamond market');
-  assert.equal(incidentSentence(tavrik!, name), `Tavrik made $5.44M on the diamond market within 60 minutes on ${day}. The incident holds 8 findings, the strongest of them high.`);
+  assert.equal(incidentSentence(tavrik!, name), `Tavrik made 5.44M $ on the diamond market within 60 minutes on ${day}. The incident holds 8 findings, the strongest of them high.`);
 
   const base: Incident = { ...tavrik!, players: [], markets: [ITEM.diamond, ITEM.emerald], profit: 0n, level: 'medium', findings: ['a', 'b'], start: T0, end: T0 + 27 * MIN };
   assert.equal(incidentTitle(base, name), 'The diamond and emerald markets');
   assert.equal(incidentSentence(base, name), `2 findings about the diamond and emerald markets within 27 minutes on ${day}. The strongest of them is medium.`);
   const crowd: Incident = { ...base, players: ['A', 'B', 'C'].map((n) => ({ uuid: n, name: n })), markets: [1, 2, 3], profit: -123_456_789_012n, end: T0 + 5 * 3_600_000 };
   assert.equal(incidentTitle(crowd, name), '3 players on 3 markets');
-  assert.equal(incidentSentence(crowd, name), `3 players lost $1.23B on 3 markets within 5 hours on ${day}. The incident holds 2 findings, the strongest of them medium.`);
-  assert.match(incidentSentence({ ...crowd, end: T0 + 3 * 86_400_000 }, name), /^3 players lost \$1\.23B on 3 markets between \d+ Nov 2026 and \d+ Nov 2026\./);
+  assert.equal(incidentSentence(crowd, name), `3 players lost 1.23B $ on 3 markets within 5 hours on ${day}. The incident holds 2 findings, the strongest of them medium.`);
+  assert.match(incidentSentence({ ...crowd, end: T0 + 3 * 86_400_000 }, name), /^3 players lost 1\.23B \$ on 3 markets between \d+ Nov 2026 and \d+ Nov 2026\./);
 });
 
 test('suspicion: 8, 4, 2, 1 per finding by level, dismissed findings left out', () => {

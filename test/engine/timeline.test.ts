@@ -18,7 +18,7 @@ let fx: Fixtures;
 
 before(() => {
   fx = buildFixtures(fs.mkdtempSync(path.join(os.tmpdir(), 'audittool-timeline-')));
-  // Tavrik pays $2M of notes into the shared account a minute after taking $2M out of his own (minute 51).
+  // Tavrik pays 2M $ of notes into the shared account a minute after taking 2M $ out of his own (minute 51).
   const save = path.join(fx.root, 'carried');
   fs.cpSync(fx.master, save, { recursive: true });
   const db = new DatabaseSync(path.join(save, 'data/BankSystem/Database/banksystem.db'));
@@ -43,7 +43,7 @@ test('notes paid into another account at the amount taken out shortly before are
   assert.deepEqual(brief(carried), ['notes', PLAYERS.Tavrik.account, SHARED.account, 200_000_000n, 'estimate']);
   assert.deepEqual([carried.time, carried.until, carried.by, carried.paidInBy, carried.rows.length], [T0 + 51 * MIN + 500, T0 + 52 * MIN, tavrik, tavrik, 2]);
   assert.deepEqual(players.find((p) => p.uuid === tavrik)?.name, 'Tavrik');
-  // The first $2M has no deposit of its amount: it left for the world. Ombrelune's $3M came from it.
+  // The first 2M $ has no deposit of its amount: it left for the world. Ombrelune's 3M $ came from it.
   assert.deepEqual(at(moves, 50), [['notes', PLAYERS.Tavrik.account, 'world', 200_000_000n, 'proven']]);
   assert.deepEqual(at(moves, 70), [['notes', 'world', PLAYERS.Ombrelune.account, 300_000_000n, 'proven']]);
   // A transfer writes a row on each account: one move with both rows.

@@ -75,15 +75,15 @@ export function words(itemRows: Map<number, ItemRow>) {
     /** Orders as a CSV table (AT-44): what the order tables show, every field of the row and the ids behind the links. */
     orderTable: (list: OrderRow[], name: (uuid: string) => string): Table => ({
       columns: [['Order id', 'id'], ['Row id', 'id'], ['Placed', 'time'], ['Finished', 'time'], ['Player', 'text'], ['Player uuid', 'id'], ['Account', 'id'],
-        ['Market', 'text'], ['Item id', 'id'], ['Side', 'text'], ['Kind', 'text'], ['Limit price ($)', 'money'], ['Quantity', 'quantity'], ['Wanted', 'quantity'],
-        ['Status', 'text'], ['Average price ($)', 'money'], ['Value ($)', 'money'], ['Placed on', 'text']],
+        ['Market', 'text'], ['Item id', 'id'], ['Side', 'text'], ['Kind', 'text'], ['Limit price', 'money'], ['Quantity', 'quantity'], ['Wanted', 'quantity'],
+        ['Status', 'text'], ['Average price', 'money'], ['Value', 'money'], ['Placed on', 'text']],
       rows: list.map((o) => [o.orderId, o.id, o.time || null, o.finishMs, name(o.player), o.player, o.account, itemName(o.item), o.item, o.amount > 0n ? 'Buy' : 'Sell',
         KIND_OF[o.type], o.limitPrice || null, abs(o.amount), o.wanted === null ? null : abs(o.wanted), o.status, o.price, abs(o.money), o.server]),
     }),
     /** Log rows and gaps as a CSV table: money and items in their own columns, so every cell has one unit. */
     ledgerTable: (list: Entry[], master: string | undefined): Table => ({
-      columns: [['Time', 'time'], ['Entry id', 'id'], ['Account', 'id'], ['Type', 'text'], ['What', 'text'], ['Money ($)', 'money'], ['Item change', 'quantity'], ['Item', 'text'],
-        ['Item id', 'id'], ['Balance after ($)', 'money'], ['Balance after (items)', 'quantity'], ['Other account', 'id'], ['Done by', 'text'], ['Actor uuid', 'id'],
+      columns: [['Time', 'time'], ['Entry id', 'id'], ['Account', 'id'], ['Type', 'text'], ['What', 'text'], ['Money', 'money'], ['Item change', 'quantity'], ['Item', 'text'],
+        ['Item id', 'id'], ['Balance after', 'money'], ['Balance after (items)', 'quantity'], ['Other account', 'id'], ['Done by', 'text'], ['Actor uuid', 'id'],
         ['Reference', 'id'], ['Detail', 'text'], ['Server', 'text'], ['Gap from', 'time']],
       rows: list.map(({ row: r, gap: g }) => {
         if (g) {

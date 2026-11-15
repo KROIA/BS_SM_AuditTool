@@ -272,8 +272,8 @@
   // ---- CSV (AT-44): every part of the flow for the players chosen, with the records behind it ----
   const partTable = () => ({
     columns: [['Column', 'text'], ['Part', 'text'], ['Kind', 'text'], ['Player', 'text'], ['Player uuid', 'id'], ['Accounts', 'id'], ['Market', 'text'], ['Item id', 'id'],
-      ['Other account', 'id'], ['Amount ($)', 'money'], ['Basis', 'text'], ['On an incident market', 'text'], ['Items still held', 'quantity'], ['Worth at the usual price ($)', 'money'],
-      ['Notes taken out ($)', 'money'], ['Notes paid back in ($)', 'money'], ['Gap from', 'time'], ['Gap to', 'time'], ['Entry ids', 'id'], ['Order ids', 'id'], ['Finding ids', 'id']] as const,
+      ['Other account', 'id'], ['Amount', 'money'], ['Basis', 'text'], ['On an incident market', 'text'], ['Items still held', 'quantity'], ['Worth at the usual price', 'money'],
+      ['Notes taken out', 'money'], ['Notes paid back in', 'money'], ['Gap from', 'time'], ['Gap to', 'time'], ['Entry ids', 'id'], ['Order ids', 'id'], ['Finding ids', 'id']] as const,
     rows: parts.map((p) => [p.side === 'in' ? 'Came from' : 'Is now', nodeOf(p)[1], p.kind, nameOf.get(p.player), p.player, p.accounts.join(' '), p.market === null ? null : w.itemName(p.market),
       p.market, p.other, p.amount, p.basis, p.market === null ? null : p.incident, p.items?.qty, p.items?.worth, p.notes?.out, p.notes?.back, p.gap?.from, p.gap?.to,
       p.records.ledger.join(' '), p.records.orders.join(' '), p.records.findings.join(' ')]),

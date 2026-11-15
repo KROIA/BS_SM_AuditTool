@@ -104,7 +104,7 @@ test('after a threshold change in the rules, the pinned finding stays as "not ra
   await field.fill('nothing');
   await field.press('Enter');
   await expect(page.getByText('Enter a number above 0, with at most two decimals.')).toBeVisible();
-  await field.fill("10'000'000"); // Tavrik made $5.44M
+  await field.fill("10'000'000"); // Tavrik made 5.44M $
   await field.press('Enter');
   await expect(page.getByText('Enter a number above 0, with at most two decimals.')).toHaveCount(0);
   await expect(page.locator('.group h2').last()).toHaveText('Not raised with the current settings');

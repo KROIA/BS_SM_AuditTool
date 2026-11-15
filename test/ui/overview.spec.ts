@@ -27,11 +27,11 @@ test.describe('the invented network', () => {
   test('the summary names the strongest incident, the figures and both lists, dark and light', async () => {
     await expect(page.locator('.sub').first()).toHaveText(/^survival-main · 1 master and 2 slave servers · 6 players · 11 bank accounts$/);
     await expect(summary(page)).toContainText('Needs attention');
-    await expect(summary(page).locator('.sentence')).toHaveText(/^Tavrik made \$[\d'.]+M? on the diamond market within \d+ minutes on \d+ Nov 2026\. The incident holds 8 findings, the strongest of them \w+\.$/);
+    await expect(summary(page).locator('.sentence')).toHaveText(/^Tavrik made [\d'.]+M? \$ on the diamond market within \d+ minutes on \d+ Nov 2026\. The incident holds 8 findings, the strongest of them \w+\.$/);
     await expect(summary(page).getByRole('link', { name: 'Open the incident' })).toHaveAttribute('href', /^#\/findings\/hour-profit/);
     await expect(figure(page, 'Open findings').locator('.small')).toHaveText(/critical|high/);
     await expect(figure(page, 'Players').locator('.fvalue')).toHaveText('6');
-    await expect(figure(page, 'Money in bank accounts').locator('.fvalue')).toHaveText(/^\$[\d'.]+[MB]$/);
+    await expect(figure(page, 'Money in bank accounts').locator('.fvalue')).toHaveText(/^[\d'.]+[MB] \$$/);
     await expect(page.getByRole('button', { name: 'Total wealth' })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('.event')).toHaveCount(8);
     await expect(page.locator('.event').first()).toContainText('Tavrik on the diamond market');

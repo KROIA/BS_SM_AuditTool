@@ -279,21 +279,21 @@
   // ---- CSV (AT-44): every row behind each table, with the ids behind the links ----
   const T = { player: ['Player', 'text'], uuid: ['Player uuid', 'id'], market: ['Market', 'text'], item: ['Item id', 'id'] } as const;
   const listTable = () => ({
-    columns: [T.player, T.uuid, ['Orders', 'count'], ['Trading profit ($)', 'money'], ['Open findings', 'count'], ['Highest level', 'text'], ['First activity', 'time'], ['Last activity', 'time']] as const,
+    columns: [T.player, T.uuid, ['Orders', 'count'], ['Trading profit', 'money'], ['Open findings', 'count'], ['Highest level', 'text'], ['First activity', 'time'], ['Last activity', 'time']] as const,
     rows: (ordered ?? []).map((p) => [p.name, p.uuid, p.orders, p.profit, flags.get(p.uuid)?.n ?? 0, flags.get(p.uuid)?.level, p.firstMs, p.lastMs]),
   });
   const marketTable = (s: PlayerDetail) => ({
-    columns: [T.uuid, T.market, T.item, ['Orders', 'count'], ['Bought ($)', 'money'], ['Sold ($)', 'money'], ['Sold without a purchase ($)', 'money'], ['Profit ($)', 'money']] as const,
+    columns: [T.uuid, T.market, T.item, ['Orders', 'count'], ['Bought', 'money'], ['Sold', 'money'], ['Sold without a purchase', 'money'], ['Profit', 'money']] as const,
     rows: s.markets.map((m) => [s.uuid, itemName(m.item), m.item, m.orders, m.bought, m.sold, m.soldWithoutPurchase, m.profit]),
   });
   const sessionTable = (s: PlayerDetail) => ({
     columns: [T.uuid, ['Start', 'time'], ['End', 'time'], ['Markets', 'text'], ['Item ids', 'id'], ['Orders', 'count'], ['Typical time between orders (ms)', 'count'],
-      ['Profit ($)', 'money'], ['Sold without a purchase ($)', 'money'], ['Strongest finding', 'id']] as const,
+      ['Profit', 'money'], ['Sold without a purchase', 'money'], ['Strongest finding', 'id']] as const,
     rows: [...sessions].reverse().map((x) => [s.uuid, x.start, x.end, x.markets.map(itemName).join('; '), x.markets.join(' '), x.orders, x.medianGapMs === null ? null : Math.round(x.medianGapMs),
       x.profit, x.soldWithoutPurchase, flagged.find((f) => f.start <= x.end && f.end >= x.start)?.id]),
   });
-  const amountTable = (rows: { label: string; raw: bigint }[]) => ({ columns: [['What', 'text'], ['Amount ($)', 'money']] as const, rows: rows.map((r) => [r.label, r.raw]) });
-  const carriedTable = () => ({ columns: [['Where', 'text'], ['What', 'text'], ['Banknotes ($)', 'money']] as const, rows: carried.map((c) => [c.label, c.sub, c.raw]) });
+  const amountTable = (rows: { label: string; raw: bigint }[]) => ({ columns: [['What', 'text'], ['Amount', 'money']] as const, rows: rows.map((r) => [r.label, r.raw]) });
+  const carriedTable = () => ({ columns: [['Where', 'text'], ['What', 'text'], ['Banknotes', 'money']] as const, rows: carried.map((c) => [c.label, c.sub, c.raw]) });
   const linkTable = (l: PlayerLink[], me: string) => ({
     columns: [T.player, T.uuid, ['How sure', 'text'], ['How they are linked', 'text'], ['Order ids', 'id'], ['Entry ids', 'id']] as const,
     rows: l.map((x) => [x.player.name, x.player.uuid, STRENGTH[x.strength], x.ways.map((w) => sentence(w, me, x.player.name, money)).join(' '), x.records.orders.join(' '), x.records.ledger.join(' ')]),

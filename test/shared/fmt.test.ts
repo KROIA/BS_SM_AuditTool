@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { amount, bytes, count, countShort, items, money, moneyShort, percent, time } from '../../src/shared/fmt.ts';
+import { amount, bytes, count, countShort, currency, items, money, moneyShort, percent, setCurrency, time } from '../../src/shared/fmt.ts';
 
 test('apostrophe between thousands, point before decimals', () => {
   assert.equal(amount(153205n), "1'532.05");
@@ -13,14 +13,14 @@ test('apostrophe between thousands, point before decimals', () => {
 });
 
 test('money in full and shortened', () => {
-  assert.equal(money(153205n), "$1'532.05");
-  assert.equal(money(-153205n), "-$1'532.05");
-  assert.equal(money(1154255602700n), "$11'542'556'027.00");
-  assert.equal(moneyShort(2_943_000_000_000n), '$29.43B');
-  assert.equal(moneyShort(19_200_000_000n), '$192M');
-  assert.equal(moneyShort(-714_000_000_000n), '-$7.14B');
-  assert.equal(moneyShort(1_240_000n), "$12'400.00"); // below a million: in full
-  assert.equal(moneyShort(99_999_600_000n), '$1B'); // 999.996M rounds up to the next unit
+  assert.equal(money(153205n), "1'532.05 $");
+  assert.equal(money(-153205n), "-1'532.05 $");
+  assert.equal(money(1154255602700n), "11'542'556'027.00 $");
+  assert.equal(moneyShort(2_943_000_000_000n), '29.43B $');
+  assert.equal(moneyShort(19_200_000_000n), '192M $');
+  assert.equal(moneyShort(-714_000_000_000n), '-7.14B $');
+  assert.equal(moneyShort(1_240_000n), "12'400.00 $"); // below a million: in full
+  assert.equal(moneyShort(99_999_600_000n), '1B $'); // 999.996M rounds up to the next unit
 });
 
 test('counts shortened for headlines', () => {
@@ -41,7 +41,13 @@ test('item counts drop empty decimals', () => {
 test('amounts beyond what a floating-point number holds stay exact', () => {
   // 2^63 - 1, the largest value a save can contain. A float would turn the last digits into 808.
   assert.equal(amount(9223372036854775807n), "92'233'720'368'547'758.07");
-  assert.equal(moneyShort(9223372036854775807n), "$92'233'720.37B");
+  assert.equal(moneyShort(9223372036854775807n), "92'233'720.37B $");
+});
+
+test('money in the currency of the loaded save', () => {
+  setCurrency('Diamond');
+  assert.deepEqual([money(-153205n), moneyShort(2_943_000_000_000n), currency()], ["-1'532.05 Diamond", '29.43B Diamond', 'Diamond']);
+  setCurrency('$');
 });
 
 test('time and file size', () => {

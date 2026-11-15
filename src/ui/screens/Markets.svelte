@@ -153,12 +153,12 @@
 
   // ---- CSV (AT-44) ----
   const listTable = () => ({
-    columns: [['Market', 'text'], ['Item', 'id'], ['Item id', 'id'], ['Orders', 'count'], ['Price when the save was taken ($)', 'money'], ['Lowest ($)', 'money'], ['Highest ($)', 'money'],
+    columns: [['Market', 'text'], ['Item', 'id'], ['Item id', 'id'], ['Orders', 'count'], ['Price when the save was taken', 'money'], ['Lowest', 'money'], ['Highest', 'money'],
       ['Swing (highest / lowest)', 'number'], ['Open findings', 'count'], ['Highest level', 'text']] as const,
     rows: (ordered ?? []).map((m) => [itemName(m.item), itemRows.get(m.item)?.name, m.item, m.orders, m.price, m.low, m.high, m.swing, flags.get(m.item)?.n ?? 0, flags.get(m.item)?.level]),
   });
   const traderTable = (i: number) => ({
-    columns: [['Player', 'text'], ['Player uuid', 'id'], ['Market', 'text'], ['Item id', 'id'], ['Bought ($)', 'money'], ['Sold ($)', 'money'], ['Realised profit ($)', 'money']] as const,
+    columns: [['Player', 'text'], ['Player uuid', 'id'], ['Market', 'text'], ['Item id', 'id'], ['Bought', 'money'], ['Sold', 'money'], ['Realised profit', 'money']] as const,
     rows: traders.map((t) => [t.name, t.uuid, itemName(i), i, t.bought, t.sold, t.profit]),
   });
 

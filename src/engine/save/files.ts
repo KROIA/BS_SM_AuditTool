@@ -82,14 +82,38 @@ export interface AccountFile {
   users: { uuid: string; permissions: number }[];
   balances: { item: number; balance: bigint; locked: bigint }[];
 }
-/** plain: an ItemIDs entry without components, the number a plain stack of that item id has (not a name digest, not an old alias). */
-export interface ItemFile { id: number; name: string; money: boolean; plain: boolean }
+/**
+ * plain: an ItemIDs entry without components, the number a plain stack of that item id has (not a name digest, not an old alias).
+ * money: the server's currency, the item trades settle in. bank: BankSystem's own money, what banknotes are worth; the same
+ * item unless the market trades in another one.
+ */
+export interface ItemFile { id: number; name: string; money: boolean; bank: boolean; plain: boolean }
 export interface MarketFile { item: number; price: bigint | null; defaultPrice: bigint | null; maintenance: boolean }
 /** aliases: every old item number with the number it ends at. */
-export interface SaveFiles { players: PlayerFile[]; accounts: AccountFile[]; items: ItemFile[]; markets: MarketFile[]; bankVersion: string | null; aliases: [number, number][] }
+export interface SaveFiles { players: PlayerFile[]; accounts: AccountFile[]; items: ItemFile[]; markets: MarketFile[]; bankVersion: string | null; aliases: [number, number][]; currency: string }
+
+export const BANK_MONEY = 'banksystem:money';
+/**
+ * The market's currency (StockMarket settings.json, "ServerMarket" group, CURRENCY: an item stack as {id, count, components?}).
+ * BankSystem money when the file or the key is missing, as on slaves, which never load it.
+ */
+function readCurrency(dataDir: string): { id: string; components: boolean } {
+  try {
+    const file = readSmallFile(path.join(dataDir, 'StockMarket', 'settings.json'));
+    const c: unknown = file && (JSON.parse(file.toString('utf8')) as { ServerMarket?: { CURRENCY?: unknown } } | null)?.ServerMarket?.CURRENCY;
+    if (typeof c === 'object' && c !== null && 'id' in c && typeof c.id === 'string' && /^[a-z0-9_.-]+:[a-z0-9_./-]+$/.test(c.id) && c.id.length <= 100) {
+      const comp = 'components' in c ? c.components : undefined;
+      return { id: c.id, components: typeof comp === 'object' && comp !== null && Object.keys(comp).length > 0 };
+    }
+  } catch {
+    // unreadable: the default
+  }
+  return { id: BANK_MONEY, components: false };
+}
 
 export function readFiles(dataDir: string): SaveFiles {
   const bank = path.join(dataDir, 'BankSystem'), market = path.join(dataDir, 'StockMarket', 'MarketManager');
+  const currency = readCurrency(dataDir);
 
   // Items: the mods number them per world. An alias points an old number at the one that replaced it.
   const items = new Map<number, ItemFile>();
@@ -105,9 +129,10 @@ export function readFiles(dataDir: string): SaveFiles {
     for (const e of list(root, 'itemIDs').filter(isCompound)) {
       const id = itemId(e), stack = compound(e, 'itemStack'), name = str(stack, 'id');
       if (id === undefined || !name) continue;
-      // Money is whichever number stands for banksystem:money without extra components; it differs between worlds.
+      // Money is whichever number stands for the currency without extra components; it differs between worlds.
+      // ponytail: a currency with components matches every entry of its id that has components, not the exact ones.
       const plain = Object.keys(compound(stack, 'components') ?? {}).length === 0;
-      items.set(id, { id, name, money: name === 'banksystem:money' && plain, plain });
+      items.set(id, { id, name, money: name === currency.id && plain !== currency.components, bank: name === BANK_MONEY && plain, plain });
     }
   } catch {
     // no item names: the screens then show "item 6"
@@ -118,7 +143,7 @@ export function readFiles(dataDir: string): SaveFiles {
     bankVersion = str(root, 'version') ?? null;
     for (const d of list(root, 'itemIDShortNameDigest').filter(isCompound)) { // names of items whose mod is gone
       const id = num(d, 's'), name = str(d, 'n');
-      if (id !== undefined && name && !items.has(id)) items.set(id, { id, name, money: false, plain: false });
+      if (id !== undefined && name && !items.has(id)) items.set(id, { id, name, money: false, bank: false, plain: false });
     }
   } catch {
     // version stays unknown
@@ -185,5 +210,5 @@ export function readFiles(dataDir: string): SaveFiles {
     return item === undefined ? [] : [{ item: resolve(item), price: big(m, 'currentMarketPrice') ?? null, defaultPrice: big(m, 'defaultPrice') ?? null, maintenance: flag(m, 'maintenance') }];
   });
 
-  return { players: [...players.values()], accounts, items: [...items.values()], markets, bankVersion, aliases: [...alias.keys()].map((from) => [from, resolve(from)]) };
+  return { players: [...players.values()], accounts, items: [...items.values()], markets, bankVersion, aliases: [...alias.keys()].map((from) => [from, resolve(from)]), currency: currency.id };
 }

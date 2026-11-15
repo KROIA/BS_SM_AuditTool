@@ -101,7 +101,7 @@
   const goods = (t: TransferRow, side: 'sent' | 'received') => t.items.filter((i) => i.item !== null && i[side] !== 0n).map((i) => `${quantity(i[side])} ${itemName(i.item!)}`).join('; ');
   const table = () => ({
     columns: [['Transfer id', 'id'], ['Start', 'time'], ['End', 'time'], ['Between', 'text'], ['Direction', 'text'], ['Path', 'text'], ['Slave', 'text'], ['Player', 'text'], ['Player uuid', 'id'],
-      ['Account', 'id'], ['Money sent ($)', 'money'], ['Money received ($)', 'money'], ['Items sent', 'text'], ['Items received', 'text'], ['Result', 'text'], ['What each side did', 'text'],
+      ['Account', 'id'], ['Money sent', 'money'], ['Money received', 'money'], ['Items sent', 'text'], ['Items received', 'text'], ['Result', 'text'], ['What each side did', 'text'],
       ['Why', 'text'], ['Journal steps', 'text'], ['Entry ids', 'id'], ['Flag ids', 'id'], ['Finding id', 'id']] as const,
     rows: rows.map((t) => [t.id, t.start, t.end, route(t), t.direction, t.path, t.server, t.player?.name, t.player?.uuid, t.account, cash(t, 'sent'), cash(t, 'received'),
       goods(t, 'sent'), goods(t, 'received'), LABEL[t.class], sides(t), t.why, t.steps.join(' '), t.ledger.join(' '), t.flags.join(' '), raised.has('transfer:' + t.id) ? 'transfer:' + t.id : null]),

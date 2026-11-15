@@ -47,7 +47,7 @@ test('both styles in both languages: self-contained, the figures and commands of
     for (const line of commands(tb.rows, '2.1.2')) assert.ok(html.includes(line), `${k}: ${line}`);
     assert.ok(html.includes('Checked with the admins.'), `${k}: the pin's note`);
     assert.doesNotMatch(html, /\d,\d{3}/, `${k}: the apostrophe format`);
-    assert.doesNotMatch(html, /\$[\d.']+[MB]\b/, `${k}: amounts in full`);
+    assert.doesNotMatch(html, /\d[MB] \$/, `${k}: amounts in full`);
   }
   const en = new Set([...headings(out.adminen!), ...headings(out.techen!)]);
   for (const k of ['adminde', 'techde']) {

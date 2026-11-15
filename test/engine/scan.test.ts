@@ -234,14 +234,14 @@ test('the banknote rule follows the coverage: complete, partial, and money that 
   assert.equal(f.facts.offers, SCAN.offers);
   assert.equal(f.measured.value, count - WORLD.found - SCAN.blocks);
   const w = words(f);
-  assert.match(w.summary, /\$839'180\.00 was found\. Looked at: player files, ender chests and every region file \(chests and other blocks, dropped items and other entities\)\. 3 chunks could not be read \(1 packed with LZ4, which the tool does not read\); what they hold is not counted\./);
-  assert.match(w.summary, /Villagers' offers name \$320\.00 in notes; those are prices, not notes, and are not counted\./);
+  assert.match(w.summary, /839'180\.00 \$ was found\. Looked at: player files, ender chests and every region file \(chests and other blocks, dropped items and other entities\)\. 3 chunks could not be read \(1 packed with LZ4, which the tool does not read\); what they hold is not counted\./);
+  assert.match(w.summary, /Villagers' offers name 320\.00 \$ in notes; those are prices, not notes, and are not counted\./);
   assert.doesNotMatch(w.summary, /ATM converter/); // nothing appeared without a log row on this save
-  assert.deepEqual(w.facts.find(([k]) => k === 'Found in blocks and entities'), ['Found in blocks and entities', "$32'940.00"]);
+  assert.deepEqual(w.facts.find(([k]) => k === 'Found in blocks and entities'), ['Found in blocks and entities', "32'940.00 $"]);
   const partial = words({ ...f, facts: { ...f.facts, scan: 'partial', scanFiles: 2, chunksUnread: 0, lz4: 0, filesUnread: 1 } });
   assert.match(partial.summary, /Looked at: player files, ender chests and 2 of 5 region files; the region scan was stopped or the world changed since, so notes in the rest of the world are not counted\. 1 region file not at all; what they hold is not counted\./);
   const short = f.measured.value as bigint;
   assert.match(words({ ...f, facts: { ...f.facts, appeared: 5_000_000n } }).summary,
-    /Of the \$141'782\.00 not found, up to \$50'000\.00 may have been paid back through the ATM converter: that much appeared on accounts without a log row\./);
+    /Of the 141'782\.00 \$ not found, up to 50'000\.00 \$ may have been paid back through the ATM converter: that much appeared on accounts without a log row\./);
   assert.match(words({ ...f, facts: { ...f.facts, appeared: short + 1n } }).summary, /not found, all may have been paid back through the ATM converter/);
 });

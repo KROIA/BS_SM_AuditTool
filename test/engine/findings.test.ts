@@ -74,12 +74,12 @@ test('order rate: the bursts of Tavrik and Quenby, nobody else', () => {
   assert.equal(of('order-rate', set('order-rate', { orders: 30 })).length, 0);
 });
 
-test('profit per hour: Tavrik above $1M, Quenby below', () => {
+test('profit per hour: Tavrik above 1M $, Quenby below', () => {
   open(fx.master);
   const [f, ...rest] = of('hour-profit');
   assert.equal(rest.length, 0);
   assert.deepEqual([who(f!), f!.level, f!.measured, f!.start, f!.end], [['Tavrik'], 'high', { value: 544_083_000n, threshold: 100_000_000n, unit: 'money' }, T0, T0 + 60 * MIN - 1]);
-  // At $50k Quenby's hour counts too, and Tavrik's is more than ten times it.
+  // At 50 $k Quenby's hour counts too, and Tavrik's is more than ten times it.
   assert.deepEqual(of('hour-profit', set('hour-profit', { money: 5_000_000n })).map((x) => [who(x), x.level]), [[['Tavrik'], 'critical'], [['Quenby'], 'high']]);
 });
 
@@ -106,7 +106,7 @@ test('balance not explained: gaps above the threshold, level from the rating and
   assert.deepEqual(of('balance').map((f) => [f.accounts, f.level, f.measured.value, f.facts.rating, f.facts.labels]), [
     [[CHECK.set], 'high', 1_000_000n, 'medium', ['ADMIN_SET']], // ten times the threshold: one higher
     [[CHECK.gain], 'medium', 500_000n, 'medium', []],
-  ]); // the pair's $1'000 gaps and the raw case's are not above $1'000
+  ]); // the pair's 1'000 $ gaps and the raw case's are not above 1'000 $
   assert.equal(of('balance', set('balance', { money: 99_999n })).length, 5);
 });
 
@@ -192,7 +192,7 @@ test('fixed run: every finding on the current and the old save', () => {
     `high balance:${CHECK.set}:${ITEM.money}@${at(30)}`,
     'high market-alert:2', // SM-316: Tavrik's profit alert, more than ten times the server's threshold
     'high bank-flag:2',
-    'medium banknotes:count', // AT-35: $174'722 of notes the count expects are in no player file; spans the whole log, so it sorts first
+    'medium banknotes:count', // AT-35: 174'722 $ of notes the count expects are in no player file; spans the whole log, so it sorts first
     `medium order-ledger:${brindle}@${T0 + 301_200}`,
     `medium balance:${CHECK.gain}:${ITEM.money}@${at(10)}`,
     `medium order-rate:${tavrik}@${at(21)}`,
@@ -252,8 +252,8 @@ test('market alerts: the sentences put every number through fmt', () => {
   const w = { itemName: (id: number) => (id === ITEM.diamond ? 'Diamond' : id === ITEM.emerald ? 'Emerald' : 'Coal'), isMoney: () => false };
   const words = of('market-alert').map((f) => describe(f, w));
   assert.deepEqual(words.map((x) => x.measured), [
-    "$5'550'000.00, the server's limit is $50'000.00", "a rise of 24.99%, the server's limit is 20%",
-    "$150'000.00, the server's limit is $100'000.00", 'a rise of $0.30 per item; without a price for that minute the percent is unknown',
+    "5'550'000.00 $, the server's limit is 50'000.00 $", "a rise of 24.99%, the server's limit is 20%",
+    "150'000.00 $, the server's limit is 100'000.00 $", 'a rise of 0.30 $ per item; without a price for that minute the percent is unknown',
   ]);
   assert.ok(words.every((x) => x.facts.some(([k]) => k === 'Server log line')));
 });

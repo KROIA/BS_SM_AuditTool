@@ -66,7 +66,7 @@ test('every class is found, paired by id alone', () => {
   const get = (k: number) => r.transfers.find((t) => t.id === id(k))!;
   const money = (sent: bigint, received: bigint) => [{ item: null, sent, received }];
   assert.deepEqual([get(4).items, get(4).steps], [money(300_000n, 300_000n), ['REQUESTED', 'CONFIRMED', 'RETURNED']]); // the returned part is not sent
-  // Debit less refund = delivered: the $100 notes of the journal and the master's money item are both money.
+  // Debit less refund = delivered: the 100 $ notes of the journal and the master's money item are both money.
   assert.deepEqual([get(6).items, get(6).path, get(6).ledger.length], [money(300_000n, 300_000n), 'DROP', 2]);
   assert.deepEqual([get(9).items, get(9).ledger.length], [money(70_000n, 140_000n), 2]);
   // Same raw amount, another item: per item, the iron did not arrive and the diamonds came from nowhere.

@@ -85,7 +85,7 @@ test('current save: the pump incident closes per player, and each part is what i
   assert.equal(part(f, 'market', ombrelune, { market: ITEM.diamond }).amount, cash(ombrelune, ITEM.diamond));
 
   // Notes still outside, both players as one: what Ombrelune paid in is not outside any more. None in their files (Tavrik
-  // has only a .dat_old), all found notes are elsewhere, the rest not found. Tavrik alone: his $4M.
+  // has only a .dat_old), all found notes are elsewhere, the rest not found. Tavrik alone: his 4M $.
   const out = 400_000_000n - part(f, 'notes', ombrelune).amount;
   assert.deepEqual(f.notes, { outside: out, inFiles: 0n, elsewhere: WORLD.found, notFound: out - WORLD.found, others: [] });
   assert.deepEqual(flow(PUMP, tavrik).notes, { outside: 400_000_000n, inFiles: 0n, elsewhere: null, notFound: null, others: [] });
@@ -126,16 +126,16 @@ test('2.1.2: orders stand in for trades; notes, removals and money without a row
   closes(f);
   assert.equal(part(f, 'market', tavrik, { market: ITEM.diamond }).records.orders.length, 60);
   assert.equal(part(f, 'market', tavrik, { market: ITEM.diamond }).basis, 'proven');
-  // The $2M asked for at minute 51 is cut by the $500'000 put back without a row.
+  // The 2M $ asked for at minute 51 is cut by the 500'000 $ put back without a row.
   assert.deepEqual([part(f, 'notes').amount, part(f, 'notes').basis], [350_000_000n, 'estimate']);
-  // The converter (2.1.2 wrote no row) is at most the notes outside: probably notes paid in. The admin's $5M is more.
+  // The converter (2.1.2 wrote no row) is at most the notes outside: probably notes paid in. The admin's 5M $ is more.
   assert.deepEqual([part(f, 'appeared').amount, part(f, 'appeared').basis], [FLOW.converter, 'estimate']);
   assert.deepEqual([part(f, 'added').amount, part(f, 'added').basis], [FLOW.adminAdd, 'estimate']);
   assert.equal(part(f, 'added').records.findings.length, 1);
   assert.equal(part(f, 'unexplained').amount, FLOW.unexplained);
   assert.equal(part(f, 'unexplained').basis, 'estimate'); // the rest after estimates is one too
   assert.equal(f.parts.filter((p) => ['admin', 'sent', 'received', 'other'].includes(p.kind)).length, 0); // 2.1.2 logged none
-  // The $1.5M that appeared on Brindle's account without a row is exactly the cut withdrawal at minute 51: a Likely note
+  // The 1.5M $ that appeared on Brindle's account without a row is exactly the cut withdrawal at minute 51: a Likely note
   // link (AT-41), so it is off the notes outside, at most what is left after Ombrelune's deposit.
   const out = 350_000_000n - FLOW.converter - part(f, 'notes', ombrelune).amount;
   const brindleName = { uuid: brindle, name: 'Brindle' };
