@@ -16,6 +16,7 @@ import { report } from './query/report.ts';
 import { search } from './query/search.ts';
 import { sessions } from './query/sessions.ts';
 import { takeBack } from './query/takeback.ts';
+import { flowTimeline } from './query/timeline.ts';
 import { transfers } from './query/transfers.ts';
 import { worldItems } from './query/world.ts';
 import { scanStatus, startScan, stopScan } from './scan.ts';
@@ -54,6 +55,7 @@ export const api: EngineApi = {
   banknotes,
   links,
   moneyFlow,
+  flowTimeline,
   takeBack,
   report,
   worldItems,

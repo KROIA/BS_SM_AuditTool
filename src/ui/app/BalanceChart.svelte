@@ -5,6 +5,7 @@
   // millions. A line's bands are spans to shade while it is shown, [from, to] in epoch ms.
   import type { Point } from '../../shared/api.ts';
   import { countShort, time } from '../../shared/fmt.ts';
+  import FilterList from './FilterList.svelte';
   import { pan, timeTick, wheel, type View } from './zoom.ts';
 
   export interface Series { id: number; name: string; points: Point[]; fmt: (raw: bigint) => string; bands: [number, number][] }
@@ -20,22 +21,9 @@
   /** The step of 1, 2 or 5 times a power of ten at or above x. */
   const nice = (x: number) => { const p = 10 ** Math.floor(Math.log10(x)); return [1, 2, 5, 10].map((m) => m * p).find((s) => s >= x)!; };
 
-  let off = $state(new Set<number>());
-  let search = $state('');
+  let off = $state(new Set<string | number>());
   const colored = $derived(series.map((s, k) => ({ ...s, color: color(k) })));
-  const listed = $derived(colored.filter((s) => s.name.toLowerCase().includes(search.trim().toLowerCase())));
   const on = $derived(colored.filter((s) => !off.has(s.id) && s.points.length));
-  function toggle(id: number) {
-    const next = new Set(off);
-    if (!next.delete(id)) next.add(id);
-    off = next;
-  }
-  /** Shows or hides every line the search leaves in the list. */
-  function all(show: boolean) {
-    const next = new Set(off);
-    for (const s of listed) show ? next.delete(s.id) : next.add(s.id);
-    off = next;
-  }
 
   const bounds = $derived.by(() => {
     const t = series.flatMap((s) => (s.points.length ? [s.points[0]![0], s.points.at(-1)![0]] : []));
@@ -146,23 +134,8 @@
 </script>
 
 <div class="wrap">
-  <div class="filter">
-    <input type="search" placeholder="Find an item" aria-label="Find an item on the chart" bind:value={search} />
-    <div class="all">
-      <button type="button" class="link" onclick={() => all(true)}>Show all items</button>
-      <button type="button" class="link" onclick={() => all(false)}>Hide all items</button>
-    </div>
-    <div role="group" aria-label="Items on the chart" class="items">
-      {#each listed as s (s.id)}
-        <button type="button" aria-pressed={!off.has(s.id)} style="--c: {s.color}" onclick={() => toggle(s.id)} disabled={!s.points.length}
-          title={s.points.length ? undefined : 'No balance snapshot in this time range'}>
-          <span class="dot" aria-hidden="true"></span><span class="ellipsis">{s.name}</span>
-        </button>
-      {:else}
-        <p class="small" style="margin: 4px 0">No item matches.</p>
-      {/each}
-    </div>
-  </div>
+  <FilterList bind:off label="Items on the chart" find="Find an item on the chart" all={['Show all items', 'Hide all items']}
+    entries={colored.map((s) => ({ id: s.id, name: s.name, color: s.color, disabled: s.points.length ? undefined : 'No balance snapshot in this time range' }))} />
   <div style="min-width: 0">
     <div class="readout">
       <span style="font-weight: 600; color: var(--text)">{readout.when}</span>
@@ -200,17 +173,7 @@
 
 <style>
   .wrap { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; margin-top: 16px; }
-  .filter { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .filter input { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line2); background: var(--raised); color: var(--text); }
-  .all { display: flex; gap: 12px; font-size: 13px; }
-  .items { display: flex; flex-direction: column; gap: 2px; max-height: 360px; overflow-y: auto; }
-  .items button { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border: 0; border-radius: 6px; background: none; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
-  .items button:hover { background: var(--raised); }
-  .items button[aria-pressed='false'] { color: var(--text3); }
-  .items button[aria-pressed='false'] .dot { background: none; box-shadow: inset 0 0 0 2px var(--c); }
-  .items button:disabled { cursor: default; opacity: 0.5; }
   .dot { flex: none; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; background: var(--c); vertical-align: -1px; }
-  .items .dot { margin-right: 0; }
   .readout { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text2); }
   .chart { display: flex; gap: 12px; margin-top: 12px; }
   .plot { flex: 1 1 0; min-width: 0; overflow: hidden; cursor: crosshair; touch-action: none; user-select: none; border-radius: 4px; }

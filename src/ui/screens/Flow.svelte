@@ -1,11 +1,18 @@
+<script module lang="ts">
+  // What the screen shows stays when it is left and opened again: the incident or the timeline, players or accounts.
+  const ui = $state({ view: 'incident' as 'incident' | 'timeline', byAccount: false });
+</script>
+
 <script lang="ts">
-  // Money flow: where the money of one incident came from, which player got it and where it is now.
+  // Money flow: where the money of one incident came from, which player (or account) got it and where it is now.
   // Three columns as on the design canvas; the engine sorts every move into a part (query/flow.ts), this screen groups them.
-  import type { Finding, FlowPart, Incident, ItemRow, LedgerRow, MoneyFlow, OrderRow, Scope } from '../../shared/api.ts';
+  // The timeline shows every money move of the bank in the time range instead (FlowTimeline).
+  import type { AccountListRow, Finding, FlowPart, FlowTimeline as Timeline, Incident, ItemRow, LedgerRow, MoneyFlow, OrderRow, Scope } from '../../shared/api.ts';
   import { count, items as quantity, money, moneyShort, time } from '../../shared/fmt.ts';
   import { incidentTitle } from '../../shared/incident.ts';
   import CsvButton from '../app/CsvButton.svelte';
   import FindingLinks from '../app/FindingLinks.svelte';
+  import FlowTimeline from '../app/FlowTimeline.svelte';
   import { app, engine } from '../app/state.svelte.ts';
   import { words } from '../app/words.ts';
 
@@ -39,12 +46,23 @@
     player = null; // another incident has other players
   });
   $effect(() => {
-    const id = incidentId, who = player, scope = $state.snapshot(app.scope), rules = $state.snapshot(app.rules);
+    const id = incidentId, who = player, split = ui.byAccount, scope = $state.snapshot(app.scope), rules = $state.snapshot(app.rules);
     void app.saves.length;
-    if (id === null) return;
+    if (id === null || ui.view !== 'incident') return;
     let stale = false;
-    void engine.moneyFlow(scope, id, who, rules).then((f) => {
+    void engine.moneyFlow(scope, id, who, rules, { split }).then((f) => {
       if (!stale) flow = f;
+    });
+    return () => (stale = true);
+  });
+  let tl = $state<Timeline | null>(null), accounts = $state<AccountListRow[]>([]);
+  $effect(() => {
+    const scope = $state.snapshot(app.scope), rules = $state.snapshot(app.rules);
+    void app.saves.length;
+    if (ui.view !== 'timeline') return;
+    let stale = false;
+    void Promise.all([engine.flowTimeline(scope, rules), engine.accounts(scope, rules)]).then(([t, a]) => {
+      if (!stale) [tl, accounts] = [t, a];
     });
     return () => (stale = true);
   });
@@ -86,7 +104,8 @@
     const links = new Map<string, { a: Node; b: Node; v: bigint }>();
     for (const p of parts) {
       const [id, name] = nodeOf(p);
-      const side = node(id, p.side === 'in' ? 0 : 2, name), who = node(`p:${p.player}`, 1, nameOf.get(p.player) ?? 'A player');
+      const side = node(id, p.side === 'in' ? 0 : 2, name), owner = nameOf.get(p.player) ?? 'A player';
+      const who = ui.byAccount ? node(`a:${p.accounts[0]}`, 1, `Account ${p.accounts[0]} · ${owner}`) : node(`p:${p.player}`, 1, owner);
       side.parts.push(p);
       side.v += p.amount;
       if (p.side === 'in') who.v += p.amount;
@@ -179,7 +198,7 @@
     'out:other-server': 'Trading on the servers the server filter leaves out, netted.',
     'out:unexplained': 'What the balance lost beyond every log entry and order. It includes amounts below the threshold of the finding.',
   };
-  const textOf = (n: Node) => (n.col === 1 ? `Where the money of ${n.name} came from and where it is now.` : n.id.startsWith('in:market:') ? `What ${n.parts.length === 1 ? nameOf.get(n.parts[0]!.player) : 'the players'} made on this market from the incident's start to the copy: sales minus purchases, from the orders.` : TEXT[n.id] ?? '');
+  const textOf = (n: Node) => (n.col === 1 ? `Where the money ${n.id.startsWith('a:') ? `on account ${n.id.slice(2)} of ${nameOf.get(n.parts[0]!.player)}` : `of ${n.name}`} came from and where it is now.` : n.id.startsWith('in:market:') ? `What ${n.parts.length === 1 ? nameOf.get(n.parts[0]!.player) : 'the players'} made on this market from the incident's start to the copy: sales minus purchases, from the orders.` : TEXT[n.id] ?? '');
   interface Row { label: string; sub: string; amount: bigint | null; basis: 'proven' | 'estimate'; href?: string }
   function rowsOf(n: Node): Row[] {
     if (n.col === 1) {
@@ -221,6 +240,7 @@
   }
   const findingsOf = (n: Node) => [...new Set(n.parts.flatMap((p) => p.records.findings))].flatMap((id) => byId.get(id) ?? []);
   const linkOf = (n: Node): [string, string] | null => {
+    if (n.id.startsWith('a:')) return [`Open account ${n.id.slice(2)}`, `#/accounts/${n.id.slice(2)}`];
     if (n.col === 1) return [`Open ${n.name}`, `#/players/${encodeURIComponent(n.parts[0]!.player)}`];
     if (n.id.startsWith('in:market:')) return [`Open the ${w.itemName(n.parts[0]!.market!).toLowerCase()} market`, `#/markets/${n.parts[0]!.market}`];
     const accounts = [...new Set(n.parts.flatMap((p) => p.accounts))];
@@ -263,9 +283,17 @@
 <div class="top">
   <div style="flex: 1 1 320px; min-width: 0">
     <h1 class="h1">Money flow</h1>
-    <p class="sub">Where the money of an incident came from, who got it and where it is now.</p>
+    <p class="sub">{ui.view === 'incident' ? 'Where the money of an incident came from, who got it and where it is now.' : 'Every move of money over time: between accounts, the markets and the world.'}</p>
   </div>
-  {#if flow && flow.players.length > 1}
+  <div role="group" aria-label="View" class="seg">
+    <button type="button" aria-pressed={ui.view === 'incident'} onclick={() => (ui.view = 'incident')}>Incident</button>
+    <button type="button" aria-pressed={ui.view === 'timeline'} onclick={() => (ui.view = 'timeline')}>Timeline</button>
+  </div>
+  <div role="group" aria-label="Show" class="seg">
+    <button type="button" aria-pressed={!ui.byAccount} onclick={() => (ui.byAccount = false)}>Players</button>
+    <button type="button" aria-pressed={ui.byAccount} onclick={() => (ui.byAccount = true)}>Bank accounts</button>
+  </div>
+  {#if ui.view === 'incident' && flow && flow.players.length > 1}
     <div role="group" aria-label="Whose money to follow" class="seg">
       <button type="button" aria-pressed={player === null} onclick={() => (player = null)}>{flow.players.length === 2 ? 'Both players' : 'All players'}</button>
       {#each flow.players as p (p.uuid)}<button type="button" aria-pressed={player === p.uuid} onclick={() => (player = p.uuid)}>{p.name}</button>{/each}
@@ -273,7 +301,15 @@
   {/if}
 </div>
 
-{#if list === null}
+{#if ui.view === 'timeline'}
+  {#if tl === null}
+    <p class="small" aria-busy="true" style="margin: 0">Following the money…</p>
+  {:else if tl.reason !== null}
+    <p class="empty">{tl.reason}</p>
+  {:else}
+    <FlowTimeline {tl} {accounts} byAccount={ui.byAccount} {w} />
+  {/if}
+{:else if list === null}
   <p class="small" aria-busy="true" style="margin: 0">Loading the incidents…</p>
 {:else if list.length === 0}
   <p class="empty">No incident with these rule settings, so there is no money to follow. Findings that belong together form an incident.</p>

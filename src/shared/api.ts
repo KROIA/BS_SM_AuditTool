@@ -642,8 +642,11 @@ export interface QueryApi {
    * Where the money of one incident went, for all its players (player null) or one. The time range
    * does not apply; the server filter applies to orders and trade rows (trading elsewhere becomes "other-server").
    * settings: the incidents are made from the findings, and the threshold of gaps on 2.1.2 is the balance rule's.
+   * opts.split keeps the parts per account (and per gap) instead of merging them per player.
    */
-  moneyFlow(scope: Scope, incidentId: string, player: string | null, settings: RuleSettings): MoneyFlow;
+  moneyFlow(scope: Scope, incidentId: string, player: string | null, settings: RuleSettings, opts?: { split?: boolean }): MoneyFlow;
+  /** Every money move of the bank in the time range, for the timeline of the money flow. settings: the gaps' threshold. */
+  flowTimeline(scope: Scope, settings: RuleSettings): FlowTimeline;
   /** What to take back from the incident's players, from the cutoff to the copy. No scope applies. */
   takeBack(incidentId: string, cutoff: Cutoff, settings: RuleSettings): TakeBack;
   /**
@@ -914,6 +917,42 @@ export interface MoneyFlow {
   missing: string[];
 }
 
+/** Where money is: a bank account (its number), notes outside the bank (world), the markets, an admin, other log entries, or nowhere the log says (unexplained). */
+export type Place = number | 'world' | 'markets' | 'admin' | 'other' | 'unexplained';
+
+/** One move of money between two places, for the timeline of the money flow. Amounts raw, positive. */
+export interface TimelineMove {
+  time: number;
+  /** Notes taken out and paid in again (from an account to an account through the world): when they were paid in, else null. */
+  until: number | null;
+  from: Place;
+  to: Place;
+  amount: bigint;
+  kind: 'notes' | 'trade' | 'transfer' | 'admin' | 'other' | 'unexplained';
+  /** estimate: notes matched by their amount, and changes between two snapshots without a log entry. */
+  basis: 'proven' | 'estimate';
+  /** notes: who took them out (by) and who paid them in (paidInBy), player UUIDs, when the log says. */
+  by: string | null;
+  paidInBy: string | null;
+  /** Log entry ids, and order ids for orders that stand in for trades. */
+  rows: number[];
+  orders: number[];
+}
+
+/**
+ * The bank's money over time, move by move: every log entry of a money item as a move between two places, and the
+ * changes between two snapshots no entry explains (above the balance rule's threshold). Notes paid in at the exact
+ * amount someone took out at most a day before are one move from account to account through the world, an estimate;
+ * the same player's withdrawal first, else the latest one. Every server; the time range applies.
+ */
+export interface FlowTimeline {
+  reason: string | null;
+  moves: TimelineMove[];
+  players: { uuid: string; name: string }[];
+  /** Log entries whose direction the save does not give, left out. */
+  unknown: number;
+}
+
 /** How sure a link between two players is. */
 export type LinkStrength = 'proven' | 'likely' | 'weak';
 /** One way two players are linked; "this" is the player asked about, "they" the other one. */
@@ -986,7 +1025,7 @@ export interface AdminEvent {
   ledgerId: number | null;
 }
 
-export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers' | 'banknotes' | 'links' | 'moneyFlow' | 'takeBack' | 'worldItems' | 'startScan' | 'stopScan' | 'scanStatus'> {
+export interface EngineApi extends Pick<QueryApi, 'items' | 'players' | 'player' | 'orders' | 'ledger' | 'accounts' | 'account' | 'balances' | 'markets' | 'market' | 'candles' | 'traders' | 'search' | 'sessions' | 'check' | 'findings' | 'incidents' | 'adminEvents' | 'overview' | 'keyEvents' | 'transfers' | 'banknotes' | 'links' | 'moneyFlow' | 'flowTimeline' | 'takeBack' | 'worldItems' | 'startScan' | 'stopScan' | 'scanStatus'> {
   /** The saves of the last session, read again only where they changed on disk. */
   workspace(): Workspace;
   /** A save folder, or a .zip that holds one or several; a zip is unpacked first, so it answers later. */

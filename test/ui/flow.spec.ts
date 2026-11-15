@@ -3,7 +3,8 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { buildFixtures, PLAYERS, T0, uuidText } from '../fixtures/build.ts';
+import { DatabaseSync } from 'node:sqlite';
+import { buildFixtures, ITEM, PLAYERS, SHARED, T0, uuidText } from '../fixtures/build.ts';
 
 const fx = buildFixtures(path.resolve('test-results/fixtures-flow'), true);
 const PUMP = `hour-profit:${uuidText(PLAYERS.Tavrik.n)}@${T0}`;
@@ -116,6 +117,73 @@ test.describe('the invented network', () => {
     expect(await fits('MightyWombat_916')).toBe(true); // 16 letters, the longest Minecraft name
     expect(await fits('MightyWombat_916_and_more')).toBe(false);
     await page.setViewportSize({ width: 1440, height: 900 });
+  });
+
+  test('Bank accounts splits the middle column into the players\' accounts (AT-59)', async () => {
+    await page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Bank accounts' }).click();
+    await expect(node(`Account ${PLAYERS.Tavrik.account} · Tavrik`)).toHaveCount(1);
+    await expect(node('Tavrik')).toHaveCount(0);
+    await node(`Account ${PLAYERS.Tavrik.account} · Tavrik`).click();
+    await expect(page.getByRole('link', { name: `Open account ${PLAYERS.Tavrik.account}` })).toHaveAttribute('href', `#/accounts/${PLAYERS.Tavrik.account}`);
+    await page.screenshot({ path: 'test-results/flow-accounts-dark.png' });
+    await page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Players' }).click();
+    await expect(node('Tavrik')).toHaveCount(1);
+  });
+});
+
+test.describe('the timeline', () => {
+  // Tavrik pays $2M of notes into the shared account a minute after taking $2M out of his own (minute 51).
+  test.beforeAll(() => {
+    const save = path.resolve('test-results/fixtures-flow/carried');
+    fs.rmSync(save, { recursive: true, force: true });
+    fs.cpSync(fx.master, save, { recursive: true });
+    const db = new DatabaseSync(path.join(save, 'data/BankSystem/Database/banksystem.db'));
+    db.prepare(`INSERT INTO TransactionLog (account_number, actor_uuid, actor_name, kind, type_code, item_id, amount, ts, source_kind)
+      VALUES (?, ?, 'Tavrik', 'DEPOSIT', 1, ?, 200000000, ?, 'PLAYER')`).run(SHARED.account, uuidText(PLAYERS.Tavrik.n), ITEM.money, T0 + 52 * 60_000);
+    db.close();
+    return launch('timeline', [save]);
+  });
+  test.afterAll(() => program.close());
+
+  test('notes carried from one account into another run through the world', async () => {
+    await page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Timeline' }).click();
+    await expect(page.locator('.lead')).toContainText('$2M likely went from one account to another as banknotes, each time carried by the same player.');
+    const rows = page.getByRole('group', { name: 'Rows on the chart' }).getByRole('button');
+    await expect(rows.filter({ hasText: /^Tavrik$/ })).toHaveCount(1);
+    await expect(rows.filter({ hasText: `Account ${SHARED.account} · ${SHARED.name}` })).toHaveCount(1); // a shared account keeps its own row
+    await expect(rows.filter({ hasText: 'World: notes outside the bank' })).toHaveAttribute('aria-pressed', 'true');
+
+    // The arrow keys step through the moves; the carried one opens with both log entries.
+    const plot = page.getByRole('img', { name: /^Money moves from / });
+    await plot.focus();
+    for (let i = 0; i < 200 && !(await page.locator('.dtitle').allTextContents()).includes('Carried as notes'); i++) await plot.press('ArrowRight');
+    await expect(page.locator('.dtitle')).toHaveText('Carried as notes');
+    await expect(page.locator('.dtext')).toContainText(`left account ${PLAYERS.Tavrik.account} as banknotes and the same amount was paid into account ${SHARED.account} 1 min later, by the same player, Tavrik.`);
+    await expect(page.locator('.detail .badge')).toHaveText('Estimate');
+    await expect(page.locator('.detail tbody tr')).toHaveCount(2);
+    await expect(page.locator('path.band.dash')).not.toHaveCount(0);
+    await shot('flow-timeline');
+
+    // The time only zooms; Ctrl+Space shows everything again.
+    const label = await plot.getAttribute('aria-label');
+    await plot.hover();
+    await page.mouse.wheel(0, -500);
+    await expect(plot).not.toHaveAttribute('aria-label', label!);
+    await plot.press('Control+Space');
+    await expect(plot).toHaveAttribute('aria-label', label!);
+  });
+
+  test('Bank accounts gives every account its own row; a hidden row hides its moves', async () => {
+    await page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Bank accounts' }).click();
+    const rows = page.getByRole('group', { name: 'Rows on the chart' }).getByRole('button');
+    await expect(rows.filter({ hasText: /^Tavrik$/ })).toHaveCount(0);
+    await expect(rows.filter({ hasText: new RegExp(`^Account ${PLAYERS.Tavrik.account} · `) })).toHaveCount(1);
+    await page.screenshot({ path: 'test-results/flow-timeline-accounts-dark.png' });
+    await page.getByRole('button', { name: 'Hide all rows' }).click();
+    await expect(page.locator('.lead')).toHaveText('No money moved between the rows shown in this time range.');
+    await page.getByRole('button', { name: 'Show all rows' }).click();
+    await page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Players' }).click();
+    await page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Incident' }).click();
   });
 });
 
