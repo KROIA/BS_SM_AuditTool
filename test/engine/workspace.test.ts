@@ -74,7 +74,7 @@ test('a second master is refused with a sentence, and the first stays loaded', (
   open(fresh());
   addSave(fx.master);
   assert.throws(() => addSave(fx.legacy), {
-    message: '"survival-main" is already loaded as the server with the bank and market data. One workspace holds one network: remove it first to look at "old-world".',
+    message: '"old-world" was not loaded: "survival-main" already holds the bank and market data, and one workspace holds one network. To look at "old-world", remove "survival-main" first.',
   });
   assert.deepEqual(names(), ['survival-main']);
   // The same folder spelled differently is the same save, not a second master.
@@ -83,6 +83,12 @@ test('a second master is refused with a sentence, and the first stays loaded', (
   assert.deepEqual(names(), ['survival-main']);
   assert.equal(workspace().saves[0]!.path, path.resolve(fx.master));
   assert.ok(mainData());
+  // A case.json that lists both (older versions did not refuse) brings them back with a warning.
+  const dir = fresh();
+  fs.mkdirSync(dir);
+  fs.writeFileSync(path.join(dir, 'case.json'), JSON.stringify({ saves: [fx.master, fx.legacy] }));
+  open(dir);
+  assert.deepEqual(workspace().warnings.slice(0, 1), ['Several loaded saves hold bank or market data ("survival-main", "old-world"). Only "survival-main" is read: remove the others.']);
 });
 
 test('removing a save drops it and its cache; a slave alone is told its master is missing', () => {

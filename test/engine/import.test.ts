@@ -297,7 +297,7 @@ test('an audit export (BS-255) opens like a save: made when its manifest says, b
   assert.equal(save.bankVersion, '2.2.0'); // the bank's own files win over the manifest's 2.3.0
   assert.equal(save.marketVersion, EXPORT.market);
   assert.deepEqual(status(save), ['bank:read', 'market:read', 'bankDiag:read', 'marketDiag:read', 'audit:read']);
-  assert.deepEqual(save.warnings, [`The server had no ${EXPORT.missing} when it made this export.`]);
+  assert.deepEqual(save.warnings, [`The server had no ${EXPORT.missing} when it made this export.`]); // not EXPORT.unread: the tool does not read it
   assert.equal(load(path.join(fx.exported, 'data')).save.exported, true); // its data folder picked directly
 });
 

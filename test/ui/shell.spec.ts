@@ -50,7 +50,7 @@ test.describe('with the invented network loaded', () => {
     await expect(page.locator('section.save h2')).toHaveText(['survival-main', 'mining-1', 'nether-hub']);
     await expect(page.locator('nav')).toContainText('3 saves loaded');
     await expect(page.getByRole('alert')).toHaveText(
-      '"survival-main" is already loaded as the server with the bank and market data. One workspace holds one network: remove it first to look at "old-world".');
+      '"old-world" was not loaded: "survival-main" already holds the bank and market data, and one workspace holds one network. To look at "old-world", remove "survival-main" first.');
     await expect(page.locator('main')).toContainText('The copies were taken more than an hour apart.'); // nether-hub was copied 9 hours earlier
     const master = page.locator('section', { hasText: 'survival-main' }).first();
     // numbers on the screen use the apostrophe: 8 markets x 160 candles + 86 orders
@@ -135,7 +135,8 @@ test.describe('an audit export (BS-255)', () => {
     await expect(save.locator('h2')).toHaveText(EXPORT.folder);
     await expect(save).toContainText(/Audit export made 4 Nov 2026, \d\d:\d\d/);
     await expect(save).toContainText('BankSystem 2.2.0 · StockMarket 1.9.0 · Minecraft 1.21.1');
-    await expect(page.locator('main')).toContainText('dividend_history.db when it made this export');
+    await expect(page.locator('main')).toContainText(`The server had no ${EXPORT.missing} when it made this export.`);
+    await expect(page.locator('main')).not.toContainText('villager_trades'); // the tool does not read it
     await page.screenshot({ path: 'test-results/saves-export-dark.png' });
     await page.getByRole('button', { name: 'Switch to the light theme' }).click();
     await page.screenshot({ path: 'test-results/saves-export-light.png' });

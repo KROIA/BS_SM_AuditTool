@@ -118,6 +118,8 @@ const FINGERPRINT_FILES = [
   'ModUtilities/server_identity.json', 'BankSystem/ItemIDs.nbt', 'BankSystem/Meta_data.nbt', 'BankSystem/settings.json', '../level.dat', '../manifest.json', '../../usercache.json',
 ];
 const FINGERPRINT_DIRS = ['BankSystem/audit', 'BankSystem/Bank_data', 'BankSystem/Companies', 'StockMarket/MarketManager', '../playerdata'];
+/** Whether the tool reads a file, by its path relative to the data folder (../level.dat for one beside it). */
+const reads = (rel: string) => FINGERPRINT_FILES.includes(rel) || FINGERPRINT_DIRS.some((d) => rel.startsWith(d + '/'));
 const CHUNK = 200_000; // ids per insert; a failing insert is halved until the damage is fenced in
 const SMALLEST = 64;
 
@@ -314,7 +316,7 @@ export function importSave(picked: string, cacheFile: string, report: Report = (
   const dataDir = findDataDir(picked);
   const identity = readIdentity(dataDir);
   const level = readLevel(dataDir);
-  const manifest = readManifest(dataDir);
+  const manifest = readManifest(dataDir, reads);
   const print = fingerprint(picked);
   const tmp = cacheFile + '.copies';
   for (const f of [cacheFile, cacheFile + '-journal']) fs.rmSync(f, { force: true });

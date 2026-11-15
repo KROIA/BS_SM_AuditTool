@@ -792,9 +792,9 @@ function tradeAlerts(price: Map<number, number[]>, list: Order[]): Record<string
 }
 
 /** The audit export: folder name (server local time), when it was made, what its manifest records. */
-export const EXPORT = { folder: '20261104-134400-before-wipe', ms: T0 + (MINUTES + 4) * MIN, bank: '2.3.0', market: '1.9.0', missing: 'data/BankSystem/Database/dividend_history.db' } as const;
+export const EXPORT = { folder: '20261104-134400-before-wipe', ms: T0 + (MINUTES + 4) * MIN, bank: '2.3.0', market: '1.9.0', missing: 'level.dat', unread: 'data/StockMarket/villager_trades.nbt' } as const;
 
-/** manifest.json as BS AuditExporter.java writes it: every file of the package with its size and sha256, and one the server did not have. */
+/** manifest.json as BS AuditExporter.java writes it: every file of the package with its size and sha256, and two the server did not have (one the tool does not read). */
 function auditManifest(dir: string) {
   const files = (fs.readdirSync(path.join(dir, 'data'), { recursive: true }) as string[]).map((f) => path.join('data', f).replaceAll('\\', '/'))
     .filter((f) => fs.statSync(path.join(dir, f)).isFile()).sort();
@@ -808,7 +808,7 @@ function auditManifest(dir: string) {
     mods: { banksystem: EXPORT.bank, modutilities: '1.4.0', stockmarket: EXPORT.market },
     participants: {
       banksystem: { files: [...part('data/BankSystem/'), ...part('data/ModUtilities/'), { path: EXPORT.missing, method: 'missing' }] },
-      stockmarket: { files: part('data/StockMarket/') },
+      stockmarket: { files: [...part('data/StockMarket/'), { path: EXPORT.unread, method: 'missing' }] },
     },
   }, null, 2));
 }

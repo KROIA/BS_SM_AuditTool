@@ -60,7 +60,8 @@ export interface Manifest {
 const MANIFEST_LIMIT = 1024 * 1024;
 const ROLES: Record<string, Identity['role']> = { master: 'MASTER', slave: 'SLAVE', single: 'STANDALONE' };
 
-export function readManifest(dataDir: string): Manifest | null {
+/** reads: whether the tool reads a file (path relative to the data folder); a missing file it does not read is not worth a note. */
+export function readManifest(dataDir: string, reads: (rel: string) => boolean = () => true): Manifest | null {
   if (path.basename(dataDir) !== 'data') return null;
   const root = path.dirname(dataDir);
   try {
@@ -84,7 +85,9 @@ export function readManifest(dataDir: string): Manifest | null {
         const rel = text(f.path, 300);
         // Only paths inside the export: no absolute paths, no way up.
         if (rel === null || path.isAbsolute(rel) || rel.split(/[\\/]/).includes('..')) continue;
-        if (f.method === 'missing') missing.push(rel);
+        if (f.method === 'missing') {
+          if (reads(path.posix.relative('data', rel.replaceAll('\\', '/')))) missing.push(rel);
+        }
         else if (typeof f.size === 'number') {
           const s = fs.statSync(path.join(root, rel), { throwIfNoEntry: false });
           if (!s?.isFile() || s.size !== f.size) differ.push(rel);

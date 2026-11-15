@@ -246,6 +246,9 @@ function closeMaster() {
 function networkWarnings(): string[] {
   const out: string[] = [];
   const main = mainSave();
+  // add() refuses a second one; a case.json of an older version can still bring two back.
+  const banks = saves.filter(hasBankOrMarket);
+  if (banks.length > 1) out.push(`Several loaded saves hold bank or market data (${banks.map((s) => `"${s.name}"`).join(', ')}). Only "${main!.name}" is read: remove the others.`);
   const byUid = new Map<string, string>();
   for (const s of saves) {
     if (!s.serverUid) continue;
@@ -315,7 +318,7 @@ function add(picked: string): Workspace {
   const main = mainSave();
   if (main && !isSame(main, picked) && hasBankOrMarket(summary)) {
     fs.rmSync(cacheFile(picked), { force: true });
-    throw new Error(`"${main.name}" is already loaded as the server with the bank and market data. One workspace holds one network: remove it first to look at "${summary.name}".`);
+    throw new Error(`"${summary.name}" was not loaded: "${main.name}" already holds the bank and market data, and one workspace holds one network. To look at "${summary.name}", remove "${main.name}" first.`);
   }
   saves = [...saves.filter((s) => !isSame(s, picked)), summary];
   remember();
