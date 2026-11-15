@@ -162,8 +162,12 @@ test.describe('the timeline', () => {
     await expect(page.locator('.detail .badge')).toHaveText('Estimate');
     await expect(page.locator('.detail tbody tr')).toHaveCount(2);
     await expect(page.locator('g.band path.dash')).not.toHaveCount(0);
-    // Straight pieces only, no curves (their slanted flat ends looked like corners).
-    expect(await page.locator('g.band path').evaluateAll((l) => l.every((p) => /^M[\d.-]+ [\d.-]+[VH][\d.-]+$/.test(p.getAttribute('d')!)))).toBe(true);
+    // Straight pieces only, no curves (their slanted flat ends looked like corners), and one arrowhead per band.
+    expect(await page.locator('g.band path:not(.head)').evaluateAll((l) => l.every((p) => /^M[\d.-]+ [\d.-]+[VH][\d.-]+$/.test(p.getAttribute('d')!)))).toBe(true);
+    expect(await page.locator('g.band path.head').count()).toBe(await page.locator('g.band').count());
+    // The carried notes end with an arrow pointing up from the World row into the shared account: tip above the base.
+    const [head] = await page.locator('g.band:has(path.dash) path.head').evaluateAll((l) => l.map((p) => p.getAttribute('d')!.match(/-?[\d.]+/g)!.map(Number)));
+    expect(head![5]).toBeLessThan(head![1]);
     await shot('flow-timeline');
 
     // The time only zooms; Ctrl+Space shows everything again.
