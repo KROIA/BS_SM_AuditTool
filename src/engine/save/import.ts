@@ -11,8 +11,8 @@ import { readBankAudit, readFiles, readUserCache } from './files.ts';
 import { findDataDir, readIdentity, readLevel, readManifest } from './locate.ts';
 import { readPlayerFiles } from './players.ts';
 
-/** Raise when the layout of the cache changes: caches written by an older version are rebuilt. */
-export const CACHE_VERSION = 12;
+/** Raise when the layout or the content of the cache changes: caches written by an older version are rebuilt. */
+export const CACHE_VERSION = 13;
 
 const SCHEMA = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);

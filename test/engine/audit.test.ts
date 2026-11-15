@@ -85,6 +85,11 @@ test('time zone: one file whose matches agree, and none in this computer\'s zone
   assert.deepEqual(found.placed, [{ ts: at - 3_600_000, approximate: false, row: 1 }, { ts: at + 9_000 - 3_600_000, approximate: false, row: 2 },
     { ts: at - 3_600_000, approximate: false, row: null }, { ts: null, approximate: false, row: null }]);
 
+  // An admin entry and a flag entry whose rows have the same id in their own tables (ledger 1, flag 1): both pair.
+  const twice = placeInTime([{ local: at, key: 'A', file: 0 }, { local: at + 9_000, key: 'F', file: 0 }],
+    [{ id: 1, ts: at - 3_600_000, key: 'A' }, { id: 1, ts: at - 3_600_000 + 9_000, key: 'F' }], 1);
+  assert.deepEqual(twice.placed.map((p) => p.row), [1, 1]);
+
   const none = placeInTime([{ local: at, key: 'a', file: 0 }], [{ id: 1, ts: at - 3_600_000 - 400_000, key: 'a' }], 1);
   assert.deepEqual([none.zones, none.matches, none.placed[0]], [[{ offset: null, how: 'approximate' }], 0, { ts: new Date(2026, 10, 4, 11, 0, 5).getTime(), approximate: true, row: null }]);
 });

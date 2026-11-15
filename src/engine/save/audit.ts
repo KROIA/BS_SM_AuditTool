@@ -169,7 +169,7 @@ export function placeInTime(entries: { local: number | null; key: string | null;
     return { offset: before ?? after, how: before !== null && after !== null && before !== after ? 'approximate' : 'neighbour' };
   });
 
-  const used = new Set<number>();
+  const used = new Set<TimedRow>(); // by row, not id: flag rows and ledger rows count their ids separately
   const placed = entries.map((e, i) => {
     const z = zones[e.file]!;
     let ts: number | null = null;
@@ -179,8 +179,8 @@ export function placeInTime(entries: { local: number | null; key: string | null;
         : new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()).getTime();
     }
     const exact = z.how !== 'approximate';
-    const best = candidates[i]!.filter((c) => !used.has(c.row.id) && (!exact || c.q === z.offset)).sort((a, b) => a.off - b.off)[0];
-    if (best) used.add(best.row.id);
+    const best = candidates[i]!.filter((c) => !used.has(c.row) && (!exact || c.q === z.offset)).sort((a, b) => a.off - b.off)[0];
+    if (best) used.add(best.row);
     return { ts, approximate: !exact, row: best?.row.id ?? null };
   });
   return { zones, matches: placed.filter((p) => p.row !== null).length, placed };
