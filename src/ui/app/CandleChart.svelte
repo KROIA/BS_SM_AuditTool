@@ -89,6 +89,8 @@
     });
     return {
       up, down, wickUp, wickDown, vol, markers, slot,
+      // Two thirds of a candle's body (which is 0.6 of its slot), between 10 and 30 px.
+      markWidth: `clamp(10px, ${(40 / n).toFixed(3)}%, 30px)`,
       grid: ticks.map((t) => `M0 ${f(Y(t))}H${W}`).join(''),
       usual: line,
       yticks: ticks.map((t) => ({ top: pct(Y(t)), label: axis(t) })),
@@ -170,7 +172,7 @@
           <path d={draw.down} style="fill: var(--down)" />
         </svg>
         {#each draw.markers as m, i (i)}
-          <span class="mark" class:buy={m.buy} style="left: {m.left}; top: {m.top}"></span>
+          <span class="mark" class:buy={m.buy} style="left: {m.left}; top: {m.top}; width: {draw.markWidth}"><i></i></span>
         {/each}
         <svg viewBox="0 0 {W} {VH}" preserveAspectRatio="none" aria-hidden="true" style="height: {VH}px; margin-top: 8px">
           <path d={draw.vol} class="vol" />
@@ -199,8 +201,10 @@
   .cross { fill: none; stroke: var(--text3); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .wick { fill: none; stroke-width: 1; vector-effect: non-scaling-stroke; }
   .vol { fill: var(--text3); fill-opacity: 0.45; }
-  .mark { position: absolute; width: 10px; height: 9px; margin: -4px 0 0 -5px; pointer-events: none; background: var(--sell); clip-path: polygon(0 0, 100% 0, 50% 100%); }
-  .mark.buy { background: var(--buy); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  /* A halo in the card's colour keeps a marker apart from the candle under it. */
+  .mark { position: absolute; aspect-ratio: 10 / 9; transform: translate(-50%, -50%); pointer-events: none; filter: drop-shadow(0 0 1px var(--card)) drop-shadow(0 0 1px var(--card)); }
+  .mark i { display: block; width: 100%; height: 100%; background: var(--sell); clip-path: polygon(0 0, 100% 0, 50% 100%); }
+  .mark.buy i { background: var(--buy); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
   .xaxis { position: relative; height: 16px; margin-top: 8px; font-size: 12px; line-height: 16px; color: var(--text3); }
   .xaxis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
   .yaxis { flex: none; width: 72px; font-size: 12px; line-height: 16px; color: var(--text3); }
