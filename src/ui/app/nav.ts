@@ -1,4 +1,4 @@
-// The eight screens of the left menu, in the order of the design canvas.
+// The eight screens of the left menu. Saves and servers comes first: it opens the saves the other screens read.
 export interface Screen {
   id: string;
   label: string;
@@ -8,13 +8,13 @@ export interface Screen {
 }
 
 export const SCREENS: Screen[] = [
+  { id: 'saves', label: 'Saves and servers', question: 'What is loaded, and do the servers agree?', icon: 'M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01' },
   { id: 'overview', label: 'Overview', question: 'Is something wrong, and where do I start?', icon: 'M4 4h7v7H4zM13 4h7v4h-7zM13 11h7v9h-7zM4 14h7v6H4z' },
   { id: 'findings', label: 'Findings', question: 'What exactly was flagged, and why?', icon: 'M12 4l9 15H3zM12 10v4M12 16.5v.5' },
   { id: 'players', label: 'Players', question: 'What did this player do?', icon: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20c.8-3.4 3.8-5.5 7.5-5.5s6.7 2.1 7.5 5.5' },
   { id: 'markets', label: 'Markets', question: 'What happened to this price, and who did it?', icon: 'M7 3v4M7 15v6M5 7h4v8H5zM17 3v6M17 15v6M15 9h4v6h-4z' },
   { id: 'accounts', label: 'Bank accounts', question: "Does the bank's log explain the balance?", icon: 'M3 10l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 20h18' },
   { id: 'flow', label: 'Money flow', question: 'Where did the money go?', icon: 'M4 7h5c3 0 3 10 6 10h5M4 17h5c1.2 0 1.9-1.6 2.6-3.5M17 14l3 3-3 3' },
-  { id: 'saves', label: 'Saves and servers', question: 'What is loaded, and do the servers agree?', icon: 'M4 5h16v6H4zM4 13h16v6H4zM8 8h.01M8 16h.01' },
   { id: 'case', label: 'Case and report', question: 'What do we take back, and what do we tell the admins?', icon: 'M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2h8.5A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z' },
 ];
 

@@ -45,7 +45,7 @@ test.describe('with the invented network loaded', () => {
   test.afterAll(() => program.close());
 
   test('the frame shows the eight screens and the loaded saves', async () => {
-    await expect(page.locator('nav .nav')).toHaveText(['Overview', 'Findings', 'Players', 'Markets', 'Bank accounts', 'Money flow', 'Saves and servers', 'Case and report']);
+    await expect(page.locator('nav .nav')).toHaveText(['Saves and servers', 'Overview', 'Findings', 'Players', 'Markets', 'Bank accounts', 'Money flow', 'Case and report']);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Saves and servers');
     await expect(page.locator('section.save h2')).toHaveText(['survival-main', 'mining-1', 'nether-hub']);
     await expect(page.locator('nav')).toContainText('3 saves loaded');
