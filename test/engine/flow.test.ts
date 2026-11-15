@@ -164,6 +164,23 @@ test('notes another player likely paid in are off the notes outside (AT-41)', ()
   assert.equal(flow(PUMP, tavrik).parts.find((p) => p.kind === 'notes')!.amount, 400_000_000n, 'the node keeps its value: the rows add up to it');
 });
 
+test('another item in its own count: bought and sold from the trade rows, no notes; the money itself stays the money flow (AT-65)', () => {
+  open(fx.master, ...fx.slaves);
+  const f = api.moneyFlow(ALL, PUMP, null, DEFAULT_RULES, { item: ITEM.diamond });
+  assert.equal(f.item, ITEM.diamond);
+  closes(f);
+  const orders = api.orders({ player: tavrik, item: ITEM.diamond }, ALL), qty = (buy: boolean) => orders.filter((o) => o.amount > 0n === buy).reduce((s, o) => s + (buy ? o.amount : -o.amount), 0n);
+  const sold = part(f, 'market', tavrik, { side: 'out' });
+  assert.deepEqual([sold.market, sold.amount, sold.incident, sold.records.ledger.length], [ITEM.diamond, qty(false), true, 30]);
+  // His first diamond snapshot comes after the purchases, so the flow starts there and they are in the start (the screen says so).
+  assert.equal(part(f, 'start').amount, qty(true));
+  assert.ok(f.accounts.find((a) => a.player === tavrik)!.from! > f.incident!.start);
+  assert.ok(f.parts.every((p) => !['notes', 'appeared', 'added', 'items', 'lost'].includes(p.kind)), 'no notes and no money parts');
+  assert.deepEqual(f.notes, { outside: 0n, inFiles: 0n, elsewhere: 0n, notFound: 0n, others: [] });
+  // The currency asked for by its id is the money flow.
+  assert.deepEqual(api.moneyFlow(ALL, PUMP, null, DEFAULT_RULES, { item: ITEM.money }), { ...flow(), item: null });
+});
+
 test('without a save or players, a sentence instead of a flow', () => {
   init(path.join(fx.root, `workspace-${++n}`));
   assert.match(flow().reason!, /No save/);

@@ -1,14 +1,16 @@
 <script module lang="ts">
-  // What the screen shows stays when it is left and opened again: the incident or the timeline, players or accounts.
-  const ui = $state({ view: 'incident' as 'incident' | 'timeline', byAccount: false });
+  // What the screen shows stays when it is left and opened again: the incident or the timeline, players or accounts,
+  // whether items other than money are shown, and the item the incident chart follows (null: the money).
+  const ui = $state({ view: 'incident' as 'incident' | 'timeline', byAccount: false, items: false, item: null as number | null });
 </script>
 
 <script lang="ts">
-  // Money flow: where the money of one incident came from, which player (or account) got it and where it is now.
+  // Item flow: where the money of one incident came from, which player (or account) got it and where it is now.
   // Three columns as on the design canvas; the engine sorts every move into a part (query/flow.ts), this screen groups them.
-  // The timeline shows every money move of the bank in the time range instead (FlowTimeline).
+  // With non-money items switched on, the incident chart can follow any item instead, in its own count.
+  // The timeline shows every move of the bank in the time range instead (FlowTimeline).
   import type { AccountListRow, Finding, FlowPart, FlowTimeline as Timeline, Incident, ItemRow, LedgerRow, MoneyFlow, OrderRow, Scope } from '../../shared/api.ts';
-  import { count, items as quantity, money, moneyShort, time } from '../../shared/fmt.ts';
+  import { count, currency, items as quantity, money, moneyShort, time } from '../../shared/fmt.ts';
   import { incidentTitle } from '../../shared/incident.ts';
   import CsvButton from '../app/CsvButton.svelte';
   import FindingLinks from '../app/FindingLinks.svelte';
@@ -45,27 +47,40 @@
     void incidentId;
     player = null; // another incident has other players
   });
+  /** The item the incident chart follows: null is the money. */
+  const item = $derived(ui.items && ui.item !== null && itemRows.has(ui.item) && !w.isMoney(ui.item) ? ui.item : null);
   $effect(() => {
-    const id = incidentId, who = player, split = ui.byAccount, scope = $state.snapshot(app.scope), rules = $state.snapshot(app.rules);
+    const id = incidentId, who = player, split = ui.byAccount, scope = $state.snapshot(app.scope), rules = $state.snapshot(app.rules), it = item;
     void app.saves.length;
     if (id === null || ui.view !== 'incident') return;
     let stale = false;
-    void engine.moneyFlow(scope, id, who, rules, { split }).then((f) => {
+    void engine.moneyFlow(scope, id, who, rules, it === null ? { split } : { split, item: it }).then((f) => {
       if (!stale) flow = f;
     });
     return () => (stale = true);
   });
   let tl = $state<Timeline | null>(null), accounts = $state<AccountListRow[]>([]);
   $effect(() => {
-    const scope = $state.snapshot(app.scope), rules = $state.snapshot(app.rules);
+    const scope = $state.snapshot(app.scope), rules = $state.snapshot(app.rules), items = ui.items;
     void app.saves.length;
     if (ui.view !== 'timeline') return;
     let stale = false;
-    void Promise.all([engine.flowTimeline(scope, rules), engine.accounts(scope, rules)]).then(([t, a]) => {
+    void Promise.all([engine.flowTimeline(scope, rules, items), engine.accounts(scope, rules)]).then(([t, a]) => {
       if (!stale) [tl, accounts] = [t, a];
     });
     return () => (stale = true);
   });
+  /** The other items to follow: the incident's markets first, then the rest by name; one entry per name. */
+  const choices = $derived.by(() => {
+    const markets = new Set(list?.find((i) => i.id === incidentId)?.markets ?? []), seen = new Set<string>();
+    const rank = (id: number) => (markets.has(id) ? 0 : 1);
+    return [...itemRows.keys()].filter((id) => !w.isMoney(id)).map((id) => ({ id, name: w.itemName(id) }))
+      .sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name)).filter((c) => !seen.has(c.name) && !!seen.add(c.name));
+  });
+  /** An amount of what the chart follows: money, or the item in its own count. */
+  const goods = $derived(flow?.item ?? null);
+  const val = (v: bigint) => (goods === null ? money(v) : w.value(goods, v));
+  const short = (v: bigint) => (goods === null ? moneyShort(v) : w.value(goods, v));
 
   // ---- The parts as nodes: Came from (in), the players, Is now (out) ----
   const IN: Partial<Record<FlowPart['kind'], string>> = {
@@ -76,6 +91,7 @@
     now: 'Still in the bank', sent: 'Sent to other accounts', notes: 'Taken out as notes', items: 'Spent on items', lost: 'Lost trading',
     removed: 'Already removed', admin: 'Removed by an admin', other: 'Other entries', 'other-server': 'Other servers', unexplained: 'Not explained',
   };
+  const ITEM_NODE: Record<string, string> = { 'in:market': 'Bought on the market', 'out:market': 'Sold on the market', 'in:notes': 'Paid in', 'out:notes': 'Taken out' };
   interface Node { id: string; col: 0 | 1 | 2; name: string; parts: FlowPart[]; v: bigint; y: number; h: number; out: number; inn: number }
 
   const nameOf = $derived(new Map((flow?.players ?? []).map((p) => [p.uuid, p.name])));
@@ -85,6 +101,8 @@
   const top = $derived(parts.filter((p) => p.kind === 'market' && p.incident).sort((a, b) => Number(b.amount - a.amount))[0]?.market ?? null);
   /** Which node of its column a part belongs to. Incident markets of at least 1% stand alone; every other market is grouped. */
   function nodeOf(p: FlowPart): [string, string] {
+    // Another item: one market node a side (bought, sold), and its own deposits and withdrawals instead of notes.
+    if (goods !== null && (p.kind === 'market' || p.kind === 'notes')) return [`${p.side}:${p.kind}`, ITEM_NODE[`${p.side}:${p.kind}`]!];
     if (p.side === 'out') return [`out:${p.kind}`, OUT[p.kind]!];
     if (p.kind !== 'market') return [`in:${p.kind}`, IN[p.kind]!];
     const own = parts.filter((x) => x.kind === 'market' && x.market === p.market).reduce((s, x) => s + x.amount, 0n);
@@ -148,7 +166,7 @@
     return { nodes: [...cols[0]!, ...cols[1]!, ...cols[2]!], paths, H };
   });
   const bar = (n: Node) => `M${XS[n.col][0]} ${n.y.toFixed(1)}h12v${n.h.toFixed(1)}h-12Z`;
-  const pick = $derived(sk.nodes.find((n) => n.id === sel) ?? sk.nodes.find((n) => n.id === 'out:notes') ?? sk.nodes.find((n) => n.col === 2) ?? null);
+  const pick = $derived(sk.nodes.find((n) => n.id === sel) ?? sk.nodes.find((n) => n.id === 'out:notes') ?? sk.nodes.filter((n) => n.col === 2).sort((a, b) => Number(b.v - a.v))[0] ?? null);
   const estimate = (n: Node) => n.parts.every((p) => p.basis === 'estimate');
   // A player name longer than 16 letters is cut (the full name is in the title).
   const POS = $derived([`right: ${W - XS[0][0] + 4}px; text-align: right; align-items: flex-end`, `left: ${MID}px; transform: translate(-50%, -100%); text-align: center; align-items: center; max-width: 172px`, `left: ${XS[2][1] + 4}px`]);
@@ -160,8 +178,18 @@
     ['now', 'is still in the bank'], ['notes', 'was taken out as banknotes'], ['items', 'was spent on items'], ['removed', 'was already removed'],
     ['sent', 'was sent to other accounts'], ['lost', 'was lost trading'], ['admin', 'was removed by an admin'], ['unexplained', 'is not explained'],
   ];
+  const ITEM_PHRASE: [FlowPart['kind'], string][] = [
+    ['now', 'is still in the bank'], ['market', 'was sold on the market'], ['notes', 'was taken out'], ['sent', 'was sent to other accounts'],
+    ['removed', 'was already removed'], ['admin', 'was removed by an admin'], ['other', 'left through other entries'], ['unexplained', 'is not explained'],
+  ];
   const lead = $derived.by(() => {
     if (!flow?.incident) return '';
+    const who = flow.player !== null ? nameOf.get(flow.player) ?? 'this player' : flow.players.length === 1 ? 'this player' : 'these players';
+    if (goods !== null) {
+      if (total === 0n) return `${who[0]!.toUpperCase() + who.slice(1)} had no ${w.itemName(goods)} in the bank since the incident's start.`;
+      const now = ITEM_PHRASE.map(([k, t]) => [sum(k, 'out'), t] as const).filter(([v]) => v > 0n).sort((a, b) => Number(b[0] - a[0])).slice(0, 4).map(([v, t]) => `${short(v)} ${t}`);
+      return `Of the ${short(total)} ${who} had or got since the incident's start, ${now.length < 2 ? now.join('') : `${now.slice(0, -1).join(', ')} and ${now.at(-1)}`}.`;
+    }
     const made = parts.filter((p) => p.kind === 'market' && p.incident).reduce((s, p) => s + p.amount, 0n);
     const markets = [...new Set(parts.filter((p) => p.kind === 'market' && p.incident).map((p) => p.market!))];
     const more = markets.length - 1;
@@ -170,7 +198,6 @@
     const list = now.map(([v, t]) => `${moneyShort(v)} ${t}`);
     const tail = list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`;
     // The base is the whole left column (start and every inflow), since the parts after it are shares of that.
-    const who = flow.player !== null ? nameOf.get(flow.player) : flow.players.length === 1 ? 'this player' : 'these players';
     return `Of the ${moneyShort(total)} ${who} had or got since the incident's start${made > 0n ? ` (${moneyShort(made)} of it made on ${where})` : ''}, ${tail}.`;
   });
 
@@ -198,7 +225,17 @@
     'out:other-server': 'Trading on the servers the server filter leaves out, netted.',
     'out:unexplained': 'What the balance lost beyond every log entry and order. It includes amounts below the threshold of the finding.',
   };
-  const textOf = (n: Node) => (n.col === 1 ? `Where the money ${n.id.startsWith('a:') ? `on account ${n.id.slice(2)} of ${nameOf.get(n.parts[0]!.player)}` : `of ${n.name}`} came from and where it is now.` : n.id.startsWith('in:market:') ? `What ${n.parts.length === 1 ? nameOf.get(n.parts[0]!.player) : 'the players'} made on this market from the incident's start to the copy: sales minus purchases, from the orders.` : TEXT[n.id] ?? '');
+  const ITEM_TEXT: Record<string, string> = {
+    'in:market': 'Bought on the market, from the trade rows of the bank\'s log (the orders, before the save has trade rows).',
+    'out:market': 'Sold on the market, from the trade rows of the bank\'s log (the orders, before the save has trade rows).',
+    'in:notes': 'Paid into the bank as the item itself: at a terminal, through an upload block or a converter.',
+    'out:notes': 'Taken out of the bank as the item itself.',
+    'in:received': 'Other accounts transferred it to these accounts, from the bank\'s log.',
+    'in:admin': 'An admin added it, from the bank\'s log.', 'out:admin': 'An admin removed it, from the bank\'s log.',
+    'in:other': 'Other log entries that added it.', 'out:other': 'Other log entries that took it.',
+    'out:now': 'Still on the accounts, read from the bank\'s files when the copy was taken.',
+  };
+  const textOf = (n: Node) => (goods !== null && n.col !== 1 ? ITEM_TEXT[n.id] ?? TEXT[n.id] ?? '' : n.col === 1 ? `Where the ${goods === null ? 'money' : w.itemName(goods)} ${n.id.startsWith('a:') ? `on account ${n.id.slice(2)} of ${nameOf.get(n.parts[0]!.player)}` : `of ${n.name}`} came from and where it is now.` : n.id.startsWith('in:market:') ? `What ${n.parts.length === 1 ? nameOf.get(n.parts[0]!.player) : 'the players'} made on this market from the incident's start to the copy: sales minus purchases, from the orders.` : TEXT[n.id] ?? '');
   interface Row { label: string; sub: string; amount: bigint | null; basis: 'proven' | 'estimate'; href?: string }
   function rowsOf(n: Node): Row[] {
     if (n.col === 1) {
@@ -210,7 +247,7 @@
     const one = new Set(n.parts.map((p) => p.player)).size === 1;
     const who = (p: FlowPart) => (one ? acct(p) : `${nameOf.get(p.player)}, ${acct(p)}`);
     // A row names what is not in the node's name already: the market, the other account, else the player.
-    const market = (p: FlowPart) => p.market !== null && !n.id.startsWith('in:market:');
+    const market = (p: FlowPart) => p.market !== null && goods === null && !n.id.startsWith('in:market:');
     const rows: Row[] = [...n.parts].sort((a, b) => Number(b.amount - a.amount)).map((p) => ({
       label: market(p) ? w.itemName(p.market!) : p.other !== null ? `Account ${p.other}` : nameOf.get(p.player) ?? '',
       sub: [p.items ? `${quantity(p.items.qty)} still held` : p.notes ? `${money(p.notes.out)} taken out, ${money(p.notes.back)} paid back in` : '', market(p) || p.other !== null ? who(p) : acct(p)].filter(Boolean).join(' · '),
@@ -225,7 +262,7 @@
       const worth = n.parts.map((p) => p.items?.worth ?? null);
       return [{ head: 'Made of', rows: rowsOf(n) }, { head: 'What the goods are worth', rows: [{ label: 'Worth about, at the usual price', sub: worth.includes(null) ? 'some markets have no usual price' : "at each market's usual price before the incident", amount: worth.includes(null) ? null : worth.reduce((s, v) => s! + v!, 0n), basis: 'estimate' }] }];
     }
-    if (n.id !== 'out:notes' || !flow) return [{ head: 'Made of', rows: rowsOf(n) }];
+    if (n.id !== 'out:notes' || !flow || goods !== null) return [{ head: 'Made of', rows: rowsOf(n) }];
     const m = flow.notes, where: Row[] = [], others = m.others.reduce((s, o) => s + o.amount, 0n);
     if (n.v > m.outside + others) where.push({ label: 'Paid in again', sub: `by ${flow.player === null ? 'these players' : 'this player'}: “Notes paid in” and “Likely notes paid in” on the left`, amount: n.v - m.outside - others, basis: 'estimate' });
     for (const o of m.others) where.push({ label: `Likely paid in by ${o.player.name}`, sub: 'the same amount, paid in within a day after it was taken out', amount: o.amount, basis: 'estimate', href: `#/players/${encodeURIComponent(o.player.uuid)}` });
@@ -271,10 +308,10 @@
 
   // ---- CSV (AT-44): every part of the flow for the players chosen, with the records behind it ----
   const partTable = () => ({
-    columns: [['Column', 'text'], ['Part', 'text'], ['Kind', 'text'], ['Player', 'text'], ['Player uuid', 'id'], ['Accounts', 'id'], ['Market', 'text'], ['Item id', 'id'],
-      ['Other account', 'id'], ['Amount', 'money'], ['Basis', 'text'], ['On an incident market', 'text'], ['Items still held', 'quantity'], ['Worth at the usual price', 'money'],
+    columns: [['What', 'text'], ['Column', 'text'], ['Part', 'text'], ['Kind', 'text'], ['Player', 'text'], ['Player uuid', 'id'], ['Accounts', 'id'], ['Market', 'text'], ['Item id', 'id'],
+      ['Other account', 'id'], ['Amount', goods === null ? 'money' : 'quantity'], ['Basis', 'text'], ['On an incident market', 'text'], ['Items still held', 'quantity'], ['Worth at the usual price', 'money'],
       ['Notes taken out', 'money'], ['Notes paid back in', 'money'], ['Gap from', 'time'], ['Gap to', 'time'], ['Entry ids', 'id'], ['Order ids', 'id'], ['Finding ids', 'id']] as const,
-    rows: parts.map((p) => [p.side === 'in' ? 'Came from' : 'Is now', nodeOf(p)[1], p.kind, nameOf.get(p.player), p.player, p.accounts.join(' '), p.market === null ? null : w.itemName(p.market),
+    rows: parts.map((p) => [goods === null ? 'Money' : w.itemName(goods), p.side === 'in' ? 'Came from' : 'Is now', nodeOf(p)[1], p.kind, nameOf.get(p.player), p.player, p.accounts.join(' '), p.market === null ? null : w.itemName(p.market),
       p.market, p.other, p.amount, p.basis, p.market === null ? null : p.incident, p.items?.qty, p.items?.worth, p.notes?.out, p.notes?.back, p.gap?.from, p.gap?.to,
       p.records.ledger.join(' '), p.records.orders.join(' '), p.records.findings.join(' ')]),
   });
@@ -282,9 +319,10 @@
 
 <div class="top">
   <div style="flex: 1 1 320px; min-width: 0">
-    <h1 class="h1">Money flow</h1>
-    <p class="sub">{ui.view === 'incident' ? 'Where the money of an incident came from, who got it and where it is now.' : 'Every move of money over time: between accounts, the markets and the world.'}</p>
+    <h1 class="h1">Item flow</h1>
+    <p class="sub">{ui.view === 'incident' ? `Where the ${item === null ? 'money' : w.itemName(item)} of an incident came from, who got it and where it is now.` : `Every move of ${ui.items ? 'money and items' : 'money'} over time: between accounts, the markets and the world.`}</p>
   </div>
+  <label class="check"><input type="checkbox" bind:checked={ui.items} />Non-money items</label>
   <div role="group" aria-label="View" class="seg">
     <button type="button" aria-pressed={ui.view === 'incident'} onclick={() => (ui.view = 'incident')}>Incident</button>
     <button type="button" aria-pressed={ui.view === 'timeline'} onclick={() => (ui.view = 'timeline')}>Timeline</button>
@@ -307,21 +345,33 @@
   {:else if tl.reason !== null}
     <p class="empty">{tl.reason}</p>
   {:else}
-    <FlowTimeline {tl} {accounts} byAccount={ui.byAccount} {w} />
+    <FlowTimeline {tl} {accounts} byAccount={ui.byAccount} items={ui.items} {w} />
   {/if}
 {:else if list === null}
   <p class="small" aria-busy="true" style="margin: 0">Loading the incidents…</p>
 {:else if list.length === 0}
   <p class="empty">No incident with these rule settings, so there is no money to follow. Findings that belong together form an incident.</p>
 {:else}
-  {#if list.length > 1}
-    <label class="choose"><span class="small">Incident</span>
-      <select value={incidentId} onchange={(e) => (location.hash = '#/flow/' + encodeURIComponent(e.currentTarget.value))}>
-        {#each list as i (i.id)}<option value={i.id}>{incidentTitle(i, w.itemName)}, {time(i.start)}</option>{/each}
-      </select>
-    </label>
+  {#if list.length > 1 || ui.items}
+    <div class="choices">
+      {#if list.length > 1}
+        <label class="choose"><span class="small">Incident</span>
+          <select value={incidentId} onchange={(e) => (location.hash = '#/flow/' + encodeURIComponent(e.currentTarget.value))}>
+            {#each list as i (i.id)}<option value={i.id}>{incidentTitle(i, w.itemName)}, {time(i.start)}</option>{/each}
+          </select>
+        </label>
+      {/if}
+      {#if ui.items}
+        <label class="choose" style="flex: 0 1 280px"><span class="small">Item</span>
+          <select value={item ?? 'money'} onchange={(e) => (ui.item = e.currentTarget.value === 'money' ? null : Number(e.currentTarget.value))}>
+            <option value="money">Money ({currency()})</option>
+            {#each choices as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+          </select>
+        </label>
+      {/if}
+    </div>
   {/if}
-  {#if !flow || (flow.incident && flow.incident.id !== incidentId)}
+  {#if !flow || (flow.incident && flow.incident.id !== incidentId) || (flow.reason === null && flow.item !== item)}
     <p class="small" aria-busy="true" style="margin: 0">Following the money…</p>
   {:else if flow.reason !== null}
     <p class="empty">{flow.reason}</p>
@@ -341,14 +391,14 @@
           {#each sk.nodes as n (n.id)}
             <button type="button" class="node" aria-pressed={pick?.id === n.id} onclick={() => (sel = n.id)} style="top: {labelY(n).toFixed(1)}px; {POS[n.col]}">
               <span class="nname" title={n.name}>{n.name}</span>
-              <span class="namount">{estimate(n) ? 'about ' : ''}{moneyShort(n.v)}</span>
+              <span class="namount">{estimate(n) ? 'about ' : ''}{short(n.v)}</span>
             </button>
           {/each}
         </div>
       </div>
       <div class="under">
         <p class="small" style="flex: 1 1 auto; margin: 0">Band height shows the amount. Select a name to see what it is made of.</p>
-        <CsvButton screen="flow" table="parts" what="every part of the money flow" make={partTable} />
+        <CsvButton screen="flow" table="parts" what="every part of the {goods === null ? 'money' : w.itemName(goods).toLowerCase()} flow" make={partTable} />
       </div>
     </section>
 
@@ -359,7 +409,7 @@
         <div class="dleft">
           <div>
             <h2 class="dtitle">{pick.name}</h2>
-            <p class="damount">{estimate(pick) ? 'about ' : ''}{money(pick.v)}</p>
+            <p class="damount">{estimate(pick) ? 'about ' : ''}{val(pick.v)}</p>
           </div>
           <p class="dtext">{textOf(pick)}</p>
           {#if link}<a class="btn" href={link[1]} style="font-weight: 500; border-color: var(--line2)">{link[0]}<svg width="16" height="16" viewBox="0 0 24 24" class="icon" aria-hidden="true" style="stroke-width: 2"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>{/if}
@@ -376,7 +426,7 @@
             {#each g.rows as r, i (i)}
               <div class="mrow">
                 <span class="mlabel"><span class="mname">{#if r.href}<a href={r.href}>{r.label}</a>{:else}{r.label}{/if}</span>{#if r.sub}<span class="small">{r.sub}</span>{/if}</span>
-                <span class="num">{r.amount === null ? 'unknown' : money(r.amount)}</span>
+                <span class="num">{r.amount === null ? 'unknown' : g.head === 'What the goods are worth' ? money(r.amount) : val(r.amount)}</span>
                 <span class="badge" class:est={r.basis === 'estimate'}>{r.basis === 'estimate' ? 'Estimate' : 'Proven'}</span>
               </div>
             {/each}
@@ -443,7 +493,10 @@
   .seg { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); }
   .seg button { height: 32px; padding: 0 14px; border: 0; border-radius: 7px; font-weight: 500; background: transparent; color: var(--text2); }
   .seg button[aria-pressed='true'] { background: var(--raised); color: var(--text); }
-  .choose { display: flex; align-items: center; gap: 12px; max-width: 720px; }
+  .choices { display: flex; flex-wrap: wrap; gap: 12px 24px; }
+  .choose { flex: 1 1 420px; display: flex; align-items: center; gap: 12px; max-width: 720px; }
+  .check { display: flex; align-items: center; gap: 8px; height: 42px; font-weight: 500; color: var(--text2); cursor: pointer; }
+  .check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
   select { flex: 1 1 auto; min-width: 0; height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line2); background: var(--card); color: var(--text); font: inherit; }
   .empty { margin: 0; padding: 24px; border-radius: 14px; border: 1px dashed var(--line2); color: var(--text2); }
   .lead { margin: 0; max-width: 820px; font-size: 16px; line-height: 24px; text-wrap: pretty; }

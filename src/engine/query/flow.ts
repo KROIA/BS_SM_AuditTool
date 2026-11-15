@@ -1,5 +1,7 @@
 // Where the money of an incident went: per player and personal account, from the balance at the
 // incident's start to the copy, every move of the money items sorted into a part. "unexplained" takes the rest, so it closes.
+// Any other item the same way in its own count (AT-65): its trades are bought (in) and sold (out), its deposits and
+// withdrawals paid in and taken out; there are no notes.
 import type { BanknotesResult, FlowPart, MoneyFlow, RuleSettings, Scope } from '../../shared/api.ts';
 import { mainData, mainSave } from '../workspace.ts';
 import { banknotes, noteChange } from './banknotes.ts';
@@ -26,15 +28,15 @@ const note = (d: Draft, m: Move) => (m.order ? d.records.orders : d.records.ledg
 
 /**
  * For the take-back (takeback.ts): start replaces the incident's start, players are followed besides the incident's, and
- * split keeps the parts per account and gap instead of merging them per player.
+ * split keeps the parts per account and gap instead of merging them per player. item: follow this item instead of the money.
  */
-export interface FlowOptions { start?: number; players?: string[]; split?: boolean }
+export interface FlowOptions { start?: number; players?: string[]; split?: boolean; item?: number }
 
 export function moneyFlow(scope: Scope, incidentId: string, player: string | null, settings: RuleSettings, opts: FlowOptions = {}): MoneyFlow {
   const db = mainData(), main = mainSave();
   const legacy = main?.generation === 'legacy';
   const empty = (reason: string): MoneyFlow =>
-    ({ reason, incident: null, players: [], player, accounts: [], parts: [], notes: ZERO, to: main?.lastPlayedMs ?? null, legacy, missing: [] });
+    ({ reason, incident: null, players: [], player, item: null, accounts: [], parts: [], notes: ZERO, to: main?.lastPlayedMs ?? null, legacy, missing: [] });
   if (!db || !main) return empty('No save with bank data is loaded, so no money can be followed.');
   const inc = incidents(ALL, settings).incidents.find((i) => i.id === incidentId);
   if (!inc) return empty('This incident is not raised with the current rule settings.');
@@ -45,7 +47,8 @@ export function moneyFlow(scope: Scope, incidentId: string, player: string | nul
   const players = [...inc.players, ...extra].filter((p) => owned.some((o) => o.player === p.uuid));
   if (!players.length) return { ...empty('None of the players of this incident has a personal account, so there is no balance to follow.'), incident: inc };
 
-  const money = [...moneyItems(db)];
+  const currency = moneyItems(db), goods = opts.item !== undefined && !currency.has(opts.item) ? opts.item : null;
+  const money = goods === null ? [...currency] : [goods];
   const now = new Map(all(db, 'SELECT account, item, balance + locked AS v FROM balance').map((r) => [`${r.account}:${r.item}`, big(r.v)!]));
   const notesFrom = new Map<number | null, BanknotesResult>();
   const notesSince = (t0: number | null) => notesFrom.get(t0) ?? notesFrom.set(t0, banknotes({ from: t0 === null ? null : t0 + 1, to: null, server: null })).get(t0)!;
@@ -94,8 +97,15 @@ export function moneyFlow(scope: Scope, incidentId: string, player: string | nul
         if (m.how === 'unknown') unknown.push(m.id);
         if (m.how === 'raw' || m.how === 'unknown') continue;
         if (m.how === 'trade') {
-          if (m.market === null) continue; // a goods move of a trade on a money item: none exist
+          if (m.market === null && goods === null) continue; // a goods move of a trade on a money item: none exist
           if (!here(m)) { away.amount += m.amount; note(away, m); continue; }
+          if (m.market === null) { // the goods side: bought (in) or sold (out), in the item's count
+            const side = m.amount > 0n ? 'in' : 'out';
+            const d = rows.get(`trade:${side}`) ?? rows.set(`trade:${side}`, { ...draft('market', uuid, account, { market: item, incident: inc.markets.includes(item) }), side }).get(`trade:${side}`)!;
+            d.amount += m.amount < 0n ? -m.amount : m.amount;
+            note(d, m);
+            continue;
+          }
           const mk = markets.get(m.market) ?? markets.set(m.market, { cash: 0n, qty: 0n, paid: 0n, bought: 0n,
             d: draft('market', uuid, account, { market: m.market, incident: inc.markets.includes(m.market) }) }).get(m.market)!;
           mk.cash += m.amount;
@@ -106,12 +116,13 @@ export function moneyFlow(scope: Scope, incidentId: string, player: string | nul
         }
         const side = m.amount > 0n ? 'in' : 'out';
         // Note rows: their amounts come from the banknote count below (cut by put-backs on 2.1.2); here only their ids.
-        const [key, kind]: [string, FlowPart['kind']] = noteChange(m.kind, m.amount, m.note, null) ? ['notes', 'notes']
+        // Another item's deposits and withdrawals are the item itself, paid in or taken out, summed here.
+        const [key, kind]: [string, FlowPart['kind']] = noteChange(m.kind, m.amount, m.note, null) ? [goods === null ? 'notes' : `notes:${side}`, 'notes']
           : TRANSFER.has(m.kind) ? [`${side}:${m.other}`, side === 'in' ? 'received' : 'sent']
           : m.kind.startsWith('ADMIN_') ? [`admin:${side}`, 'admin'] : [`other:${side}`, 'other'];
         const d = rows.get(key) ?? rows.set(key, { ...draft(kind, uuid, account, kind === 'sent' || kind === 'received' ? { other: m.other } : {}), side }).get(key)!;
         note(d, m);
-        if (kind !== 'notes') d.amount += m.amount < 0n ? -m.amount : m.amount;
+        if (kind !== 'notes' || goods !== null) d.amount += m.amount < 0n ? -m.amount : m.amount;
       }
       mine.push(...rows.values()); // the notes part is filled per account below
 
@@ -132,7 +143,7 @@ export function moneyFlow(scope: Scope, incidentId: string, player: string | nul
     }
 
     // Notes, once per account over all money items (the count sums them), and on 2.1.2 the money that appeared without a row.
-    const bn = notesSince(from ?? null);
+    const bn: Pick<BanknotesResult, 'accounts' | 'appeared' | 'tooLarge'> = goods === null ? notesSince(from ?? null) : { accounts: [], appeared: [], tooLarge: [] };
     const ba = bn.accounts.find((a) => a.account === account);
     const nd = mine.find((p) => p.kind === 'notes') ?? (ba ? (mine.push({ ...draft('notes', uuid, account), side: 'out' }), mine.at(-1)!) : undefined);
     if (nd && ba) {
@@ -199,7 +210,8 @@ export function moneyFlow(scope: Scope, incidentId: string, player: string | nul
   const own = world.players.filter((w) => chosen.includes(w.player.uuid)).reduce((s, w) => s + w.notes, 0n);
   const incidentFiles = world.players.filter((w) => players.some((p) => p.uuid === w.player.uuid)).reduce((s, w) => s + w.notes, 0n);
   let outside = 0n;
-  for (const p of merged.values()) if (chosen.includes(p.player)) outside += p.kind === 'notes' ? (p.side === 'out' ? p.amount : -p.amount) : p.kind === 'appeared' ? -p.amount : 0n;
+  // Another item has no notes: nothing is outside.
+  if (goods === null) for (const p of merged.values()) if (chosen.includes(p.player)) outside += p.kind === 'notes' ? (p.side === 'out' ? p.amount : -p.amount) : p.kind === 'appeared' ? -p.amount : 0n;
   if (outside < 0n) outside = 0n;
   // Notes they took out after the start that another player likely paid in (a Likely note link).
   const others: MoneyFlow['notes']['others'] = [];
@@ -218,9 +230,9 @@ export function moneyFlow(scope: Scope, incidentId: string, player: string | nul
     missing.push('BankSystem 2.1.2 logged no admin action and no note paid in through the ATM converter: money that came or went without a log row is taken from the gaps between snapshots, an estimate.');
   }
   if (scope.server !== null) missing.push('The server filter applies to trading only: trading on other servers is shown as one part. Bank rows and gaps belong to every server.');
-  if (world.reason) missing.push(`Where the notes are now is not known: ${world.reason}`);
+  if (world.reason && goods === null) missing.push(`Where the notes are now is not known: ${world.reason}`);
   return {
-    reason: null, incident: inc, players, player, accounts: accounts.filter((a) => chosen.includes(a.player)),
+    reason: null, incident: inc, players, player, item: goods, accounts: accounts.filter((a) => chosen.includes(a.player)),
     parts: (opts.split ? parts : [...merged.values()]).filter((p) => chosen.includes(p.player)), notes, to: main.lastPlayedMs, legacy, missing,
   };
 }

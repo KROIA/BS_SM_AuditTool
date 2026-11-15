@@ -1,5 +1,6 @@
-// Money flow on the invented network with Tavrik's extra money (FLOW): the answer first, the three
-// columns, the player switch, a picked part with its records, and the 2.1.2 save's estimates. Screenshots land in test-results/.
+// Item flow on the invented network with Tavrik's extra money (FLOW): the answer first, the three
+// columns, the player switch, a picked part with its records, another item instead of the money, the timeline with its
+// items and trades, and the 2.1.2 save's estimates. Screenshots land in test-results/.
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,8 +20,9 @@ async function launch(name: string, open: string[]) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Overview');
   await page.evaluate(`location.hash = '#/flow/${encodeURIComponent(PUMP)}'`);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Money flow');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Item flow');
 }
+const nonMoney = () => page.getByRole('checkbox', { name: 'Non-money items' });
 const node = (name: string) => page.locator('.node', { has: page.locator('.nname', { hasText: new RegExp(`^${name}$`) }) });
 const shot = async (name: string) => {
   for (const [theme, other] of [['dark', 'light'], ['light', 'dark']] as const) {
@@ -129,6 +131,24 @@ test.describe('the invented network', () => {
     await page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Players' }).click();
     await expect(node('Tavrik')).toHaveCount(1);
   });
+
+  test('non-money items: the incident chart follows another item in its own count (AT-65)', async () => {
+    await expect(page.getByRole('combobox', { name: 'Item', exact: true })).toHaveCount(0);
+    await nonMoney().check();
+    const item = page.getByRole('combobox', { name: 'Item', exact: true });
+    await expect(item.locator('option').first()).toHaveText('Money ($)');
+    await expect(item.locator('option').nth(1)).toHaveText('Diamond'); // the incident's market before the rest
+    await item.selectOption({ label: 'Diamond' });
+    await expect(page.locator('.lead')).toHaveText(/^Of the [\d']+ Diamond these players had or got since the incident's start, [\d']+ Diamond was sold on the market\.$/);
+    await expect(node('Sold on the market')).toHaveCount(1);
+    await expect(node('Taken out as notes')).toHaveCount(0);
+    await expect(page.locator('.namount').first()).toHaveText(/^[\d']+ Diamond$/);
+    await expect(page.locator('.notes')).toContainText('has no balance snapshot before the incident');
+    await shot('flow-item');
+    await item.selectOption({ label: 'Money ($)' });
+    await nonMoney().uncheck();
+    await expect(node('Taken out as notes')).toHaveCount(1);
+  });
 });
 
 test.describe('the timeline', () => {
@@ -189,6 +209,32 @@ test.describe('the timeline', () => {
     await expect(page.locator('.lead')).toHaveText('No money moved between the rows shown in this time range.');
     await page.getByRole('button', { name: 'Show all rows' }).click();
     await page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Players' }).click();
+  });
+
+  test('non-money items: a second list, item colours, and a trade with both sides drawn as one (AT-65)', async () => {
+    await expect(page.getByRole('group', { name: 'Items on the chart' })).toHaveCount(0);
+    await nonMoney().check();
+    const items = page.getByRole('group', { name: 'Items on the chart' }).getByRole('button');
+    await expect(items.first()).toHaveText('Money ($)');
+    await expect(items.filter({ hasText: /^Diamond$/ })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('group', { name: 'Rows on the chart' }).getByRole('button').filter({ hasText: 'World: outside the bank' })).toHaveCount(1);
+    await expect(page.locator('path.trade')).not.toHaveCount(0);
+    await expect(page.locator('.lead')).toContainText(/both sides, marked with a diamond on the Markets row\.$/);
+    await expect(page.locator('.legend')).toContainText('The colour shows the item');
+    // A trade: two arrows, one head each, and the detail names both sides.
+    expect(await page.locator('g.band path.head').count()).toBe(await page.locator('g.band').count());
+    const plot = page.getByRole('img', { name: /^Moves from / });
+    await plot.focus();
+    for (let i = 0; i < 300 && !/ on the markets$/.test((await page.locator('.dtitle').allTextContents())[0] ?? ''); i++) await plot.press('ArrowRight');
+    await expect(page.locator('.dtitle')).toHaveText(/^(Bought|Sold) on the markets$/);
+    await expect(page.locator('.dtext')).toContainText(/(bought|sold) [\d'.]+ \w+ for [\d'.]+ \$ on the markets: the money/i);
+    await shot('flow-timeline-items');
+    // The money alone again: no trade marks, colours by kind.
+    await page.getByRole('button', { name: 'Hide all items' }).click();
+    await items.first().click();
+    await expect(page.locator('path.trade')).toHaveCount(0);
+    await expect(page.locator('.legend')).toContainText('Transfer');
+    await nonMoney().uncheck();
     await page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Incident' }).click();
   });
 });

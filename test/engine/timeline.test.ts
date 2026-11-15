@@ -53,6 +53,22 @@ test('notes paid into another account at the amount taken out shortly before are
   assert.ok(moves.some((m) => m.kind === 'trade' && m.to === 'markets'), 'purchases');
 });
 
+test('with every item: each trade has its money side and its goods side under the same id, the other way round (AT-65)', () => {
+  assert.ok(api.flowTimeline(ALL, DEFAULT_RULES).moves.every((m) => m.item === ITEM.money), 'money only by default');
+  const { moves } = api.flowTimeline(ALL, DEFAULT_RULES, true);
+  const id = (m: TimelineMove) => `${m.orders[0] ?? ''}|${m.rows[0] ?? ''}`;
+  const trades = moves.filter((m) => m.kind === 'trade'), cash = trades.filter((m) => m.item === ITEM.money);
+  assert.ok(cash.length > 60);
+  for (const m of cash) {
+    const goods = trades.filter((g) => g.item === m.market && id(g) === id(m));
+    assert.equal(goods.length, 1, `the goods side of ${id(m)}`);
+    assert.deepEqual([goods[0]!.from, goods[0]!.to, goods[0]!.market], [m.to, m.from, m.market]);
+  }
+  assert.ok(trades.some((m) => m.item === ITEM.diamond && m.to === PLAYERS.Tavrik.account && m.amount === 10_000n), 'Tavrik\'s diamonds');
+  // Diamonds paid in: from the world, as the item itself.
+  assert.ok(moves.some((m) => m.kind === 'notes' && m.item === ITEM.diamond && m.from === 'world'));
+});
+
 test('the time range keeps a carried move whose deposit is in it', () => {
   const { moves } = api.flowTimeline({ from: T0 + 52 * MIN, to: T0 + 53 * MIN, server: null }, DEFAULT_RULES);
   assert.deepEqual(moves.map(brief), [['notes', PLAYERS.Tavrik.account, SHARED.account, 200_000_000n, 'estimate']]);

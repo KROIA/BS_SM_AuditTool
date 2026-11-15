@@ -646,11 +646,12 @@ export interface QueryApi {
    * Where the money of one incident went, for all its players (player null) or one. The time range
    * does not apply; the server filter applies to orders and trade rows (trading elsewhere becomes "other-server").
    * settings: the incidents are made from the findings, and the threshold of gaps on 2.1.2 is the balance rule's.
-   * opts.split keeps the parts per account (and per gap) instead of merging them per player.
+   * opts.split keeps the parts per account (and per gap) instead of merging them per player. opts.item follows that item
+   * instead of the money, in its own count: bought, sold, paid in and taken out instead of markets and notes.
    */
-  moneyFlow(scope: Scope, incidentId: string, player: string | null, settings: RuleSettings, opts?: { split?: boolean }): MoneyFlow;
-  /** Every money move of the bank in the time range, for the timeline of the money flow. settings: the gaps' threshold. */
-  flowTimeline(scope: Scope, settings: RuleSettings): FlowTimeline;
+  moneyFlow(scope: Scope, incidentId: string, player: string | null, settings: RuleSettings, opts?: { split?: boolean; item?: number }): MoneyFlow;
+  /** Every money move of the bank in the time range, every item's with items set, for the timeline. settings: the gaps' threshold. */
+  flowTimeline(scope: Scope, settings: RuleSettings, items?: boolean): FlowTimeline;
   /** What to take back from the incident's players, from the cutoff to the copy. No scope applies. */
   takeBack(incidentId: string, cutoff: Cutoff, settings: RuleSettings): TakeBack;
   /**
@@ -907,6 +908,8 @@ export interface MoneyFlow {
   players: { uuid: string; name: string }[];
   /** The player asked for, or null: all of them. */
   player: string | null;
+  /** The item followed when it is not money (amounts are then its count, and market parts are bought (in) and sold (out)); null: money. */
+  item: number | null;
   accounts: { account: number; player: string; from: number | null; start: bigint; now: bigint }[];
   parts: FlowPart[];
   /** Where the notes still outside are (estimates), for the chosen players as one: notes out minus notes paid in minus
@@ -924,9 +927,13 @@ export interface MoneyFlow {
 /** Where money is: a bank account (its number), notes outside the bank (world), the markets, an admin, other log entries, or nowhere the log says (unexplained). */
 export type Place = number | 'world' | 'markets' | 'admin' | 'other' | 'unexplained';
 
-/** One move of money between two places, for the timeline of the money flow. Amounts raw, positive. */
+/** One move of money (or of an item) between two places, for the timeline of the money flow. Amounts raw, positive. */
 export interface TimelineMove {
   time: number;
+  /** What moved. notes on a non-money item: the item paid in or taken out. */
+  item: number;
+  /** trade: the goods traded, on both sides (the money side and the goods side carry the same row or order id). */
+  market: number | null;
   /** Notes taken out and paid in again (from an account to an account through the world): when they were paid in, else null. */
   until: number | null;
   from: Place;

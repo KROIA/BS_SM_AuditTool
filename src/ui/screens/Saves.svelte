@@ -217,7 +217,7 @@
       <li class="card">
         <span class="step">3</span>
         <h3>Follow the answer</h3>
-        <p>The Overview says whether something needs attention. Findings, Players and Money flow show what happened and who gained. Case and report works out what to take back and writes the report for the admins.</p>
+        <p>The Overview says whether something needs attention. Findings, Players and Item flow show what happened and who gained. Case and report works out what to take back and writes the report for the admins.</p>
       </li>
     </ol>
   </section>

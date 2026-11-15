@@ -1,3 +1,16 @@
+<script module lang="ts">
+  /**
+   * One hue per line, spread by the golden angle; the first line (money) takes the accent, and the others skip the hues
+   * within 35° of its blue (about 275° in both themes) so no item looks like the money. The item flow's timeline uses them too.
+   */
+  export function color(k: number): string {
+    if (k === 0) return 'var(--accent)';
+    let h = 0;
+    for (let j = 1; k > 0; j++) if (Math.abs((h = (j * 137.508) % 360) - 275) > 35) k--;
+    return `oklch(var(--series-l) 0.15 ${h.toFixed(1)})`;
+  }
+</script>
+
 <script lang="ts">
   // Every item of an account in one chart, a step line each (a balance holds until the next snapshot), with a list on
   // the left to switch lines on and off, a search for that list, and zoom and pan as in StockMarket's chart (zoom.ts).
@@ -12,8 +25,6 @@
   let { series, label }: { series: Series[]; label: string } = $props();
 
   const W = 1000, H = 360;
-  /** One hue per line, spread by the golden angle; the first line (money) takes the accent. */
-  const color = (k: number) => (k === 0 ? 'var(--accent)' : `oklch(var(--series-l) 0.15 ${((k * 137.508) % 360).toFixed(1)})`);
   // Raw amounts are hundredths; the axis is log10(1 + value), so 0 has a place and large values read as powers of ten.
   const pos = (v: number) => Math.sign(v) * Math.log10(1 + Math.abs(v)); // ponytail: a negative balance sits below 0 but gets no ticks of its own
   const tr = (raw: bigint) => pos(Number(raw) / 100);
