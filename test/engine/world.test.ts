@@ -132,7 +132,7 @@ test('worldItems: notes per player and place over the network, valuables, refuse
 
 test('worldItems without player files, and without bank data', () => {
   open(fx.exported);
-  assert.match(api.worldItems().reason ?? '', /None of the loaded saves has player files/);
+  assert.match(api.worldItems().reason ?? '', /An audit export carries only the mods' data, no player files.*Load the world folder/);
   open(fx.slaves[0]!);
   assert.match(api.worldItems().reason ?? '', /No save with bank data/);
 });

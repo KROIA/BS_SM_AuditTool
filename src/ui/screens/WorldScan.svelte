@@ -32,6 +32,7 @@
   });
 
   const scan = $derived(app.scan ?? world?.scan ?? null);
+  const exportNames = $derived(new Set(app.saves.filter((s) => s.exported).map((s) => s.name)));
   const server = $derived(app.scope.server);
   const here = (s: string) => server === null || s === server;
   const sum = (list: bigint[]) => list.reduce((a, v) => a + v, 0n);
@@ -129,7 +130,10 @@
     if (lost.length) out.push({ label: listed(lost.map((p) => p.name)), sub: `${lost.length === 1 ? 'Has' : 'Have'} no player file in any loaded save, so what ${lost.length === 1 ? 'this player carries' : 'they carry'} is unknown.` });
     if (world.unreadable.length) out.push({ label: listed(world.unreadable.map((p) => p.name)), sub: `${world.unreadable.length === 1 ? 'The player file' : 'Their player files'} could not be read, so what ${world.unreadable.length === 1 ? 'this player carries' : 'they carry'} is unknown.` });
     if (world.unnamed) out.push({ label: plural(world.unnamed, 'id without a name', 'ids without a name'), sub: 'Placed orders or used the bank, but have no player file and no name in the save; they may never have joined.' });
-    for (const s of world.without) out.push({ label: s, sub: 'This save has no player files (the world\'s playerdata folder), so inventories and ender chests there are unknown.' });
+    for (const s of world.without) {
+      out.push({ label: s, sub: exportNames.has(s) ? 'Loaded as an audit export, which carries no player files; load its world folder to see inventories and ender chests.'
+        : 'This save has no player files (the world\'s playerdata folder), so inventories and ender chests there are unknown.' });
+    }
     if (world.altered.count) out.push({ label: plural(world.altered.count, 'note with a custom name or other changes', 'notes with a custom name or other changes'), sub: 'The bank refuses them, so they are not counted.' });
     if (scan && scan.state !== 'complete' && scan.state !== 'no region files') {
       out.push({ label: 'Chests, other blocks and entities', sub: scan.state === 'not run' ? 'The region scan has not been run.' : `The region scan read ${count(scan.files)} of ${count(scan.filesTotal)} region files; the rest is not counted.` });

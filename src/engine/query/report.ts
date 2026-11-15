@@ -117,6 +117,7 @@ const EN = {
     'Where the notes are now is not known: ': '',
     'No save with bank data is loaded, so no player file can be compared with it.': '',
     "None of the loaded saves has player files (the world's playerdata folder), so nothing could be counted.": '',
+    "An audit export carries only the mods' data, no player files (the world's playerdata folder), so nothing could be counted. Load the world folder itself to count the notes players carry.": '',
   } as Record<string, string>,
   // Technical only
   allFindings: 'Every finding of the incident', rulesUsed: 'The rules and their thresholds',
@@ -204,6 +205,8 @@ const DE: typeof EN = {
     'No save with bank data is loaded, so no player file can be compared with it.': 'Kein Spielstand mit Bankdaten ist geladen, darum kann keine Spielerdatei damit verglichen werden.',
     "None of the loaded saves has player files (the world's playerdata folder), so nothing could be counted.":
       'Keiner der geladenen Spielstände hat Spielerdateien (den Ordner playerdata der Welt), darum konnte nichts gezählt werden.',
+    "An audit export carries only the mods' data, no player files (the world's playerdata folder), so nothing could be counted. Load the world folder itself to count the notes players carry.":
+      'Ein Audit-Export enthält nur die Daten der Mods, keine Spielerdateien (den Ordner playerdata der Welt), darum konnte nichts gezählt werden. Lade den Weltordner selbst, um die Banknoten der Spieler zu zählen.',
   },
   allFindings: 'Alle Befunde des Vorfalls', rulesUsed: 'Die Regeln und ihre Grenzwerte',
   f: { measured: 'Gemessen', account: 'Konto', accounts: 'Konten', orders: 'Order-Ids', ledger: 'Bank-Log-Ids', flags: 'Markierungs-Ids' },

@@ -13,6 +13,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const NIL = '00000000-0000-0000-0000-000000000000';
 
 const PLACES = 2_000;
+const EXPORT_ONLY = 'An audit export carries only the mods\' data, no player files (the world\'s playerdata folder), so nothing could be counted. ' +
+  'Load the world folder itself to count the notes players carry.';
 
 const empty = (reason: string): WorldItemsResult => ({ reason, notes: 0n, inventory: 0n, enderChest: 0n, blocks: 0n, offers: 0n, places: [], placesCut: 0,
   scan: scanStatus(), players: [], altered: { stacks: 0, count: 0 }, missing: [], unnamed: 0, unreadable: [], files: 0, without: [] });
@@ -35,10 +37,11 @@ export function worldItems(): WorldItemsResult {
   const out = empty('');
   const read = new Set<string>(), bad = new Set<string>();
   const players = new Map<string, WorldPlayer>();
+  let exports = 0;
   for (const s of saves) {
     const sdb = saveData(s);
     const files = all(sdb, 'SELECT uuid, ok FROM player_file');
-    if (!files.length) out.without.push(s.name);
+    if (!files.length) { out.without.push(s.name); if (s.exported) exports++; }
     for (const f of files) (num(f.ok) ? read : bad).add(String(f.uuid));
     out.files += files.filter((f) => num(f.ok)).length;
     for (const r of all(sdb, 'SELECT player, place, path, item, item_id, count, plain, worth FROM world_item ORDER BY id')) {
@@ -99,7 +102,9 @@ export function worldItems(): WorldItemsResult {
   out.placesCut = sorted.length - out.places.length;
   out.notes += out.blocks;
 
-  if (!out.files && !bad.size && !out.scan.files) return { ...empty('None of the loaded saves has player files (the world\'s playerdata folder), so nothing could be counted.'), without: out.without };
+  if (!out.files && !bad.size && !out.scan.files) {
+    return { ...empty(exports === saves.length ? EXPORT_ONLY : 'None of the loaded saves has player files (the world\'s playerdata folder), so nothing could be counted.'), without: out.without };
+  }
 
   out.players = [...players.values()].sort((a, b) => (b.notes > a.notes ? 1 : b.notes < a.notes ? -1 : a.player.name.localeCompare(b.player.name)));
   for (const p of out.players) { out.notes += p.notes; out.inventory += p.inventory; out.enderChest += p.enderChest; }
