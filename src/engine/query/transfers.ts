@@ -238,7 +238,7 @@ export function allTransfers(): TransferRow[] {
     const row: Row = { id: num(r.id)!, ts: num(r.ts)!, account: num(r.account)!, kind: 'ADMIN_UNLOCK', item: num(r.item)!, amount: big(r.amount)!, change: 0n };
     (unlocks.get(row.account) ?? unlocks.set(row.account, []).get(row.account)!).push(row);
   }
-  const owner = new Map(all(db, 'SELECT number, owner FROM account WHERE owner IS NOT NULL').map((r) => [num(r.number)!, String(r.owner)]));
+  const owner = new Map(all(db, 'SELECT number, owner FROM main.account WHERE owner IS NOT NULL').map((r) => [num(r.number)!, String(r.owner)]));
 
   const out: TransferRow[] = [];
   for (const [id, e] of ids) {

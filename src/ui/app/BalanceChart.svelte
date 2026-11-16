@@ -19,7 +19,8 @@
   import type { Point } from '../../shared/api.ts';
   import { countShort, time } from '../../shared/fmt.ts';
   import FilterList from './FilterList.svelte';
-  import { pan, timeTick, wheel, type View } from './zoom.ts';
+  import { focusSpan } from './state.svelte.ts';
+  import { pan, timeTicks, wheel, type View } from './zoom.ts';
 
   export interface Series { id: number; name: string; points: Point[]; fmt: (raw: bigint) => string; bands: [number, number][] }
   let { series, label }: { series: Series[]; label: string } = $props();
@@ -103,7 +104,7 @@
       lines, shade, X,
       grid: ticks.map((t) => `M0 ${f(top(t.p))}H${W}`).join(''),
       yticks: ticks.map((t) => ({ top: `${((top(t.p) / H) * 100).toFixed(2)}%`, label: countShort(Math.round(t.v)) })),
-      xticks: [0, 1, 2, 3, 4].map((k) => ({ left: `${(((k + 0.5) / 5) * 100).toFixed(2)}%`, label: timeTick(x0 + (span * (k + 0.5)) / 5, span) })),
+      xticks: timeTicks([0, 1, 2, 3, 4].map((k) => x0 + (span * (k + 0.5)) / 5), span).map((label, k) => ({ left: `${(((k + 0.5) / 5) * 100).toFixed(2)}%`, label })),
     };
   });
 
@@ -166,6 +167,7 @@
         onpointerleave={() => (drag ? null : (hover = null))}
       >
         <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" aria-hidden="true" style="height: {H}px">
+          <path d={focusSpan(draw.X, H)} class="incident-span" />
           <path d={draw.grid} class="grid" />
           {#if draw.shade}<path d={draw.shade} class="band" />{/if}
           {#if hover !== null}<path d="M{draw.X(hover).toFixed(1)} 0V{H}" class="cross" />{/if}

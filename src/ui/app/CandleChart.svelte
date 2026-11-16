@@ -4,14 +4,20 @@
   // the next candle opened, and a grey line holds it there, as the game fills such gaps with flat candles.
   // Prices are bigints; only the drawing goes through a float.
   import type { Candle } from '../../shared/api.ts';
-  import { count, countShort, currency, money, time } from '../../shared/fmt.ts';
-  import { pan, timeTick, wheel, type View } from './zoom.ts';
+  import { count, countShort, currency, items, money, time } from '../../shared/fmt.ts';
+  import { focusSpan } from './state.svelte.ts';
+  import { pan, timeTicks, wheel, type View } from './zoom.ts';
 
-  interface Mark { time: number; price: bigint; buy: boolean }
+  /** One order: amount is the raw volume without its sign, who the player's name. */
+  interface Mark { time: number; price: bigint; buy: boolean; amount: bigint; who: string }
   let {
-    candles, minutes, log, usual, marks, label, describe, view = $bindable(null),
+    candles, span = null, reset, minutes, log, usual, marks, label, describe, view = $bindable(null),
   }: {
     candles: Candle[];
+    /** The time all candles cover when only a part of them is given: dragging and zooming reach all of it. */
+    span?: { from: number; to: number } | null;
+    /** A new value shows the given candles whole; candles that come with the same value keep what is shown. */
+    reset: unknown;
     minutes: number;
     log: boolean;
     /** The dashed line, one price per candle (null: no point there); null hides it. */
@@ -28,7 +34,13 @@
   const iv = $derived(minutes * 60_000);
   const tr = (p: number) => (log ? Math.log(Math.max(p, 1)) : p);
   const inv = (y: number) => (log ? Math.exp(y) : y);
-  const bounds = $derived(candles.length ? { from: candles[0]!.time, to: candles.at(-1)!.time + iv, minSpan: 10 * iv } : { from: 0, to: 1, minSpan: 1 });
+  const loaded = $derived(candles.length ? { from: candles[0]!.time, to: candles.at(-1)!.time + iv } : { from: 0, to: 1 });
+  // With only a part given, at most PART candles' time is shown: four fifths of the 5'000 one read gives, so the part
+  // read around the view has room on both sides.
+  const PART = 4000;
+  const bounds = $derived({ ...(span ?? loaded), minSpan: candles.length ? 10 * iv : 1, maxSpan: span ? PART * iv : undefined });
+  /** What shows first: the given candles, the newest PART of them when only a part is given. */
+  const start = $derived(span ? Math.max(loaded.from, loaded.to - PART * iv) : loaded.from);
 
   /** The first candle that ends after t. */
   function firstAfter(t: number) {
@@ -56,15 +68,18 @@
     return { y0: hi / lo > 20 ? 0 : lo * 0.98, y1: hi * 1.04 };
   }
 
-  // What is shown: null follows the data (everything, values fitted); zooming or dragging sets it. New candles show everything again.
-  let manual = $derived((void candles, void log, null as View | null));
-  const cur = $derived(manual ?? { x0: bounds.from, x1: bounds.to, ...fitY(bounds.from, bounds.to) });
+  // What is shown: null follows the data (the given candles, values fitted); zooming or dragging sets it. A new reset
+  // shows the candles whole again.
+  const resetKey = $derived(reset); // the prop reads the parent's whole chart object; this changes only with the value
+  let manual = $derived((void resetKey, void log, null as View | null));
+  const cur = $derived(manual ?? { x0: start, x1: loaded.to, ...fitY(start, loaded.to) });
   $effect(() => {
     view = candles.length && cur.x1 - cur.x0 < bounds.to - bounds.from - 1 ? { from: Math.floor(cur.x0), to: Math.ceil(cur.x1) - 1 } : null;
   });
 
   let hover = $state<number | null>(null); // the time under the pointer
   let box = $state<HTMLDivElement>();
+  let plotW = $state(0);
 
   /** "4 Nov 2026, 10:21:07" taken apart; day candles are UTC days, so they are named in UTC. */
   function when(ms: number) {
@@ -111,28 +126,52 @@
     const pct = (px: number, of: number) => `${((px / of) * 100).toFixed(2)}%`;
     const span = x1 - x0;
     // A marker sits on the candle its time falls into, at the order's average price.
-    const markers = marks.flatMap((m) => {
-      if (m.time < x0 || m.time >= x1) return [];
+    // Markers of one side share a column: the candle, or a marker-wide strip when candles are thinner than a marker.
+    // In a column, markers less than a marker apart merge into one that lists who traded how much, so a zoomed-out
+    // chart draws a few hundred markers at most, not one per order.
+    const px = (plotW || W) / W, size = Math.min(30, Math.max(10, ((bw * 2) / 3) * px)), colW = Math.max(slot * px, size);
+    const cols = new Map<string, { x: number; y: number; m: Mark }[]>();
+    for (const m of marks) {
+      if (m.time < x0 || m.time >= x1) continue;
       const i = candleAt(m.time), y = Y(Number(m.price));
-      return y < 0 || y > H ? [] : [{ left: pct(X(i < 0 ? m.time : candles[i]!.time + iv / 2), W), top: y.toFixed(1) + 'px', buy: m.buy }];
-    });
+      if (y < 0 || y > H) continue;
+      const x = X(i < 0 ? m.time : candles[i]!.time + iv / 2), key = `${m.buy} ${Math.floor((x * px) / colW)}`;
+      (cols.get(key) ?? cols.set(key, []).get(key)!).push({ x, y, m });
+    }
+    const markers: { left: string; top: number; buy: boolean; who: [string, bigint][] }[] = [];
+    for (const list of cols.values()) {
+      list.sort((a, b) => a.y - b.y);
+      for (let s = 0, e = 0; s < list.length; s = e) {
+        let xs = 0, ys = 0;
+        const who = new Map<string, bigint>();
+        for (; e < list.length && list[e]!.y - list[s]!.y < size; e++) {
+          const p = list[e]!;
+          [xs, ys] = [xs + p.x, ys + p.y];
+          who.set(p.m.who, (who.get(p.m.who) ?? 0n) + p.m.amount);
+        }
+        markers.push({ left: pct(xs / (e - s), W), top: ys / (e - s), buy: list[s]!.m.buy, who: [...who].sort((a, b) => (b[1] > a[1] ? 1 : b[1] < a[1] ? -1 : 0)) });
+      }
+    }
     return {
       up, down, wickUp, wickDown, vol, gaps, usual: line, markers, X,
       // Two thirds of a candle's body, between 10 and 30 px.
-      markWidth: `clamp(10px, ${((bw * 2) / 3 / W * 100).toFixed(3)}%, 30px)`,
+      markWidth: `${size.toFixed(1)}px`,
       grid: ticks.map((t) => `M0 ${f(((y1 - t) / (y1 - y0)) * H)}H${W}`).join(''),
       yticks: ticks.map((t) => ({ top: pct(((y1 - t) / (y1 - y0)) * H, H), label: axis(inv(t)) })),
-      xticks: [0, 1, 2, 3, 4, 5].map((k) => {
-        const t = x0 + (span * (k + 0.5)) / 6;
-        return { left: pct(((k + 0.5) / 6) * W, W), label: timeTick(t, span, minutes >= 1440) };
-      }),
+      xticks: timeTicks([0, 1, 2, 3, 4, 5].map((k) => x0 + (span * (k + 0.5)) / 6), span, minutes >= 1440)
+        .map((label, k) => ({ left: pct(((k + 0.5) / 6) * W, W), label })),
     };
   });
+
+  // The marker under the pointer; zooming, panning and new data move the markers, so they drop it.
+  let tip = $derived((void draw, null as NonNullable<typeof draw>['markers'][number] | null));
+  /** At most this many players in a marker's list; the rest are counted. */
+  const TIP_ROWS = 20;
 
   // The candle under the pointer, else the newest one shown; between candles, the gap and its price.
   const readout = $derived.by(() => {
     if (!candles.length) return null;
-    const t = hover ?? Math.min(cur.x1, bounds.to) - 1;
+    const t = hover ?? Math.min(cur.x1, loaded.to) - 1;
     const i = candleAt(t);
     if (i < 0) {
       const next = firstAfter(t);
@@ -198,11 +237,11 @@
 {/if}
 {#if draw}
   <div class="chart">
-    <div style="flex: 1 1 0; min-width: 0">
+    <div style="flex: 1 1 0; min-width: 0; position: relative">
       <!-- The chart takes the wheel, drags, Space and Ctrl+Space itself. -->
       <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
       <div
-        class="plot" bind:this={box} role="img" aria-label={label} tabindex="0"
+        class="plot" bind:this={box} bind:clientWidth={plotW} role="img" aria-label={label} tabindex="0"
         onpointermove={move}
         onpointerdown={(e) => {
           drag = { x: e.clientX, y: e.clientY };
@@ -213,6 +252,7 @@
         onpointerleave={() => (drag ? null : (hover = null))}
       >
         <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" aria-hidden="true" style="height: {H}px">
+          <path d={focusSpan(draw.X, H)} class="incident-span" />
           <path d={draw.grid} class="grid" />
           <path d={draw.usual} class="usual" />
           {#if hover !== null && readout}<path d="M{readout.x.toFixed(1)} 0V{H}" class="cross" />{/if}
@@ -223,12 +263,22 @@
           <path d={draw.down} style="fill: var(--down)" />
         </svg>
         {#each draw.markers as m, i (i)}
-          <span class="mark" class:buy={m.buy} style="left: {m.left}; top: {m.top}; width: {draw.markWidth}"><i></i></span>
+          <!-- Pointing shows the list; the readout says the same for the candle under the pointer. -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <span class="mark" class:buy={m.buy} style="left: {m.left}; top: {m.top.toFixed(1)}px; width: {draw.markWidth}"
+            onpointerenter={() => (tip = drag ? null : m)} onpointerleave={() => tip === m && (tip = null)}><i></i></span>
         {/each}
         <svg viewBox="0 0 {W} {VH}" preserveAspectRatio="none" aria-hidden="true" style="height: {VH}px; margin-top: 8px">
           <path d={draw.vol} class="vol" />
         </svg>
       </div>
+      {#if tip}
+        <div class="tip" class:below={tip.top < H / 2} style="left: {tip.left}; top: {tip.top.toFixed(1)}px" role="tooltip">
+          <div class="small">{tip.buy ? 'Bought' : 'Sold'} by {count(tip.who.length)} {tip.who.length === 1 ? 'player' : 'players'}</div>
+          {#each tip.who.slice(0, TIP_ROWS) as [name, qty] (name)}<div>{items(qty)} → {name}</div>{/each}
+          {#if tip.who.length > TIP_ROWS}<div class="small">and {count(tip.who.length - TIP_ROWS)} more</div>{/if}
+        </div>
+      {/if}
       <div class="xaxis" aria-hidden="true">
         {#each draw.xticks as t (t.left)}<span style="left: {t.left}">{t.label}</span>{/each}
       </div>
@@ -255,9 +305,14 @@
   .wick { fill: none; stroke-width: 1; vector-effect: non-scaling-stroke; }
   .vol { fill: var(--text3); fill-opacity: 0.45; }
   /* A halo in the card's colour keeps a marker apart from the candle under it. */
-  .mark { position: absolute; aspect-ratio: 10 / 9; transform: translate(-50%, -50%); pointer-events: none; filter: drop-shadow(0 0 1px var(--card)) drop-shadow(0 0 1px var(--card)); }
+  .mark { position: absolute; aspect-ratio: 10 / 9; transform: translate(-50%, -50%); filter: drop-shadow(0 0 1px var(--card)) drop-shadow(0 0 1px var(--card)); }
   .mark i { display: block; width: 100%; height: 100%; background: var(--sell); clip-path: polygon(0 0, 100% 0, 50% 100%); }
   .mark.buy i { background: var(--buy); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  .tip { position: absolute; z-index: 2; transform: translate(-50%, calc(-100% - 14px)); pointer-events: none; padding: 8px 10px; border-radius: 8px;
+    background: var(--raised); border: 1px solid var(--line); box-shadow: 0 4px 16px rgb(0 0 0 / 0.25); font-size: 13px; line-height: 18px;
+    white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text); }
+  .tip.below { transform: translate(-50%, 14px); }
+  .tip .small { color: var(--text2); }
   .xaxis { position: relative; height: 16px; margin-top: 8px; font-size: 12px; line-height: 16px; color: var(--text3); }
   .xaxis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
   .yaxis { flex: none; width: 72px; font-size: 12px; line-height: 16px; color: var(--text3); }

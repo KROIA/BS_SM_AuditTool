@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { clampX, pan, timeTick, wheel } from '../../src/ui/app/zoom.ts';
+import { clampX, pan, timeTick, timeTicks, wheel } from '../../src/ui/app/zoom.ts';
 
 const B = { from: 0, to: 1000, minSpan: 50 };
 const V = { x0: 0, x1: 1000, y0: 0, y1: 100 };
@@ -34,4 +34,10 @@ test('time axis labels say as much as the span shown needs', () => {
   assert.equal(timeTick(t, DAY, true), '11:30');
   assert.equal(timeTick(t, 2 * DAY, true), '4 Nov, 11:30');
   assert.equal(timeTick(t, 30 * DAY, true), '4 Nov');
+});
+
+test('a short time axis names the day on its first label and where a new day starts', () => {
+  const H = 3_600_000, t = Date.UTC(2026, 10, 4, 22, 0);
+  assert.deepEqual(timeTicks([t, t + H, t + 2 * H, t + 3 * H], 4 * H, true), ['4 Nov, 22:00', '23:00', '5 Nov, 00:00', '01:00']);
+  assert.deepEqual(timeTicks([t, t + 2 * 86_400_000], 3 * 86_400_000, true), ['4 Nov, 22:00', '6 Nov, 22:00']); // long axes name every day already
 });

@@ -2,6 +2,7 @@
   // A value over time as a step line: a balance holds until the next snapshot. bands: spans to shade, [from, to] in epoch ms.
   import type { Point } from '../../shared/api.ts';
   import { time } from '../../shared/fmt.ts';
+  import { focusSpan } from './state.svelte.ts';
 
   let { points, label, fmt, bands = [] }: { points: Point[]; label: string; fmt: (raw: bigint) => string; bands?: [number, number][] } = $props();
 
@@ -23,12 +24,13 @@
       const mid = (at(a) + at(b)) / 2, half = Math.max(4, (at(b) - at(a)) / 2);
       return `M${(mid - half).toFixed(1)} 0H${(mid + half).toFixed(1)}V${H}H${(mid - half).toFixed(1)}Z`;
     }).join('');
-    return { line, area: `${line} V${y(lo < 0n ? 0n : lo)} H0 Z`, shade, top: fmt(hi), mid: fmt((hi + lo) / 2n), bottom: fmt(lo), from: time(x0), to: time(x1) };
+    return { span: focusSpan(at, H), line, area: `${line} V${y(lo < 0n ? 0n : lo)} H0 Z`, shade, top: fmt(hi), mid: fmt((hi + lo) / 2n), bottom: fmt(lo), from: time(x0), to: time(x1) };
   });
 </script>
 
 <div class="chart">
   <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" role="img" aria-label="{label} from {chart.from} to {chart.to}">
+    <path d={chart.span} class="incident-span" />
     <path d="M0 0H{W}M0 {H / 2}H{W}M0 {H}H{W}" class="grid" />
     {#if chart.shade}<path d={chart.shade} class="band" />{/if}
     <path d={chart.area} class="area" />

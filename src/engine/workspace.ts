@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { bytes, setCurrency } from '../shared/fmt.ts';
-import { DEFAULT_RULES, type Answer, type CaseChoices, type CaseData, type Cutoff, type Mark, type Progress, type RuleSettings, type SaveSummary, type Workspace } from '../shared/api.ts';
+import { DEFAULT_RULES, type Answer, type Incident, type CaseChoices, type CaseData, type Cutoff, type Mark, type Progress, type RuleSettings, type SaveSummary, type Workspace } from '../shared/api.ts';
 import { cachedSummary, importSave } from './save/import.ts';
 import { findDataDir } from './save/locate.ts';
 import { unzip, type ZipProblem } from './save/zip.ts';
@@ -366,10 +366,45 @@ export function mainData(): DatabaseSync | null {
 /** The loaded saves, in the order they were added. */
 export const loadedSaves = (): readonly SaveSummary[] => saves;
 
-/** The cache database of one loaded save, opened read-only (the slaves' transfer journals). */
+/** The cache database of one loaded save, opened read-only (the slaves' transfer journals). Under an incident's focus a
+ *  connection of its own whose tables hold only that incident's players and accounts, so what is kept per connection
+ *  (the rules' state, the checks) never mixes the two. */
 export function saveData(s: SaveSummary): DatabaseSync {
-  const file = cacheFile(s.path);
-  let db = opened.get(file);
-  if (!db) opened.set(file, (db = new DatabaseSync(file, { readOnly: true })));
+  const file = cacheFile(s.path), key = focus ? `${file}|${focus.id}|${focus.players.map((p) => p.uuid)}|${focus.accounts}` : file;
+  let db = opened.get(key);
+  if (!db) {
+    if (focus) for (const [k, d] of opened) if (k.startsWith(file + '|')) (d.close(), opened.delete(k)); // one incident at a time
+    opened.set(key, (db = new DatabaseSync(file, { readOnly: true })));
+    if (focus) narrow(db, focus);
+  }
   return db;
+}
+
+let focus: Incident | null = null;
+/** Runs a question on the data of one incident (see Scope.focus), or on all of it (null). */
+export function within<T>(f: Incident | null | undefined, run: () => T): T {
+  const was = focus;
+  focus = f ?? null;
+  try {
+    return run();
+  } finally {
+    focus = was;
+  }
+}
+
+/** The tables cut to the incident, and which rows stay: fp holds its players, fa its accounts and those its players own. */
+const ONLY: Record<string, string> = {
+  player: 'uuid IN fp', player_file: 'uuid IN fp', account: 'number IN fa', account_user: 'account IN fa',
+  balance: 'account IN fa', snapshot: 'account IN fa', flag: 'account IN fa', ledger: 'account IN fa',
+  orders: 'player IN fp OR account IN fa', transfer_step: 'player IN fp OR account IN fa', trade_alert: 'player IN fp OR account IN fa',
+  note_flow: 'player IN fp', world_item: 'player IN fp', scan_item: 'owner IN fp OR account IN fa',
+  audit: 'player IN fp OR actor_uuid IN fp OR account IN fa',
+};
+/** Temporary views of the same names hide the tables of the connection (SQLite looks in temp first); main.x stays whole. */
+function narrow(db: DatabaseSync, f: Incident) {
+  db.exec('CREATE TEMP TABLE fp (uuid TEXT PRIMARY KEY); CREATE TEMP TABLE fa (number INTEGER PRIMARY KEY)');
+  db.prepare('INSERT INTO fp SELECT DISTINCT value FROM json_each(?)').run(JSON.stringify(f.players.map((p) => p.uuid)));
+  db.prepare('INSERT INTO fa SELECT value FROM json_each(?) UNION SELECT number FROM main.account WHERE owner IN fp').run(JSON.stringify(f.accounts));
+  const tables = new Set((db.prepare("SELECT name FROM main.sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((r) => r.name));
+  for (const [t, where] of Object.entries(ONLY)) if (tables.has(t)) db.exec(`CREATE TEMP VIEW ${t} AS SELECT * FROM main.${t} WHERE ${where}`);
 }

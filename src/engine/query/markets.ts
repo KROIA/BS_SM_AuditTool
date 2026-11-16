@@ -69,7 +69,8 @@ export function markets(scope: Scope): MarketRow[] {
     [m.low, m.high] = [lo, big(r.hi)!];
     m.swing = Number(m.high) / Number(lo > 0n ? lo : 1n); // ponytail: a low of 0 counts as 1 raw (0.01)
   }
-  return [...rows.values()].sort((a, b) => (b.swing ?? -1) - (a.swing ?? -1) || b.orders - a.orders || a.item - b.item);
+  // Under an incident's focus only the markets its players traded on.
+  return [...rows.values()].filter((m) => !scope.focus || m.orders > 0).sort((a, b) => (b.swing ?? -1) - (a.swing ?? -1) || b.orders - a.orders || a.item - b.item);
 }
 
 /** The usual price: the median open of the 1-minute candles in the scope, else the median price of the orders given. */
@@ -158,39 +159,53 @@ export function market(item: number, scope: Scope): MarketFacts {
   return { usual: usualAt(item, scope.to === null ? END : scope.to + 1), low: big(f.lo), high: big(f.hi), volume: Number(f.v), traders: new Set(list.map((o) => o.player)).size };
 }
 
-export function candles(item: number, minutes: 1 | 5 | 15 | 60 | 1440, scope: Scope): { candles: Candle[]; capped: boolean; usual: (bigint | null)[] } {
+/**
+ * The newest CAP candles of the scope up to end (the whole scope without it). span: the time all candles of the scope
+ * cover, so a chart can ask for an older or newer part with another end; capped: span holds more than came back.
+ */
+export function candles(item: number, minutes: 1 | 5 | 15 | 60 | 1440, scope: Scope, end?: number):
+{ candles: Candle[]; capped: boolean; usual: (bigint | null)[]; span: { from: number; to: number } | null } {
   const db = mainData();
-  if (!db) return { candles: [], capped: false, usual: [] };
-  const q = minutes >= 60 ? source(scope, item) : (({ where, params }) => ({ sql: `SELECT ${COLS} FROM candle WHERE ${where}`, params }))(minuteWhere(item, scope));
-  const st = db.prepare(`${q.sql} ORDER BY time`);
+  if (!db) return { candles: [], capped: false, usual: [], span: null };
+  const query = (s: Scope) => (minutes >= 60 ? source(s, item) : (({ where, params }) => ({ sql: `SELECT ${COLS} FROM candle WHERE ${where}`, params }))(minuteWhere(item, s)));
+  const cut = end !== undefined && (scope.to === null || end < scope.to);
+  const q = query(cut ? { ...scope, to: end } : scope);
+  const st = db.prepare(`${q.sql} ORDER BY time DESC`);
   st.setReadBigInts(true);
   const iv = minutes * 60_000;
-  const out: Candle[] = [];
-  let capped = false;
+  const out: Candle[] = []; // newest first while reading
+  let capped = cut;
   for (const r of st.iterate(q.params) as Iterable<Row>) {
     const time = Math.floor(num(r.time)! / iv) * iv, open = big(r.open)!, low = big(r.low)!, high = big(r.high)!;
     const last = out.at(-1);
     if (last?.time === time) {
+      last.open = open; // rows come newest first: this one is earlier in the candle
       if (high > last.high) last.high = high;
       if (low < last.low) last.low = low;
       last.volume += Number(r.volume);
       continue;
     }
-    if (last) last.close = open; // the mods store no close: it is the next candle's open
     if (out.length === CAP) {
       capped = true;
       break;
     }
     out.push({ time, open, high, low, close: null, volume: Number(r.volume) });
   }
+  out.reverse();
+  // The mods store no close: it is the next candle's open. The newest one closes at the open of the next candle after
+  // it, also when that lies past the scope.
+  for (let i = 0; i + 1 < out.length; i++) out[i]!.close = out[i + 1]!.open;
   const last = out.at(-1);
-  if (last && !capped) {
-    // The newest candle of the scope closes at the open of the next one after it, also when that lies past the scope.
-    const next = all(db, 'SELECT open FROM candle WHERE market = :m AND time >= :t ORDER BY time LIMIT 1', { m: item, t: last.time + iv })[0];
-    last.close = next ? big(next.open) : null;
+  if (!last) return { candles: [], capped: false, usual: [], span: null };
+  const next = all(db, 'SELECT open FROM candle WHERE market = :m AND time >= :t ORDER BY time LIMIT 1', { m: item, t: last.time + iv })[0];
+  last.close = next ? big(next.open) : null;
+  let span = { from: out[0]!.time, to: last.time + iv };
+  if (capped) {
+    const whole = query(scope), edge = (dir: string) => num(all(db, `SELECT time FROM (${whole.sql}) ORDER BY time ${dir} LIMIT 1`, whole.params)[0]!.time)!;
+    span = { from: Math.floor(edge('ASC') / iv) * iv, to: Math.floor(edge('DESC') / iv) * iv + iv };
   }
   // The usual price that follows the market (AT-45): one per candle, worked out once per hour.
-  return { candles: out, capped, usual: usualSeries(db, item, out.map((c) => c.time)) };
+  return { candles: out, capped, usual: usualSeries(db, item, out.map((c) => c.time)), span };
 }
 
 export function traders(item: number, scope: Scope): Trader[] {

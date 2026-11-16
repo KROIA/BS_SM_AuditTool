@@ -136,3 +136,39 @@ test('the chart zoom becomes the time range of the whole tool', async () => {
   await range('Everything');
   await expect(page.getByRole('button', { name: 'Time range: Everything' })).toBeVisible();
 });
+
+test('an incident picked in the top bar narrows every screen to its players and accounts, its time shaded on the charts', async () => {
+  await page.evaluate("location.hash = '#/players'");
+  const pick = page.locator('aside .pick');
+  await expect(pick).toHaveCount(6);
+  await page.getByRole('button', { name: 'Incident shown: none, all the data' }).click();
+  const menu = page.locator('#focus-menu');
+  await expect(menu.getByRole('button', { name: 'None: all the data' })).toHaveAttribute('aria-pressed', 'true');
+  await page.screenshot({ path: 'test-results/topbar-focus-menu-dark.png' });
+  await menu.getByRole('button', { name: /^Tavrik on the diamond market/ }).click();
+  await expect(menu).toBeHidden();
+  await expect(page.getByRole('button', { name: /^Incident shown: Tavrik on the diamond market/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Time range: The incident' })).toBeVisible();
+  await expect(pick).toHaveText([/Tavrik/]); // only the incident's player
+  await page.evaluate("location.hash = '#/findings'");
+  await expect(page.locator('main')).not.toContainText('Brindle');
+  await page.evaluate("location.hash = '#/markets/2'");
+  await expect(page.locator('path.incident-span')).toHaveAttribute('d', /^M[-\d.]+ 0H/);
+  // The incident's market stands out in the list, and its item in the Item flow timeline's item list.
+  await expect(page.locator('aside .pick.involved')).toHaveCount(1);
+  await expect(page.locator('aside .pick.involved')).toContainText('In the incident');
+  await page.screenshot({ path: 'test-results/topbar-focus-dark.png' });
+  await page.evaluate("location.hash = '#/flow'");
+  await page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Timeline' }).click();
+  const items = page.getByRole('group', { name: 'Items on the chart' }).getByRole('button');
+  await expect(items.filter({ hasText: /^Diamond$/ })).toHaveClass(/\bhot\b/);
+  await expect(items.locator('.ellipsis').filter({ hasText: /^Money/ }).locator('..')).not.toHaveClass(/\bhot\b/);
+  await page.getByRole('group', { name: 'Items on the chart' }).screenshot({ path: 'test-results/topbar-focus-items-dark.png' });
+
+  await page.getByRole('button', { name: /^Incident shown: / }).click();
+  await menu.getByRole('button', { name: 'None: all the data' }).click();
+  await expect(page.getByRole('button', { name: 'Time range: Everything' })).toBeVisible();
+  await expect(page.locator('path.incident-span')).toHaveAttribute('d', '');
+  await page.evaluate("location.hash = '#/players'");
+  await expect(pick).toHaveCount(6);
+});

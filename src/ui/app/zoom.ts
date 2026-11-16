@@ -6,13 +6,13 @@ import { time } from '../../shared/fmt.ts';
 /** What the chart shows: x0..x1 left to right, y0..y1 bottom to top. */
 export interface View { x0: number; x1: number; y0: number; y1: number }
 
-/** How far one can go: the time the data covers, and the shortest time span worth showing. */
-export interface Bounds { from: number; to: number; minSpan: number }
+/** How far one can go: the time the data covers, the shortest time span worth showing and, if set, the longest. */
+export interface Bounds { from: number; to: number; minSpan: number; maxSpan?: number }
 
 /** Keeps the time span inside the data and at least minSpan wide; the values are not bounded. */
 export function clampX(v: View, b: Bounds): View {
   const full = b.to - b.from;
-  const span = Math.min(full, Math.max(Math.min(b.minSpan, full), v.x1 - v.x0));
+  const span = Math.min(full, b.maxSpan ?? full, Math.max(Math.min(b.minSpan, full), v.x1 - v.x0));
   const x0 = Math.min(b.to - span, Math.max(b.from, v.x0));
   return { ...v, x0, x1: x0 + span };
 }
@@ -28,7 +28,8 @@ export function wheel(v: View, e: { deltaX: number; deltaY: number; ctrlKey: boo
   let { x0, x1, y0, y1 } = v;
   if (!e.ctrlKey) {
     // Zooming in stops at the shortest span around the pointer; leaving that to clampX would slide the view sideways.
-    const ax = x0 + rx * (x1 - x0), k = Math.max(f, Math.min(b.minSpan, b.to - b.from) / (x1 - x0));
+    // Zooming out stops at the longest span the same way.
+    const ax = x0 + rx * (x1 - x0), k = Math.min(Math.max(f, Math.min(b.minSpan, b.to - b.from) / (x1 - x0)), (b.maxSpan ?? Infinity) / (x1 - x0));
     [x0, x1] = [ax - (ax - x0) * k, ax + (x1 - ax) * k];
   }
   if (!e.shiftKey) {
@@ -51,6 +52,16 @@ export function timeTick(t: number, span: number, utc = false): string {
   if (span <= 10_000) return `${clock}.${String(Math.floor(t) % 1000).padStart(3, '0')}`;
   if (span <= 600_000) return clock;
   return span <= 86_400_000 ? clock.slice(0, 5) : span <= 4 * 86_400_000 ? `${day}, ${clock.slice(0, 5)}` : day;
+}
+
+/** The labels of a time axis, ticks oldest first: timeTick for each, and when that leaves the day out, the day on the
+ *  first label and on each label where a new day starts. */
+export function timeTicks(ticks: number[], span: number, utc = false): string[] {
+  const dayOf = (t: number) => time(t, utc).split(', ')[0]!.replace(/ \d{4}$/, '');
+  return ticks.map((t, i) => {
+    const label = timeTick(t, span, utc);
+    return span > 86_400_000 || (i > 0 && dayOf(ticks[i - 1]!) === dayOf(t)) ? label : `${dayOf(t)}, ${label}`;
+  });
 }
 
 export const HINT = 'Scroll to zoom (Ctrl: values only, Shift: time only), drag to move, Space fits the values to what is shown, Ctrl+Space shows everything.';

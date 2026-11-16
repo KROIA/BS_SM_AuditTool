@@ -3,6 +3,8 @@
   // numbered events on the money line. Zoom with the wheel and pan by dragging, as on the market chart.
   import type { Point } from '../../shared/api.ts';
   import { moneyShort, time } from '../../shared/fmt.ts';
+  import { focusSpan } from './state.svelte.ts';
+  import { timeTicks } from './zoom.ts';
 
   interface Mark { n: number; time: number; label: string }
   let {
@@ -67,16 +69,13 @@
     };
     const line = path(money);
     const ticks = [...new Set([0, 1, 2, 3].map((k) => lo + (hi - lo) * (k / 3)).concat(lo < 0 ? [0] : []))];
-    const span = b - a, day = (ms: number) => time(ms).split(',')[0]!.replace(/ \d{4}$/, ''), clock = (ms: number) => time(ms).split(', ')[1]!.slice(0, 5);
+    const span = b - a, stops = [0.1, 0.3, 0.5, 0.7, 0.9], labels = timeTicks(stops.map((p) => a + span * p), span);
     return {
-      line, wealth: wealth ? path(wealth) : '',
+      span: focusSpan(X, H), line, wealth: wealth ? path(wealth) : '',
       area: line ? `${line} V${f(Y(0))} H${line.slice(1).split(' ')[0]} Z` : '',
       grid: ticks.filter((v) => v !== lo).map((v) => `M0 ${f(Y(v))}H${W}`).join(''),
       yticks: ticks.map((v) => ({ top: `${((Y(v) / H) * 100).toFixed(2)}%`, label: moneyShort(BigInt(Math.round(v))) })),
-      xticks: [0.1, 0.3, 0.5, 0.7, 0.9].map((p) => {
-        const t = a + span * p;
-        return { left: `${p * 100}%`, label: span <= 86_400_000 ? clock(t) : span <= 4 * 86_400_000 ? `${day(t)}, ${clock(t)}` : day(t) };
-      }),
+      xticks: stops.map((p, k) => ({ left: `${p * 100}%`, label: labels[k]! })),
       marks: marks.flatMap((m) => {
         if (m.time < a || m.time > b) return [];
         const v = at(money, m.time) ?? money[0]![1];
@@ -126,6 +125,7 @@
       onpointerup={() => (drag = null)}
     >
       <svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" aria-hidden="true">
+        <path d={draw.span} class="incident-span" />
         <path d={draw.grid} class="grid" />
         <path d={draw.area} class="area" />
         <path d={draw.line} class="line" />

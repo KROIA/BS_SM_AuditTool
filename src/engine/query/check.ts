@@ -18,11 +18,12 @@ const abs = (v: bigint) => (v < 0n ? -v : v);
 /**
  * What one row or order did to one balance. raw: RAW_CHANGE from an unknown source; unknown: a row whose sign the save does
  * not give. For the money flow (flow.ts): id is the ledger row's, or the order's (order id, else row id) when order is set;
- * market and qty are a trade's goods and signed volume on its money side; server is where it was made ('' the master, null unknown).
+ * market and qty are a trade's goods and signed volume on its money side; server is where it was made ('' the master, null unknown);
+ * group: the inter-market order a trade row is a leg of (its ref, sm:im:<uuid>), else null.
  */
 export interface Move {
   ts: number; how: 'trade' | 'raw' | 'row' | 'unknown'; amount: bigint; kind: string;
-  id: number; order: boolean; market: number | null; qty: bigint; other: number | null; server: string | null; note: string | null;
+  id: number; order: boolean; market: number | null; qty: bigint; other: number | null; server: string | null; note: string | null; group: string | null;
 }
 interface RawGap { from: number; to: number; diff: bigint; trades: bigint; paidIn: bigint; paidOut: bigint; labels: string[]; after: bigint }
 type Series = [number, bigint][];
@@ -56,12 +57,13 @@ export function read(db: DatabaseSync, account: number | null) {
     const key = `${acc}:${item}`;
     (moves.get(key) ?? moves.set(key, []).get(key)!).push(m);
   };
-  for (const r of all(db, `SELECT id, ts, account, kind, item, amount, note, balance_after, source_kind, money_amount, currency_item, other_account, server FROM ledger
+  for (const r of all(db, `SELECT id, ts, account, kind, item, amount, note, balance_after, source_kind, money_amount, currency_item, other_account, server, ref FROM ledger
     WHERE 1 ${only} ORDER BY ts, id`, params)) {
     const ts = num(r.ts)!, acc = num(r.account)!, kind = String(r.kind), item = num(r.item)!;
     const c = change(kind, big(r.amount)!, text(r.note), big(r.balance_after));
     const trade = kind === 'TRADE_BUY' || kind === 'TRADE_SELL';
-    const row = { id: num(r.id)!, order: false, market: null, qty: 0n, other: num(r.other_account), server: text(r.server), note: text(r.note) };
+    const ref = text(r.ref), group = trade && ref?.startsWith('sm:im:') ? ref : null;
+    const row = { id: num(r.id)!, order: false, market: null, qty: 0n, other: num(r.other_account), server: text(r.server), note: text(r.note), group };
     add(acc, item, { ...row, ts, kind, amount: c ?? 0n, how: c === null ? 'unknown' : trade ? 'trade' : kind === 'RAW_CHANGE' && r.source_kind === 'UNKNOWN' ? 'raw' : 'row' });
     if (trade && r.money_amount !== null && r.currency_item !== null) {
       const paid = big(r.money_amount)!;
@@ -80,7 +82,8 @@ export function read(db: DatabaseSync, account: number | null) {
     FROM orders o LEFT JOIN order_origin oo ON oo.ref = 'sm:order:' || o.order_id
     WHERE time > 0 ${only} ${firstTrade !== null ? 'AND coalesce(finish_time, time) < :first' : ''}`, params)) {
     const ts = num(r.ts)!, acc = num(r.account)!, amount = big(r.amount)!, item = num(r.item)!;
-    const row = { id: num(r.oid)!, order: true, other: null, server: text(r.origin), note: null };
+    // ponytail: inter-market legs of orders before trade rows stay two trades; the orders table keeps no group id.
+    const row = { id: num(r.oid)!, order: true, other: null, server: text(r.origin), note: null, group: null };
     add(acc, item, { ...row, market: null, qty: 0n, ts, kind: 'ORDER', how: 'trade', amount });
     if (money !== null) add(acc, money, { ...row, market: item, qty: amount, ts, kind: 'ORDER', how: 'trade', amount: -(amount * big(r.price)!) / 100n }); // as readOrders: cut off
   }

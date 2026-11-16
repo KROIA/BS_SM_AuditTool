@@ -72,8 +72,8 @@ export function links(uuid: string, scope: Scope): PlayerLink[] {
 
   // Proven: one account, both its users. The owner of an account counts as one of its users.
   const people = new Map<number, { name: string; users: Set<string> }>();
-  for (const r of all(db, `SELECT number, name, owner AS uuid FROM account WHERE owner IS NOT NULL
-      UNION SELECT a.number, a.name, u.uuid FROM account_user u JOIN account a ON a.number = u.account`)) {
+  for (const r of all(db, `SELECT number, name, owner AS uuid FROM main.account WHERE owner IS NOT NULL
+      UNION SELECT a.number, a.name, u.uuid FROM main.account_user u JOIN main.account a ON a.number = u.account`)) {
     const n = num(r.number)!;
     (people.get(n) ?? people.set(n, { name: String(r.name), users: new Set() }).get(n)!).users.add(String(r.uuid));
   }
@@ -82,7 +82,7 @@ export function links(uuid: string, scope: Scope): PlayerLink[] {
   }
 
   // Proven: transfers between an account each owns. The current mods log one row on each side, the same time and amount.
-  const owner = new Map(all(db, 'SELECT number, owner FROM account WHERE owner IS NOT NULL').map((r) => [num(r.number)!, String(r.owner)]));
+  const owner = new Map(all(db, 'SELECT number, owner FROM main.account WHERE owner IS NOT NULL').map((r) => [num(r.number)!, String(r.owner)]));
   const own = [...owner].filter(([, o]) => o === uuid).map(([n]) => n);
   const params: Record<string, SQLInputValue> = { own: JSON.stringify(own) };
   if (scope.from !== null) params.from = scope.from;

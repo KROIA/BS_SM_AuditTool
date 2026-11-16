@@ -1,7 +1,7 @@
 // Incidents, made from the findings. The suspicion order of the players is in shared/incident.ts.
 import type { Finding, Incident, IncidentsResult, Level, RuleSettings, Scope } from '../../shared/api.ts';
 import { blamed } from '../../shared/incident.ts';
-import { caseData, mainData } from '../workspace.ts';
+import { caseData, mainData, within } from '../workspace.ts';
 import { findings, RANK, shown, state } from './findings.ts';
 import { sales, type Sale } from './sessions.ts';
 
@@ -45,7 +45,9 @@ export function join(list: Finding[], owner: Map<number, string>): Group[] {
 
 const union = <T extends number | string>(v: T[]) => [...new Set(v)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
-export function incidents(scope: Scope, settings: RuleSettings): IncidentsResult {
+/** Made from the findings of all the data; an incident's focus only picks which are shown. */
+export const incidents = (scope: Scope, settings: RuleSettings): IncidentsResult => within(null, () => incidentsOf(scope, settings));
+function incidentsOf(scope: Scope, settings: RuleSettings): IncidentsResult {
   const db = mainData();
   const marked = Object.keys(caseData().marks);
   if (!db) return { incidents: [], others: [], orphans: marked };

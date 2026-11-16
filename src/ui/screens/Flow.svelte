@@ -1,7 +1,7 @@
 <script module lang="ts">
   // What the screen shows stays when it is left and opened again: the incident or the timeline, players or accounts,
   // whether items other than money are shown, and the item the incident chart follows (null: the money).
-  const ui = $state({ view: 'incident' as 'incident' | 'timeline', byAccount: false, items: false, item: null as number | null });
+  const ui = $state({ view: 'incident' as 'incident' | 'timeline', byAccount: false, items: true, item: null as number | null });
 </script>
 
 <script lang="ts">
@@ -77,6 +77,16 @@
     return [...itemRows.keys()].filter((id) => !w.isMoney(id)).map((id) => ({ id, name: w.itemName(id) }))
       .sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name)).filter((c) => !seen.has(c.name) && !!seen.add(c.name));
   });
+  // The item menu: a search over the money and the items; Enter takes the first that matches.
+  let itemMenu = $state<HTMLElement>();
+  let find = $state('');
+  const entries = $derived([{ id: null as number | null, name: `Money (${currency()})` }, ...choices]);
+  const found = $derived(entries.filter((c) => c.name.toLowerCase().includes(find.trim().toLowerCase())));
+  function chooseItem(id: number | null) {
+    ui.item = id;
+    itemMenu?.hidePopover();
+  }
+
   /** An amount of what the chart follows: money, or the item in its own count. */
   const goods = $derived(flow?.item ?? null);
   const val = (v: bigint) => (goods === null ? money(v) : w.value(goods, v));
@@ -362,12 +372,24 @@
         </label>
       {/if}
       {#if ui.items}
-        <label class="choose" style="flex: 0 1 280px"><span class="small">Item</span>
-          <select value={item ?? 'money'} onchange={(e) => (ui.item = e.currentTarget.value === 'money' ? null : Number(e.currentTarget.value))}>
-            <option value="money">Money ({currency()})</option>
-            {#each choices as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
-          </select>
-        </label>
+        <div class="choose" style="flex: 0 1 280px"><span class="small">Item</span>
+          <button type="button" class="pick" popovertarget="item-menu" style="anchor-name: --item" aria-label="Item: {entries.find((c) => c.id === item)?.name ?? ''}">
+            <span class="ellipsis">{entries.find((c) => c.id === item)?.name ?? ''}</span><span aria-hidden="true" class="caret">▾</span>
+          </button>
+        </div>
+        <div id="item-menu" class="menu" popover bind:this={itemMenu} style="position-anchor: --item" aria-label="Item"
+          onbeforetoggle={(e) => e.newState === 'open' && (find = '')}>
+          <!-- svelte-ignore a11y_autofocus (the menu opens to type into it) -->
+          <input type="search" placeholder="Find an item" aria-label="Find an item" bind:value={find} autofocus
+            onkeydown={(e) => e.key === 'Enter' && found[0] && (e.preventDefault(), chooseItem(found[0].id))} />
+          <div class="options">
+            {#each found as c (c.id ?? 'money')}
+              <button type="button" class="choice" aria-pressed={c.id === item} onclick={() => chooseItem(c.id)}>{c.name}</button>
+            {:else}
+              <p class="small" style="margin: 8px 10px">Nothing matches.</p>
+            {/each}
+          </div>
+        </div>
       {/if}
     </div>
   {/if}
@@ -497,6 +519,16 @@
   .choose { flex: 1 1 420px; display: flex; align-items: center; gap: 12px; max-width: 720px; }
   .check { display: flex; align-items: center; gap: 8px; height: 42px; font-weight: 500; color: var(--text2); cursor: pointer; }
   .check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+  .pick { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 40px; padding: 0 10px;
+    border-radius: 10px; border: 1px solid var(--line2); background: var(--card); color: var(--text); font: inherit; text-align: left; }
+  .caret { color: var(--text3); font-size: 12px; }
+  .pick .ellipsis { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .menu { position-area: bottom span-right; inset: auto; margin: 6px 0 0; width: 280px; padding: 8px; box-sizing: border-box; border-radius: 12px;
+    background: var(--card); color: var(--text); border: 1px solid var(--line2); box-shadow: 0 12px 32px rgb(0 0 0 / 0.35); }
+  .menu input { width: 100%; box-sizing: border-box; height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line2); background: var(--raised); color: var(--text); font: inherit; font-size: 13px; }
+  .options { display: flex; flex-direction: column; max-height: 320px; overflow-y: auto; margin-top: 6px; }
+  .choice { width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: none; color: var(--text); text-align: left; font: inherit; font-weight: 500; }
+  .choice:hover, .choice[aria-pressed='true'] { background: var(--raised); }
   select { flex: 1 1 auto; min-width: 0; height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line2); background: var(--card); color: var(--text); font: inherit; }
   .empty { margin: 0; padding: 24px; border-radius: 14px; border: 1px dashed var(--line2); color: var(--text2); }
   .lead { margin: 0; max-width: 820px; font-size: 16px; line-height: 24px; text-wrap: pretty; }

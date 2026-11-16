@@ -115,11 +115,15 @@ export interface ScanStatus extends ScanCoverage {
 /**
  * What every question about the data is limited to: the time range and the server filter
  * of the top bar. Times are epoch ms; null leaves that end open. server is a save's name; null means all servers.
+ * focus: the incident picked in the top bar. Then only its players' and accounts' data count (the accounts its players
+ * own too), the findings are its own and the incidents only it; the rules still run on all the data, and the market
+ * prices stay those of every trade.
  */
 export interface Scope {
   from: number | null;
   to: number | null;
   server: string | null;
+  focus?: Incident | null;
 }
 
 export interface EngineCheck {
@@ -596,10 +600,11 @@ export interface QueryApi {
   markets(scope: Scope): MarketRow[];
   market(item: number, scope: Scope): MarketFacts;
   /**
-   * At most 5'000 candles; capped says that the scope held more and should be narrowed. usual: the usual price at each
-   * candle's start (it follows the market), one per candle.
+   * The newest 5'000 candles up to end (the whole scope without it). span: the time every candle of the scope covers
+   * (null: none); capped: span holds more candles than came back, a chart asks for other parts with another end.
+   * usual: the usual price at each candle's start (it follows the market), one per candle.
    */
-  candles(item: number, minutes: 1 | 5 | 15 | 60 | 1440, scope: Scope): { candles: Candle[]; capped: boolean; usual: (bigint | null)[] };
+  candles(item: number, minutes: 1 | 5 | 15 | 60 | 1440, scope: Scope, end?: number): { candles: Candle[]; capped: boolean; usual: (bigint | null)[]; span: { from: number; to: number } | null };
   /** Sorted by profit, highest first. */
   traders(item: number, scope: Scope): Trader[];
   /** At most 5 hits per group. */
@@ -932,8 +937,14 @@ export interface TimelineMove {
   time: number;
   /** What moved. notes on a non-money item: the item paid in or taken out. */
   item: number;
-  /** trade: the goods traded, on both sides (the money side and the goods side carry the same row or order id). */
+  /**
+   * trade: the goods traded, on both sides (the money side and the goods side carry the same row or order id). An
+   * inter-market order's money goes from 'markets' to 'markets': from the market of the goods sold (market) to the one
+   * of the goods bought (onto), and trader is the account whose order it was.
+   */
   market: number | null;
+  onto: number | null;
+  trader: number | null;
   /** Notes taken out and paid in again (from an account to an account through the world): when they were paid in, else null. */
   until: number | null;
   from: Place;

@@ -3,7 +3,8 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { buildFixtures, PLAYERS, uuidText } from '../fixtures/build.ts';
+import { DatabaseSync } from 'node:sqlite';
+import { buildFixtures, ITEM, PLAYERS, T0, uuidText } from '../fixtures/build.ts';
 
 const fx = buildFixtures(path.resolve('test-results/fixtures-markets'));
 const TAVRIK = uuidText(PLAYERS.Tavrik.n);
@@ -85,8 +86,11 @@ test.describe('the invented network', () => {
     await expect(page.locator('.trow')).toContainText(/Tavrik\s*bought for 440'370\.00 \$, sold for 5\.88M \$\s*\+5\.44M \$/);
     await expect(page.locator('main')).toContainText('Pick a player below to see their orders on the chart.');
     await page.getByRole('button', { name: 'Show on chart' }).click();
-    await expect(page.locator('.mark')).toHaveCount(60);
-    await expect(page.locator('.mark.buy')).toHaveCount(30);
+    // 30 buys in one candle and 30 sells in another: close orders merge into one marker each.
+    await expect(page.locator('.mark')).toHaveCount(2);
+    await expect(page.locator('.mark.buy')).toHaveCount(1);
+    await page.locator('.mark.buy').hover();
+    await expect(page.getByRole('tooltip')).toHaveText(/^Bought by 1 player\s*3'000 → Tavrik\s*$/);
     await expect(page.locator('.legend')).toContainText('Bought by Tavrik');
     await expect(page.locator('.legend')).toContainText('at the time it finished.');
     // Minute 21 holds the 30 buys: the readout names them.
@@ -131,9 +135,50 @@ test.describe('an old 2.1.2 save', () => {
   test('markers sit where the orders were placed, and the legend says why', async () => {
     await page.getByRole('link', { name: 'Markets', exact: true }).click();
     await page.getByRole('button', { name: 'Show on chart' }).click();
-    await expect(page.locator('.mark')).toHaveCount(60);
+    await expect(page.locator('.mark')).toHaveCount(2);
     await expect(page.locator('.legend')).toContainText('at the time it was placed: this save does not record when orders finished.');
     await page.setViewportSize({ width: 1440, height: 1300 });
     await page.screenshot({ path: 'test-results/markets-legacy-dark.png' });
+  });
+});
+
+test.describe('a market with more candles than one read gives', () => {
+  let program: ElectronApplication;
+  let page: Page;
+  test.beforeAll(async () => {
+    // A copy of the master with 6'000 more minutes of oak before the scenario, as in the engine's markets test.
+    const save = path.resolve('test-results/fixtures-markets-long');
+    fs.rmSync(save, { recursive: true, force: true });
+    fs.cpSync(fx.master, save, { recursive: true });
+    const db = new DatabaseSync(path.join(save, 'data/StockMarket/Database/stockdata.db'));
+    const add = db.prepare('INSERT INTO MarketPrice (marketid, open, low, high, time, traded_volume) VALUES (?, ?, ?, ?, ?, ?)');
+    db.exec('BEGIN');
+    for (let i = 0; i < 6000; i++) add.run(ITEM.oak, 100 + i, 90 + i, 110 + i, T0 - (6000 - i) * 60_000, 1);
+    db.exec('COMMIT');
+    db.close();
+    ({ program, page } = await launch(path.resolve('test-results/app-data-markets-long'), [save]));
+  });
+  test.afterAll(() => program.close());
+
+  test('the newest 5000 first; dragging to older candles reads them', async () => {
+    await page.getByRole('link', { name: 'Markets', exact: true }).click();
+    await page.evaluate(`location.hash = '#/markets/${ITEM.oak}'`);
+    await page.getByRole('group', { name: 'Candle length' }).getByRole('button', { name: '1 min' }).click();
+    await expect(page.locator('main')).toContainText('The chart starts with the newest');
+    const plot = page.locator('.plot');
+    await plot.scrollIntoViewIfNeeded();
+    const box = (await plot.boundingBox())!;
+    // Two drags reach the oldest candles (opens from 1.00 $ up), which the first read did not hold.
+    await page.mouse.move(box.x + box.width / 2, box.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width - 2, box.y + 100, { steps: 5 });
+    await page.mouse.up();
+    await page.mouse.move(box.x + box.width / 4, box.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width - 2, box.y + 100, { steps: 5 });
+    await page.mouse.up();
+    await page.mouse.move(box.x + 2, box.y + 100);
+    await expect(page.locator('.readout')).toContainText(/ Open 1\.\d\d \$ High /);
+    await page.screenshot({ path: 'test-results/markets-long-dark.png' });
   });
 });

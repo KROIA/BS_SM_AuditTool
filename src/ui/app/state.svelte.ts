@@ -203,3 +203,11 @@ export async function start() {
   toOverview();
   await addSaves([...unpack, ...(await bridge.startupPaths())]);
 }
+
+/** The picked incident's time as a shaded area behind a chart whose x is X(epoch ms), H high; '' without one. */
+export function focusSpan(X: (t: number) => number, H: number) {
+  const f = app.scope.focus;
+  if (!f) return '';
+  const c = (v: number) => Math.min(1e6, Math.max(-1e6, v)).toFixed(1), a = X(f.start), b = Math.max(X(f.end), a + 3); // a short one still shows
+  return `M${c(a)} 0H${c(b)}V${H}H${c(a)}Z`;
+}

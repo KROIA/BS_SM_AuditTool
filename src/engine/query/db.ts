@@ -14,7 +14,7 @@ export const text = (v: SQLOutputValue) => (v === null ? null : String(v));
 
 /** Player names: the one lookup every name goes through. Unknown players get the name a row gave, else the start of their UUID. */
 export function names(db: DatabaseSync) {
-  const map = new Map(all(db, 'SELECT uuid, name FROM player').map((r) => [String(r.uuid), String(r.name)]));
+  const map = new Map(all(db, 'SELECT uuid, name FROM main.player').map((r) => [String(r.uuid), String(r.name)]));
   return (uuid: string, fallback?: string | null) => map.get(uuid) ?? fallback ?? uuid.slice(0, 8);
 }
 

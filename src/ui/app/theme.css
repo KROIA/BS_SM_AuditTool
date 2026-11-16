@@ -86,3 +86,6 @@ input { font: inherit; color: inherit; }
 .split .dim { color: var(--text2); }
 .split .mono { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
 .reccsv { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+
+/* The time of the incident picked in the top bar, behind every time chart. */
+.incident-span { fill: var(--accent); fill-opacity: 0.12; stroke: none; }

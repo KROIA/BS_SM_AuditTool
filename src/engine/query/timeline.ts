@@ -3,6 +3,7 @@
 // "unexplained", and notes paid in at the exact amount someone took out at most a day before become one move from
 // account to account through the world: money carried as notes from one account to another, an estimate.
 // With items set every other item too (AT-65): its trades on both sides, and what was paid in or taken out as items.
+// An inter-market order sells one item and buys another with the money: that money is one move from market to market.
 import type { FlowTimeline, Place, RuleSettings, Scope, TimelineMove } from '../../shared/api.ts';
 import { mainData } from '../workspace.ts';
 import { countNotes, noteChange, type NoteMove } from './banknotes.ts';
@@ -25,11 +26,13 @@ export function flowTimeline(scope: Scope, settings: RuleSettings, items = false
   const inRange = (t: number) => (scope.from === null || t >= scope.from) && (scope.to === null || t <= scope.to);
   const out: TimelineMove[] = [];
   const add = (m: Pick<TimelineMove, 'time' | 'from' | 'to' | 'amount' | 'kind' | 'item'> & Partial<TimelineMove>) => {
-    out.push({ until: null, market: null, basis: 'proven', by: null, paidInBy: null, rows: [], orders: [], ...m });
+    out.push({ until: null, market: null, onto: null, trader: null, basis: 'proven', by: null, paidInBy: null, rows: [], orders: [], ...m });
     return out.at(-1)!;
   };
   let unknown = 0;
   const transfers = new Map<string, TimelineMove>(); // one transfer writes a row on each side: both go into one move
+  // The money legs of each inter-market order, per account and money item.
+  const legs = new Map<string, { account: number; item: number; list: { inn: boolean; market: number; amount: bigint; ts: number; id: number }[] }>();
 
   for (const [key, list] of byKey) {
     const [account, item] = key.split(':').map(Number) as [number, number];
@@ -55,6 +58,11 @@ export function flowTimeline(scope: Scope, settings: RuleSettings, items = false
       if (m.how === 'unknown') { if (inRange(m.ts)) unknown++; continue; }
       if (m.how === 'raw' || m.amount === 0n) continue;
       const inn = m.amount > 0n, amount = abs(m.amount);
+      if (m.how === 'trade' && m.group !== null && m.market !== null) {
+        const k = `${m.group}|${account}|${item}`;
+        (legs.get(k) ?? legs.set(k, { account, item, list: [] }).get(k)!).list.push({ inn, market: m.market, amount, ts: m.ts, id: m.id });
+        continue;
+      }
       if (m.how === 'trade') { add({ time: m.ts, ...ends(account, inn, 'markets'), amount, kind: 'trade', item, market: m.market ?? item, [m.order ? 'orders' : 'rows']: [m.id] }); continue; }
       if (noteChange(m.kind, m.amount, m.note, null)) {
         // Money notes come from the note count below, which knows who moved them; any other item was paid in or taken out as itself.
@@ -70,6 +78,17 @@ export function flowTimeline(scope: Scope, settings: RuleSettings, items = false
       const kind = m.kind.startsWith('ADMIN_') ? 'admin' : 'other';
       add({ time: m.ts, ...ends(account, inn, kind), amount, kind, item, rows: [m.id] });
     }
+  }
+
+  // What the sold leg brought goes on to the bought one, at the time of the order's last row; what one leg got more than
+  // the other spent stays between the account and that leg's market (the mod pays unspent money back).
+  for (const { account, item, list } of legs.values()) {
+    const sold = list.filter((l) => l.inn), bought = list.filter((l) => !l.inn), sum = (l: typeof list) => l.reduce((s, x) => s + x.amount, 0n);
+    const s = sum(sold), b = sum(bought), through = s < b ? s : b, time = Math.max(...list.map((l) => l.ts)), rows = list.map((l) => l.id);
+    const base = { time, amount: 0n, kind: 'trade' as const, item, rows };
+    if (through > 0n) add({ ...base, from: 'markets', to: 'markets', market: sold[0]!.market, onto: bought[0]!.market, trader: account, amount: through });
+    if (s > b) add({ ...base, from: 'markets', to: account, market: sold[0]!.market, amount: s - b });
+    if (b > s) add({ ...base, from: account, to: 'markets', market: bought[0]!.market, amount: b - s });
   }
 
   // Notes: the log's own rows (NoteFlow rows name no account). A deposit takes the latest withdrawal of the same amount

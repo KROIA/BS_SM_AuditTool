@@ -1,5 +1,6 @@
 <script lang="ts">
-  // The time range and the server filter of the top bar. Both set app.scope, which every screen passes to its questions.
+  // The time range, the server filter and the incident of the top bar. All set app.scope, which every screen passes to
+  // its questions. An incident picked here (focus) narrows the whole tool to its players and accounts until it is removed.
   import type { Incident } from '../../shared/api.ts';
   import { time } from '../../shared/fmt.ts';
   import { incidentTitle, strongest as pick } from '../../shared/incident.ts';
@@ -10,6 +11,7 @@
 
   let rangeMenu = $state<HTMLElement>();
   let serverMenu = $state<HTMLElement>();
+  let focusMenu = $state<HTMLElement>();
   let fromText = $state('');
   let toText = $state('');
   let problem = $state('');
@@ -38,26 +40,43 @@
   // The strongest incident over all the data of the filtered server (highest level, then largest profit) that still has
   // a finding not marked as "not a problem". Shared through app.incident with the Overview.
   let strongest = $state<{ incident: Incident; title: string } | null>(null);
+  /** Every incident, titled, strongest first: the choices of the incident menu. */
+  let list = $state<{ incident: Incident; title: string }[]>([]);
   $effect(() => {
     const server = app.scope.server, rules = $state.snapshot(app.rules), marks = app.marks;
     const none = app.saves.length === 0;
     let stale = false;
     app.incident = none ? null : undefined;
-    if (none) strongest = null;
+    if (none) [strongest, list] = [null, []];
     if (none || app.queue.length) return; // saves are still being read: each one would start the rules over
     // The engine answers one call after the other and the first run of the rules takes seconds: a tick later, the
     // screen's own quick questions go first.
     const timer = setTimeout(() => void Promise.all([engine.incidents({ from: null, to: null, server }, rules), engine.items()]).then(([r, i]) => {
       if (stale) return;
-      const top = pick(r.incidents, (id) => marks[id]?.dismissed === true);
+      const top = pick(r.incidents, (id) => marks[id]?.dismissed === true), name = words(new Map(i.map((x) => [x.id, x]))).itemName;
       app.incident = top;
-      strongest = top ? { incident: top, title: incidentTitle(top, words(new Map(i.map((x) => [x.id, x]))).itemName) } : null;
+      strongest = top ? { incident: top, title: incidentTitle(top, name) } : null;
+      list = r.incidents.map((incident) => ({ incident, title: incidentTitle(incident, name) }));
+      // Changed rules can change the picked incident, or end it: the focus follows.
+      const was = app.scope.focus, now = was ? (r.incidents.find((x) => x.id === was.id) ?? null) : null;
+      if (was && !now) focus(null);
+      else if (was && now && JSON.stringify([now.players, now.accounts, now.findings]) !== JSON.stringify([was.players, was.accounts, was.findings])) app.scope = { ...app.scope, focus: now };
     }));
     return () => ((stale = true), clearTimeout(timer));
   });
 
+  /** Picks the incident the whole tool shows (null: all the data again), with its time and 30 minutes on each side. */
+  function focus(i: Incident | null) {
+    app.scope = { ...app.scope, focus: i };
+    if (i) setRange('incident', i.start - 30 * MIN, i.end + 30 * MIN);
+    else setRange('all');
+    focusMenu?.hidePopover();
+  }
+  const focused = $derived(list.find((x) => x.incident.id === app.scope.focus?.id)?.title ?? null);
+
   function choose(r: Range) {
-    if (r === 'incident' && strongest) setRange(r, strongest.incident.start - 30 * MIN, strongest.incident.end + 30 * MIN);
+    const inc = app.scope.focus ?? strongest?.incident;
+    if (r === 'incident' && inc) setRange(r, inc.start - 30 * MIN, inc.end + 30 * MIN);
     else setRange(r);
     rangeMenu?.hidePopover();
   }
@@ -86,7 +105,7 @@
     <button type="button" class="choice" aria-pressed={app.range === r} disabled={r !== 'all' && end === null} onclick={() => choose(r)}>{text}</button>
   {/each}
   {#if strongest}
-    <button type="button" class="choice stack" aria-pressed={app.range === 'incident'} onclick={() => choose('incident')}>The incident<span class="small">{strongest.title}</span></button>
+    <button type="button" class="choice stack" aria-pressed={app.range === 'incident'} onclick={() => choose('incident')}>The incident<span class="small">{app.scope.focus ? focused : strongest.title}</span></button>
   {/if}
   <p class="small note">{end === null ? 'No data loaded yet.' : `"Last" counts back from the newest data in the saves, ${short(end)}, not from today.`}</p>
   <form onsubmit={custom}>
@@ -95,6 +114,19 @@
     {#if problem}<p class="small" style="margin: 0; color: var(--down)">{problem}</p>{/if}
     <button type="submit" class="btn">Use this range</button>
   </form>
+</div>
+
+<button type="button" class="btn focus" class:on={focused !== null} popovertarget="focus-menu" style="anchor-name: --focus" aria-label="Incident shown: {focused ?? 'none, all the data'}">
+  <span class="dim"><Icon d={ICON.warn} /></span><span class="ellipsis">{focused ?? 'All incidents'}</span>
+</button>
+<div id="focus-menu" class="menu" popover bind:this={focusMenu} style="position-anchor: --focus; width: 360px" aria-label="Incident shown">
+  <button type="button" class="choice" aria-pressed={!app.scope.focus} onclick={() => focus(null)}>None: all the data</button>
+  <div class="options">
+    {#each list as x (x.incident.id)}
+      <button type="button" class="choice stack" aria-pressed={x.incident.id === app.scope.focus?.id} onclick={() => focus(x.incident)}>{x.title}<span class="small">{short(x.incident.start)}</span></button>
+    {/each}
+  </div>
+  <p class="small note">{list.length ? 'Picking one shows only its players and accounts on every screen, from 30 minutes before it to 30 minutes after. None shows all the data again.' : 'No incident with these rule settings.'}</p>
 </div>
 
 <button type="button" class="btn" popovertarget="server-menu" style="anchor-name: --server" aria-label="Server: {app.scope.server ?? 'all servers'}">
@@ -116,6 +148,11 @@
   .stack { flex-direction: column; align-items: flex-start; gap: 2px; }
   .choice:hover:not(:disabled), .choice[aria-pressed='true'] { background: var(--raised); }
   .note { margin: 8px 10px; }
+  .options { display: flex; flex-direction: column; max-height: 360px; overflow-y: auto; }
+  .focus { max-width: 280px; }
+  .ellipsis { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .focus.on { border-color: var(--accent); color: var(--accent); }
+  .focus.on .dim { color: var(--accent); }
   form { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 12px 10px 4px; border-top: 1px solid var(--line); }
   label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--text2); }
   label input { height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); }

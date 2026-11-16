@@ -22,7 +22,7 @@
 //                without (saves), scan (the coverage's state), scanFiles, scanFilesTotal, chunksUnread, lz4, filesUnread
 import type { DatabaseSync } from 'node:sqlite';
 import type { Fact, Finding, FindingsResult, Level, OrderRow, RuleId, RuleSettings, RuleStatus, Scope, TransferItem, TransferRow } from '../../shared/api.ts';
-import { mainData, mainSave } from '../workspace.ts';
+import { mainData, mainSave, within } from '../workspace.ts';
 import { allGaps, moneyItems, threshold } from './check.ts';
 import { all, big, names, num, text } from './db.ts';
 import { median, usualAt } from './markets.ts';
@@ -416,12 +416,16 @@ export function orderIds(v: string | null): number[] {
   return [...new Set(v.split(',').map((x) => Number(x.trim())))];
 }
 
-/** Overlaps the time range, and under a server filter was placed there or has no server. Findings and incidents alike. */
-export const shown = (x: { start: number; end: number; servers: string[] }, scope: Scope) =>
+/** Overlaps the time range, under a server filter was placed there or has no server, and under an incident's focus is
+ *  one of its findings (an incident's id is its first finding's). Findings and incidents alike. */
+export const shown = (x: { id: string; start: number; end: number; servers: string[] }, scope: Scope) =>
   (scope.from === null || x.end >= scope.from) && (scope.to === null || x.start <= scope.to)
-  && (scope.server === null || x.servers.length === 0 || x.servers.includes(scope.server));
+  && (scope.server === null || x.servers.length === 0 || x.servers.includes(scope.server))
+  && (!scope.focus || scope.focus.findings.includes(x.id));
 
-export function findings(scope: Scope, settings: RuleSettings): FindingsResult {
+/** The rules always run on all the data; an incident's focus only picks which findings are shown. */
+export const findings = (scope: Scope, settings: RuleSettings): FindingsResult => within(null, () => findingsOf(scope, settings));
+function findingsOf(scope: Scope, settings: RuleSettings): FindingsResult {
   const db = mainData();
   const rules: RuleStatus[] = [];
   const out: Finding[] = [];

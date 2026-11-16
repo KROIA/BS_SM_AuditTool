@@ -1,19 +1,21 @@
 <script lang="ts">
-  // The money flow over time: one row per account (or per player, whose personal accounts become one row) and one per
-  // place money goes outside the accounts: notes in the world, the markets, an admin, other entries, nowhere the log says.
+  // The money flow over time: one row per account (or per player, whose personal accounts become one row), a line, then
+  // one row per market something shown was traded on and one per other place money goes outside the accounts: notes in
+  // the world, an admin, other entries, nowhere the log says. An inter-market order's money runs from market to market.
   // Every move is a band from one row to the other at its time, as thick as the square root of the amount. Notes paid
   // into another account at the amount taken out shortly before run through the World row, dashed: an estimate.
   // Moves closer than a few pixels between the same rows are drawn as one; zoom and drag the time as on the other charts.
-  // With non-money items (items) a second list picks the items shown, each in its own colour and scale. A trade whose
-  // two sides are both shown, the money to the market and the goods back (or the other way), is drawn as one: two arrows
-  // side by side and a diamond on the Markets row.
+  // With non-money items (items) a second list picks the items shown, each in its own colour and scale. A trade shows
+  // only whole: the money and the goods (two arrows side by side and a diamond on the market's row) when both are on, an
+  // inter-market order when both its items are on. The first list picks the players (or accounts); the markets and
+  // places get a row when something shown goes there.
   import type { AccountListRow, FlowTimeline, LedgerRow, Place, TimelineMove } from '../../shared/api.ts';
-  import { count, currency, money, moneyShort, time } from '../../shared/fmt.ts';
-  import { engine } from './state.svelte.ts';
+  import { count, countShort, currency, money, moneyShort, time } from '../../shared/fmt.ts';
+  import { app, engine, focusSpan } from './state.svelte.ts';
   import { color as hueOf } from './BalanceChart.svelte';
   import FilterList from './FilterList.svelte';
   import type { words } from './words.ts';
-  import { pan, timeTick, wheel, type View } from './zoom.ts';
+  import { pan, timeTicks, wheel, type View } from './zoom.ts';
 
   let { tl, accounts, byAccount, items = false, w }: { tl: FlowTimeline; accounts: AccountListRow[]; byAccount: boolean; items?: boolean; w: ReturnType<typeof words> } = $props();
 
@@ -37,43 +39,78 @@
     world: 'World: notes outside the bank', markets: 'Markets', admin: 'Admin', other: 'Other entries', unexplained: 'Not explained',
   };
   const special = (p: Exclude<Place, number>) => (p === 'world' && items ? 'World: outside the bank' : SPECIAL[p]);
-  const ORDER: Exclude<Place, number>[] = ['world', 'markets', 'admin', 'other', 'unexplained'];
+  const ORDER: Exclude<Place, number>[] = ['world', 'admin', 'other', 'unexplained'];
   const SHOWN = 8; // account or player rows shown at first, the most money moved first
   const acct = $derived(new Map(accounts.map((a) => [a.number, a])));
   const nameOf = $derived(new Map(tl.players.map((p) => [p.uuid, p.name])));
-  /** The row a place is drawn on: a personal account is its owner's row when players are shown. */
-  function rowOf(p: Place): { id: string; name: string } {
+  /** The row a place is drawn on: a personal account is its owner's row when players are shown, a market has its own. */
+  function rowOf(p: Place, market: number | null = null): { id: string; name: string } {
+    if (p === 'markets' && market !== null) return { id: `m:${market}`, name: `${w.itemName(market)} market` };
     if (typeof p === 'string') return { id: p, name: special(p) };
     const a = acct.get(p);
     if (!byAccount && a?.owner && !a.company) return { id: `p:${a.owner}`, name: a.ownerName ?? 'A player' };
     return { id: `a:${p}`, name: a ? `Account ${p} · ${a.deleted ? 'deleted' : a.name}` : `Account ${p}` };
   }
+  const fromRow = (m: TimelineMove) => rowOf(m.from, m.market), toRow = (m: TimelineMove) => rowOf(m.to, m.onto ?? m.market);
+  const isOwn = (id: string) => id.startsWith('a:') || id.startsWith('p:');
   const rows = $derived.by(() => {
     const seen = new Map<string, { id: string; name: string; v: bigint }>();
-    for (const m of tl.moves) for (const r of [rowOf(m.from), rowOf(m.to)]) (seen.get(r.id) ?? seen.set(r.id, { ...r, v: 0n }).get(r.id)!).v += w.isMoney(m.item) ? m.amount : 0n;
-    const own = [...seen.values()].filter((r) => !(ORDER as string[]).includes(r.id)).sort((a, b) => Number(b.v - a.v));
-    return [...own, ...ORDER.flatMap((id) => seen.get(id) ?? [])];
+    for (const m of tl.moves) for (const r of [fromRow(m), toRow(m)]) (seen.get(r.id) ?? seen.set(r.id, { ...r, v: 0n }).get(r.id)!).v += w.isMoney(m.item) ? m.amount : 0n;
+    const all = [...seen.values()].sort((a, b) => Number(b.v - a.v));
+    return [...all.filter((r) => isOwn(r.id)), ...all.filter((r) => r.id.startsWith('m:')), ...ORDER.flatMap((id) => seen.get(id) ?? [])];
   });
   // Rows switched off; other rows (the switch between players and accounts) start again with the largest few.
-  let off = $derived(new Set<string | number>(rows.filter((r) => r.id.startsWith('a:') || r.id.startsWith('p:')).slice(SHOWN).map((r) => r.id)));
-  const lanes = $derived(rows.filter((r) => !off.has(r.id)));
-  const laneIndex = $derived(new Map(lanes.map((r, i) => [r.id, i])));
+  let off = $derived(new Set<string | number>(rows.filter((r) => isOwn(r.id)).slice(SHOWN).map((r) => r.id)));
   /** A trade's side by the row or order both sides share, and the account it is on. */
   const tradeId = (m: TimelineMove) => `${typeof m.from === 'number' ? m.from : m.to}|${m.orders.length ? 'o' + m.orders[0] : 'r' + m.rows[0]}`;
-  /** The moves between two rows shown, of the items shown; a move within one row only when it ran through the world.
-   *  A trade with both sides shown is one entry: m the money side, goods the other. */
+  /** Inter-market orders by their ledger rows: the money's move from market to market. Its goods and the money's rest
+   *  back to the account carry the same rows. */
+  const byRow = $derived(new Map(tl.moves.filter((m) => m.onto !== null).flatMap((m) => m.rows.map((r) => [r, m] as const))));
+  const orderOf = (m: TimelineMove) => (m.kind !== 'trade' ? undefined : m.onto !== null ? m : m.rows.length ? byRow.get(m.rows[0]!) : undefined);
+  /** The other side of every other trade: the money side and the goods side, both ways. */
+  const partner = $derived.by(() => {
+    const out = new Map<TimelineMove, TimelineMove>(), plain = tl.moves.filter((m) => m.kind === 'trade' && !orderOf(m));
+    const goods = new Map(plain.filter((m) => m.item === m.market).map((m) => [tradeId(m), m]));
+    for (const m of plain) {
+      const g = m.item !== m.market ? goods.get(tradeId(m)) : undefined;
+      if (g) out.set(m, g).set(g, m);
+    }
+    return out;
+  });
+  const on = (item: number | null) => item === null || !itemsOff.has(item);
+  /** Only whole trades: an inter-market order with both its items on (and the money for the money's rest), any other
+   *  trade with its goods and its money; a side without its other side in the data by its own item. */
+  function whole(m: TimelineMove) {
+    const o = orderOf(m);
+    if (o) return on(o.market) && on(o.onto) && (m === o || on(m.item));
+    const p = partner.get(m);
+    return on(m.item) && (!p || on(p.item));
+  }
+  /** What is shown: whole trades and the other moves of the items on, of the players or accounts on. */
+  /** Of the players or accounts on: every row it touches that is a player's or account's is switched on. */
+  const mine = (m: TimelineMove) => [fromRow(m), toRow(m), ...(m.trader !== null ? [rowOf(m.trader)] : [])].every((r) => !isOwn(r.id) || !off.has(r.id));
+  const shown = $derived(tl.moves.filter((m) => whole(m) && mine(m)));
+  /** How much of each item the players or accounts on moved in the range, every move counted by its size. */
+  const volume = $derived.by(() => {
+    const out = new Map<number, bigint>();
+    for (const m of tl.moves) if (mine(m)) out.set(m.item, (out.get(m.item) ?? 0n) + (m.amount < 0n ? -m.amount : m.amount));
+    return out;
+  });
+  // The players or accounts on, then the markets and places something shown goes to.
+  const used = $derived(new Set(shown.flatMap((m) => [fromRow(m).id, toRow(m).id])));
+  const lanes = $derived(rows.filter((r) => (isOwn(r.id) ? !off.has(r.id) : used.has(r.id))));
+  /** The accounts and players above the line, the markets and other places below it. */
+  const own = $derived(lanes.filter((r) => isOwn(r.id)).length);
+  const laneIndex = $derived(new Map(lanes.map((r, i) => [r.id, i])));
+  /** The moves shown as lanes; a move within one row only when it ran through the world. A trade with both sides is one
+   *  entry: m the money side, goods the other. */
   const moves = $derived.by(() => {
     const out: { m: TimelineMove; a: number; b: number; goods: TimelineMove | null }[] = [];
-    const shown = (m: TimelineMove) => !itemsOff.has(m.item);
-    const sides = new Map(tl.moves.filter((m) => m.kind === 'trade' && m.item === m.market && shown(m)).map((m) => [tradeId(m), m]));
-    const pairOf = new Map<TimelineMove, TimelineMove>();
-    for (const m of tl.moves) if (m.kind === 'trade' && m.item !== m.market && shown(m) && sides.has(tradeId(m))) pairOf.set(m, sides.get(tradeId(m))!);
-    const paired = new Set(pairOf.values());
-    for (const m of tl.moves) {
-      if (!shown(m) || paired.has(m)) continue;
-      const a = laneIndex.get(rowOf(m.from).id), b = laneIndex.get(rowOf(m.to).id);
+    for (const m of shown) {
+      if (m.item === m.market && partner.has(m)) continue; // drawn with its money side
+      const a = laneIndex.get(fromRow(m).id), b = laneIndex.get(toRow(m).id);
       if (a === undefined || b === undefined || (a === b && m.until === null)) continue;
-      out.push({ m, a, b, goods: pairOf.get(m) ?? null });
+      out.push({ m, a, b, goods: m.item !== m.market ? (partner.get(m) ?? null) : null });
     }
     return out;
   });
@@ -84,7 +121,8 @@
     const lo = moves[0]!.m.time, hi = Math.max(...moves.map((x) => x.m.until ?? x.m.time)), pad = Math.max(30_000, (hi - lo) * 0.03);
     return { from: lo - pad, to: hi + pad, minSpan: 50 }; // the log times are in ms; moves a few ms apart still part
   });
-  let manual = $derived((void moves, null as View | null));
+  // Picking rows or items keeps the zoom; new data shows everything again.
+  let manual = $derived((void tl, null as View | null));
   const cur = $derived(manual ?? { x0: bounds.from, x1: bounds.to, y0: 0, y1: 1 });
 
   const LANE = 56, TOP = 28, MAXW = 22;
@@ -129,7 +167,9 @@
     }));
   });
   const width = (item: number, v: bigint) => Math.min(MAXW, Math.max(2, Math.sqrt(Number(v) / Number(most.get(item) || 1n)) * MAXW));
-  const world = $derived(laneIndex.get('world')), market = $derived(laneIndex.get('markets'));
+  const world = $derived(laneIndex.get('world'));
+  /** A trade whose money went to the market: bought. Its market row is b, else a. */
+  const bought = (g: Band) => g.list[0]!.to === 'markets';
   type Piece = [d: string, cls: '' | 'dash' | 'head'];
   const f = (v: number) => v.toFixed(1);
   /** A straight piece of width wd from (x0, y0) to (x1, y1) whose shaft stops at the base of an arrowhead pointing at (x1, y1). */
@@ -153,18 +193,20 @@
   function legs(g: Band): { color: string; wd: number; pieces: Piece[] }[] {
     const wd = width(g.item, g.amount), color = several ? hue.get(g.item)! : COLOR[g.kind];
     if (!g.goods) return [{ color, wd, pieces: path(g, wd) }];
-    const wg = width(g.goods.item, g.goods.amount), buy = g.b === market, ya = yOf(buy ? g.a : g.b), ym = yOf(market!), ys = ym + Math.sign(ya - ym) * (MARK + 1);
+    const wg = width(g.goods.item, g.goods.amount), buy = bought(g), ya = yOf(buy ? g.a : g.b), ym = yOf(buy ? g.b : g.a), ys = ym + Math.sign(ya - ym) * (MARK + 1);
     const xm = g.xa - wd / 2 - 1, xg = g.xa + wg / 2 + 1;
     return [
       { color, wd, pieces: buy ? arrow(xm, ya, xm, ys, '', wd) : arrow(xm, ys, xm, ya, '', wd) },
       { color: hue.get(g.goods.item)!, wd: wg, pieces: buy ? arrow(xg, ys, xg, ya, '', wg) : arrow(xg, ya, xg, ys, '', wg) },
     ];
   }
-  const diamond = (g: Band) => { const y = yOf(market!); return `M${f(g.xa)} ${f(y - MARK)}L${f(g.xa + MARK)} ${f(y)}L${f(g.xa)} ${f(y + MARK)}L${f(g.xa - MARK)} ${f(y)}Z`; };
+  const diamond = (g: Band) => { const y = yOf(bought(g) ? g.b : g.a); return `M${f(g.xa)} ${f(y - MARK)}L${f(g.xa + MARK)} ${f(y)}L${f(g.xa)} ${f(y + MARK)}L${f(g.xa - MARK)} ${f(y)}Z`; };
   const COLOR: Record<TimelineMove['kind'], string> = { notes: 'var(--high)', trade: 'var(--buy)', transfer: 'var(--accent)', admin: 'var(--crit)', other: 'var(--text3)', unexplained: 'var(--med)' };
   const KIND: Record<TimelineMove['kind'], string> = { notes: 'Notes', trade: 'Trading', transfer: 'Transfer', admin: 'Admin', other: 'Other entries', unexplained: 'Not explained' };
   const dot = (g: Band) => (several ? hue.get(g.item)! : COLOR[g.kind]);
-  const title = (g: Band) => (g.goods ? (g.b === market ? 'Bought on the markets' : 'Sold on the markets') : g.carried ? 'Carried as notes' : KIND[g.kind]);
+  const marketOf = (g: Band) => `${w.itemName(g.list[0]!.market!)} market`;
+  const across = (g: Band) => g.list[0]!.onto !== null;
+  const title = (g: Band) => (g.goods ? `${bought(g) ? 'Bought' : 'Sold'} on the ${marketOf(g)}` : across(g) ? 'Inter-market order' : g.carried ? 'Carried as notes' : KIND[g.kind]);
   /** The amount in short: a trade with both sides as the goods for the money. */
   const figure = (g: Band) => (g.goods ? `${val(g.goods.item, g.goods.amount)} for ${moneyShort(g.amount)}` : short(g.item, g.amount));
 
@@ -228,8 +270,9 @@
     const m = g.list[0]!, n = g.list.length, many = n > 1 ? `${count(n)} ${g.goods ? 'trades' : 'moves'}, ` : '', v = val(g.item, g.amount);
     if (g.goods) {
       const buy = m.to === 'markets', by = place(buy ? m.from : m.to);
-      return `${many}${n > 1 ? by : by[0]!.toUpperCase() + by.slice(1)} ${buy ? 'bought' : 'sold'} ${val(g.goods.item, g.goods.amount)} for ${money(g.amount)} on the markets: the money ${buy ? 'went to the market and the items came back' : 'came from the market for the items'}.`;
+      return `${many}${n > 1 ? by : by[0]!.toUpperCase() + by.slice(1)} ${buy ? 'bought' : 'sold'} ${val(g.goods.item, g.goods.amount)} for ${money(g.amount)} on the ${marketOf(g)}: the money ${buy ? 'went to the market and the items came back' : 'came from the market for the items'}.`;
     }
+    if (across(g)) return `${many}${v} from selling ${w.itemName(m.market!)} went straight on to buy ${w.itemName(m.onto!)}: ${n > 1 ? 'inter-market orders' : 'an inter-market order'}, one order selling one item for another.`;
     if (g.carried) {
       const same = g.list.every((x) => x.by !== null && x.by === x.paidInBy);
       return `${many}${v} left ${place(m.from)} as banknotes and the same amount was paid into ${place(m.to)} ${span(m.until! - m.time)} later, by ${same ? `the same player, ${who(m.by)}` : `${who(m.paidInBy)} after ${who(m.by)} took it out`}. Likely the same money, carried through the world.`;
@@ -240,7 +283,7 @@
         : m.to === 'world'
         ? `${many}${v} taken out of ${place(m.from)} as banknotes by ${who(m.by)}. No deposit of the same amount followed within a day, so where the notes went is not known.`
         : `${many}${v} in banknotes paid into ${place(m.to)} by ${who(m.paidInBy)}. Nobody took the same amount out within the day before: the notes come from an earlier withdrawal, from several, or from outside the bank.`;
-      case 'trade': return `${many}${v} ${m.to === 'markets' ? `${w.isMoney(m.item) ? 'spent' : 'sold'} on the markets by ${place(m.from)}` : `received from the markets by ${place(m.to)}`}.`;
+      case 'trade': return `${many}${v} ${m.to === 'markets' ? `${w.isMoney(m.item) ? 'spent' : 'sold'} on the ${marketOf(g)} by ${place(m.from)}` : `received from the ${marketOf(g)} by ${place(m.to)}`}.`;
       case 'transfer': return `${many}${v} transferred from ${place(m.from)} to ${place(m.to)}.`;
       case 'admin': return `${many}${v} ${m.to === 'admin' ? `removed from ${place(m.from)}` : `added to ${place(m.to)}`} by an admin.`;
       case 'other': return `${many}${v} ${m.to === 'other' ? `left ${place(m.from)}` : `came into ${place(m.to)}`} through other log entries: payouts, dividends, changes from an unknown source.`;
@@ -263,7 +306,7 @@
     if (inn.length) s += ` ${moneyShort(sum(inn))} came in as notes nobody took out of the bank the day before.`;
     if (out.length) s += ` ${moneyShort(sum(out))} left as notes and was not paid back in within a day.`;
     const other = every.length - all.length, pairs = moves.filter((x) => x.goods).length;
-    if (other) s += ` Other items moved ${count(other)} ${other === 1 ? 'time' : 'times'}${pairs ? `; ${count(pairs)} ${pairs === 1 ? 'trade shows' : 'trades show'} both sides, marked with a diamond on the Markets row` : ''}.`;
+    if (other) s += ` Other items moved ${count(other)} ${other === 1 ? 'time' : 'times'}${pairs ? `; ${count(pairs)} ${pairs === 1 ? 'trade shows' : 'trades show'} both sides, marked with a diamond on the market's row` : ''}.`;
     return s;
   });
 
@@ -286,11 +329,12 @@
 <section class="card">
   <div class="grid">
     <div class="lists">
-      <FilterList bind:off label="Rows on the chart" find={byAccount ? 'Find an account' : 'Find a player or account'} all={['Show all rows', 'Hide all rows']}
-        entries={rows.map((r) => ({ id: r.id, name: r.name }))} />
+      <FilterList bind:off label={byAccount ? 'Accounts on the chart' : 'Players on the chart'} find={byAccount ? 'Find an account' : 'Find a player or account'}
+        all={byAccount ? ['Show all accounts', 'Hide all accounts'] : ['Show all players', 'Hide all players']}
+        entries={rows.filter((r) => isOwn(r.id)).map((r) => ({ id: r.id, name: r.name }))} />
       {#if items}
         <FilterList bind:off={itemsOff} label="Items on the chart" find="Find an item" all={['Show all items', 'Hide all items']}
-          entries={itemList.map((id) => ({ id, name: label(id), color: hue.get(id) }))} />
+          entries={itemList.map((id) => ({ id, name: label(id), color: hue.get(id), note: countShort(Number(volume.get(id) ?? 0n) / 100), hot: app.scope.focus?.markets.includes(id) }))} />
       {/if}
     </div>
     <div style="min-width: 0">
@@ -315,7 +359,9 @@
         onpointerleave={() => (hover = null)}
       >
         <svg width={cw} height={H} aria-hidden="true">
-          {#each lanes as r, i (r.id)}<path d="M0 {yOf(i)}H{cw}" class="lane" class:place={!r.id.includes(':')} />{/each}
+          <path d={focusSpan(X, H)} class="incident-span" />
+          {#each lanes as r, i (r.id)}<path d="M0 {yOf(i)}H{cw}" class="lane" class:place={!isOwn(r.id)} />{/each}
+          {#if own && own < lanes.length}<path d="M0 {TOP + own * LANE - 10}H{cw}" class="sep" />{/if}
           {#each bands as g (g.key)}
             <!-- One group per arrow, its opacity on the whole: the pieces overlap at the corners without a darker square. -->
             {#each legs(g) as l, j (j)}
@@ -329,15 +375,16 @@
         {#each lanes as r, i (r.id)}<span class="name" style:top="{yOf(i) - 22}px" title={r.name}>{r.name}</span>{/each}
       </div>
       <div class="xaxis" aria-hidden="true">
-        {#each [0, 1, 2, 3, 4] as k (k)}<span style:left="{((k + 0.5) / 5) * 100}%">{timeTick(cur.x0 + ((cur.x1 - cur.x0) * (k + 0.5)) / 5, cur.x1 - cur.x0)}</span>{/each}
+        {#each timeTicks([0, 1, 2, 3, 4].map((k) => cur.x0 + ((cur.x1 - cur.x0) * (k + 0.5)) / 5), cur.x1 - cur.x0) as label, k (k)}<span style:left="{((k + 0.5) / 5) * 100}%">{label}</span>{/each}
       </div>
       <p class="legend">
         {#if several}
           {#each itemList.filter((id) => !itemsOff.has(id)) as id (id)}<span><span class="dot" style:--c={hue.get(id)} aria-hidden="true"></span>{label(id)}</span>{/each}
-          <span>The colour shows the item, the row an arrow goes to what kind of move it is. A diamond on the Markets row marks a trade with both sides shown: two arrows, the money to the market and the items back, or the other way round.</span>
+          <span>The colour shows the item, the row an arrow goes to what kind of move it is. A diamond on a market's row marks a trade with both sides shown: two arrows, the money to the market and the items back, or the other way round.</span>
         {:else}
           {#each Object.entries(KIND) as [k, name] (k)}<span><span class="dot" style:--c={COLOR[k as TimelineMove['kind']]} aria-hidden="true"></span>{name}</span>{/each}
         {/if}
+        <span>Below the line: the markets and other places something shown went to. A trade shows only when all its items are on: the item and the money, or both items of an inter-market order, whose money goes as an arrow from one market straight on to the other.</span>
         <span>The arrow points to where {items ? 'it' : 'the money'} went. Band thickness grows with the amount{several ? ', each item on its own scale' : ''}; a few of the largest share the full width. Dashed: notes matched by their amount, an estimate. Scroll to zoom the time, drag to move it, the arrow keys step through the moves, Ctrl+Space shows everything.</span>
       </p>
     </div>
@@ -388,6 +435,7 @@
   .plot svg { position: absolute; left: 0; top: 0; }
   .lane { stroke: var(--line2); stroke-width: 1; }
   .lane.place { stroke-dasharray: 2 4; }
+  .sep { stroke: var(--text3); stroke-width: 1.5; }
   .band { fill: none; stroke: currentColor; opacity: 0.55; stroke-linecap: butt; }
   .band.hot { opacity: 0.95; }
   .dash { stroke-dasharray: 6 5; }

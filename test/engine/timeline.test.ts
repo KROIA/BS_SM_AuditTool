@@ -9,7 +9,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { api } from '../../src/engine/api.ts';
 import { addSave, init } from '../../src/engine/workspace.ts';
 import { DEFAULT_RULES, type Scope, type TimelineMove } from '../../src/shared/api.ts';
-import { buildFixtures, ITEM, PLAYERS, SHARED, T0, uuidText, type Fixtures } from '../fixtures/build.ts';
+import { buildFixtures, ITEM, PLAYERS, SHARED, STRAY, T0, uuidText, type Fixtures } from '../fixtures/build.ts';
 
 const MIN = 60_000;
 const ALL: Scope = { from: null, to: null, server: null };
@@ -24,6 +24,12 @@ before(() => {
   const db = new DatabaseSync(path.join(save, 'data/BankSystem/Database/banksystem.db'));
   db.prepare(`INSERT INTO TransactionLog (account_number, actor_uuid, actor_name, kind, type_code, item_id, amount, ts, source_kind)
     VALUES (?, ?, 'Tavrik', 'DEPOSIT', 1, ?, 200000000, ?, 'PLAYER')`).run(SHARED.account, tavrik, ITEM.money, T0 + 52 * MIN);
+  // An inter-market order on the stray account (no snapshots, so no check moves): 20 diamonds sold for 1'000 $, 10
+  // emeralds bought for 900 $ of it, both legs under one sm:im ref.
+  const leg = db.prepare(`INSERT INTO TransactionLog (account_number, kind, type_code, item_id, amount, ts, source_kind, tag, ref, money_amount, price, currency_item)
+    VALUES (?, ?, ?, ?, ?, ?, 'STOCKMARKET', 'CLOSE', 'sm:im:7', ?, ?, ?)`);
+  leg.run(STRAY.account, 'TRADE_SELL', 5, ITEM.diamond, 2_000, T0 + 140 * MIN, 100_000, 5_000, ITEM.money);
+  leg.run(STRAY.account, 'TRADE_BUY', 4, ITEM.emerald, 1_000, T0 + 140 * MIN, 90_000, 9_000, ITEM.money);
   db.close();
   init(path.join(fx.root, 'workspace'));
   addSave(save);
@@ -57,7 +63,8 @@ test('with every item: each trade has its money side and its goods side under th
   assert.ok(api.flowTimeline(ALL, DEFAULT_RULES).moves.every((m) => m.item === ITEM.money), 'money only by default');
   const { moves } = api.flowTimeline(ALL, DEFAULT_RULES, true);
   const id = (m: TimelineMove) => `${m.orders[0] ?? ''}|${m.rows[0] ?? ''}`;
-  const trades = moves.filter((m) => m.kind === 'trade'), cash = trades.filter((m) => m.item === ITEM.money);
+  // The inter-market order's money is one move between two markets (its own test below).
+  const trades = moves.filter((m) => m.kind === 'trade'), cash = trades.filter((m) => m.item === ITEM.money && m.time !== T0 + 140 * MIN);
   assert.ok(cash.length > 60);
   for (const m of cash) {
     const goods = trades.filter((g) => g.item === m.market && id(g) === id(m));
@@ -72,4 +79,18 @@ test('with every item: each trade has its money side and its goods side under th
 test('the time range keeps a carried move whose deposit is in it', () => {
   const { moves } = api.flowTimeline({ from: T0 + 52 * MIN, to: T0 + 53 * MIN, server: null }, DEFAULT_RULES);
   assert.deepEqual(moves.map(brief), [['notes', PLAYERS.Tavrik.account, SHARED.account, 200_000_000n, 'estimate']]);
+});
+
+test('an inter-market order: its money goes from the market sold on to the one bought on, the rest back to the account', () => {
+  const im = (moves: TimelineMove[]) => moves.filter((m) => m.time === T0 + 140 * MIN).map((m) => [m.item, m.from, m.to, m.market, m.onto, m.amount]);
+  assert.deepEqual(im(api.flowTimeline(ALL, DEFAULT_RULES).moves), [
+    [ITEM.money, 'markets', 'markets', ITEM.diamond, ITEM.emerald, 90_000n],
+    [ITEM.money, 'markets', STRAY.account, ITEM.diamond, null, 10_000n],
+  ]);
+  assert.equal(api.flowTimeline(ALL, DEFAULT_RULES).moves.find((m) => m.onto !== null)!.trader, STRAY.account);
+  // The goods stay as they were: diamonds to their market, emeralds from theirs.
+  assert.deepEqual(im(api.flowTimeline(ALL, DEFAULT_RULES, true).moves).filter(([item]) => item !== ITEM.money), [
+    [ITEM.diamond, STRAY.account, 'markets', ITEM.diamond, null, 2_000n],
+    [ITEM.emerald, 'markets', STRAY.account, ITEM.emerald, null, 1_000n],
+  ]);
 });

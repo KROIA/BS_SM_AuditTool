@@ -20,9 +20,10 @@ import { flowTimeline } from './query/timeline.ts';
 import { transfers } from './query/transfers.ts';
 import { worldItems } from './query/world.ts';
 import { scanStatus, startScan, stopScan } from './scan.ts';
-import { caseData, mark, open, reload, removeSave, setChoices, setRules, workspace } from './workspace.ts';
+import type { Scope } from '../shared/api.ts';
+import { caseData, mark, open, reload, removeSave, setChoices, setRules, within, workspace } from './workspace.ts';
 
-export const api: EngineApi = {
+const answers: EngineApi = {
   workspace,
   addSave: open,
   reload,
@@ -72,3 +73,8 @@ export const api: EngineApi = {
     }
   },
 };
+
+const isScope = (x: unknown): x is Scope => typeof x === 'object' && x !== null && 'from' in x && 'server' in x;
+/** Every question runs under the focus of the scope it is given (none without one). */
+export const api = Object.fromEntries(Object.entries(answers).map(([k, f]) =>
+  [k, (...a: unknown[]) => within(a.find(isScope)?.focus, () => (f as (...a: unknown[]) => unknown)(...a))])) as unknown as EngineApi;

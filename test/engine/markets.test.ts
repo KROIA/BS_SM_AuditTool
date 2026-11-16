@@ -55,7 +55,7 @@ test('with nothing loaded the market questions answer empty', () => {
   init(path.join(fx.root, 'empty-workspace'));
   assert.deepEqual(api.markets(ALL), []);
   assert.deepEqual(api.market(ITEM.diamond, ALL), { usual: null, low: null, high: null, volume: 0, traders: 0 });
-  assert.deepEqual(api.candles(ITEM.diamond, 60, ALL), { candles: [], capped: false, usual: [] });
+  assert.deepEqual(api.candles(ITEM.diamond, 60, ALL), { candles: [], capped: false, usual: [], span: null });
   assert.deepEqual(api.traders(ITEM.diamond, ALL), []);
 });
 
@@ -79,7 +79,7 @@ test('candles of every length match the minutes added up, with close taken from 
   assert.equal(cut.at(-1)!.close, api.candles(ITEM.diamond, 1, ALL).candles[10]!.open);
 });
 
-test('at most 5000 candles; capped says the range held more', () => {
+test('at most the newest 5000 candles; capped says the range held more, span what it covers, end reads older parts', () => {
   // A copy of the master with 6000 more minutes of oak before the scenario.
   const save = path.join(fx.root, 'long-market');
   fs.cpSync(fx.master, save, { recursive: true });
@@ -93,7 +93,16 @@ test('at most 5000 candles; capped says the range held more', () => {
   const one = api.candles(ITEM.oak, 1, ALL);
   assert.equal(one.capped, true);
   assert.equal(one.candles.length, 5000);
-  assert.deepEqual([one.candles[0]!.time, one.candles.at(-1)!.time, one.candles.at(-1)!.close], [T0 - 6000 * MIN, T0 - 1001 * MIN, 5100n]);
+  const all1 = api.candles(ITEM.oak, 5, ALL).candles; // whole, for the times
+  assert.deepEqual(one.span, { from: T0 - 6000 * MIN, to: all1.at(-1)!.time + 5 * MIN });
+  assert.equal(one.candles.at(-1)!.close, null); // the newest candle of the save
+  // Older ones: the 5000 up to an end, which close at the next open even past the end.
+  const older = api.candles(ITEM.oak, 1, ALL, T0 - 1001 * MIN);
+  assert.deepEqual([older.capped, older.candles.length, older.candles[0]!.time, older.candles.at(-1)!.time, older.candles.at(-1)!.close],
+    [true, 5000, T0 - 6000 * MIN, T0 - 1001 * MIN, 5100n]);
+  assert.deepEqual(older.span, one.span);
+  // Read newest first, a 5-minute candle still opens at its first minute.
+  assert.deepEqual(api.candles(ITEM.oak, 5, ALL, T0 - 1001 * MIN).candles.slice(0, 2).map((c) => [c.open, c.close]), [[100n, 105n], [105n, 110n]]);
   const five = api.candles(ITEM.oak, 5, ALL);
   assert.deepEqual([five.capped, five.candles.length], [false, 1232]); // 6000 + 160 minutes in 5-minute candles
 });

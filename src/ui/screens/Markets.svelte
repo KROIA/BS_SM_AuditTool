@@ -24,14 +24,17 @@
   let facts = $state<MarketFacts | null>(null);
   let traders = $state<Trader[]>([]);
   let loadedFor = $state<number | null>(null);
-  let chart = $state<{ candles: Candle[]; capped: boolean; usual: (bigint | null)[]; minutes: Minutes } | null>(null);
+  type Got = { candles: Candle[]; capped: boolean; usual: (bigint | null)[]; span: { from: number; to: number } | null };
+  let chart = $state<Got & { minutes: Minutes; reset: number } | null>(null);
+  let end = $state<number | null>(null); // the loaded candles end here while dragging shows older ones; null: the newest
+  let resets = 0;
   let picked = $state<Minutes | null>(null); // the candle length the user picked
   let range = $state<{ from: number; to: number } | null>(null); // the zoomed-in span a new candle length was asked for
   let view = $state<{ from: number; to: number } | null>(null); // the span the chart shows while zoomed in
   let log = $state(true);
   let showUsual = $state(true);
-  let trader = $state<string | null>(null);
-  let traderOrders = $state<OrderRow[]>([]);
+  let shown = $state<string[]>([]); // the players whose orders are on the chart
+  let itemOrders = $state<OrderRow[]>([]); // every player's orders on this market, read once one is shown
 
   const main = $derived(app.saves.find((s) => s.sources.some((x) => x.id === 'market' && x.status !== 'none' && x.status !== 'missing')));
   // Open findings per market, with the highest level (findings come highest level first); the engine's swing order breaks ties.
@@ -67,20 +70,20 @@
     let stale = false;
     void Promise.all([engine.market(i, scope), engine.traders(i, scope)]).then(([f, t]) => {
       if (stale) return;
-      if (loadedFor !== i) [picked, range, trader, chart] = [null, null, null, null];
-      else range = null; // a new time range of the tool replaces the zoom
+      if (loadedFor !== i) [picked, range, shown, chart, end] = [null, null, [], null, null];
+      else [range, end] = [null, null]; // a new time range of the tool replaces the zoom
       [facts, traders, loadedFor] = [f, t, i];
     });
     return () => (stale = true);
   });
 
   $effect(() => {
-    const scope = $state.snapshot(app.scope), i = item, m = picked, r = $state.snapshot(range);
+    const scope = $state.snapshot(app.scope), i = item, m = picked, r = $state.snapshot(range), e = end;
     if (i === null || !ready) return;
     const s: Scope = r ? { ...scope, from: r.from, to: r.to } : scope;
     let stale = false;
     void (async () => {
-      let minutes = m, got: { candles: Candle[]; capped: boolean; usual: (bigint | null)[] } | null = null;
+      let minutes = m, got: Got | null = null;
       if (minutes === null) {
         // The hour candles are quick to read and tell how long the range is.
         const probe = await engine.candles(i, 60, s);
@@ -88,33 +91,51 @@
         minutes = LENGTHS.find(([x]) => span <= FIT * x * MIN)?.[0] ?? 1440;
         if (minutes === 60) got = probe;
       }
-      got ??= await engine.candles(i, minutes, s);
-      if (!stale) chart = { ...got, minutes };
+      got ??= await engine.candles(i, minutes, s, e ?? undefined);
+      // Another part of the same candles keeps what the chart shows.
+      if (!stale) chart = { ...got, minutes, reset: e === null ? ++resets : resets };
     })();
     return () => (stale = true);
   });
 
   $effect(() => {
-    const scope = $state.snapshot(app.scope), i = item, t = trader;
-    if (i === null || t === null) return;
+    const scope = $state.snapshot(app.scope), i = item;
+    if (i === null || !anyShown) return;
     let stale = false;
-    void engine.orders({ player: t, item: i }, scope).then((o) => !stale && (traderOrders = o));
-    return () => ((stale = true), (traderOrders = []));
+    void engine.orders({ item: i }, scope).then((o) => !stale && (itemOrders = o));
+    return () => ((stale = true), (itemOrders = []));
+  });
+  const anyShown = $derived(shown.length > 0);
+  const traderOrders = $derived.by(() => {
+    const on = new Set(shown);
+    return itemOrders.filter((o) => on.has(o.player));
+  });
+  const allShown = $derived(traders.length > 0 && traders.every((t) => shown.includes(t.uuid)));
+  const toggle = (uuid: string) => (shown = shown.includes(uuid) ? shown.filter((x) => x !== uuid) : [...shown, uuid]);
+
+  // More candles than one read gives: the chart then shows at most 4'000 candles' time, and the 5'000 read around it
+  // leave room on both sides. Once less than half that room is left on one side, the 5'000 around the view are read.
+  $effect(() => {
+    const v = view, c = chart;
+    if (!v || !c?.capped || !c.span || !c.candles.length) return;
+    const iv = c.minutes * MIN, lo = c.candles[0]!.time, hi = c.candles.at(-1)!.time + iv, room = Math.max(0, (5000 * iv - (v.to - v.from)) / 4);
+    if ((v.from - room >= lo || lo <= c.span.from) && (v.to + room <= hi || hi >= c.span.to)) return;
+    [picked, end] = [c.minutes, Math.min(c.span.to - 1, Math.round((v.from + v.to) / 2 + 2500 * iv))];
   });
 
   /** A new candle length: while zoomed in, it is read for the span on screen only. */
   function pick(m: Minutes) {
     range = view ?? range;
-    picked = m;
+    [picked, end] = [m, null];
   }
   function wholeRange() {
-    [range, picked] = [null, null];
+    [range, picked, end] = [null, null, null];
   }
   /** The span on screen becomes the time range of the whole tool. */
   function useAsRange() {
     const v = view ?? range;
     if (!v) return;
-    [range, picked] = [null, null];
+    [range, picked, end] = [null, null, null];
     setRange('custom', v.from, v.to);
   }
 
@@ -122,10 +143,14 @@
   const swing = (s: number) => (s >= 100 ? count(Math.round(s)) : amount(BigInt(Math.round(s * 100)))) + '×';
   const initials = (name: string) => (name.replace(/[^A-Za-z0-9]/g, '').slice(0, 2) || '?').toUpperCase();
   const signed = (raw: bigint) => (raw > 0n ? '+' : '') + moneyShort(raw);
-  const traderName = $derived(traders.find((t) => t.uuid === trader)?.name ?? '');
+  const names = $derived(new Map(traders.map((t) => [t.uuid, t.name])));
+  /** The one shown player's name, or how many are shown. */
+  const shownName = $derived(shown.length === 1 ? (names.get(shown[0]!) ?? '') : `the ${count(shown.length)} shown players`);
 
   // A marker sits where the order finished when the save records it (StockMarket since SM-317), else where it was placed.
-  const marks = $derived(traderOrders.map((o) => ({ time: o.finishMs ?? o.time, price: o.price, buy: o.amount > 0n })));
+  const marks = $derived(traderOrders.map((o) => ({
+    time: o.finishMs ?? o.time, price: o.price, buy: o.amount > 0n, amount: o.amount < 0n ? -o.amount : o.amount, who: names.get(o.player) ?? o.player,
+  })));
   const basis = (list: OrderRow[]) => {
     const finished = list.filter((o) => o.finishMs !== null).length;
     return finished === list.length ? 'finished' : finished === 0 ? 'placed' : 'mixed';
@@ -135,7 +160,7 @@
     placed: ['placed', 'was placed: this save does not record when orders finished'],
     mixed: ['that finished, or were placed where the save does not say', 'finished, or was placed where the save does not record when it finished'],
   } as const;
-  /** The picked player's orders in one candle, for the readout. */
+  /** The shown players' orders in one candle, for the readout. */
   function describe(from: number, to: number): string {
     const inside = traderOrders.filter((o) => {
       const t = o.finishMs ?? o.time;
@@ -148,7 +173,9 @@
       const qty = own.reduce((s, o) => s + o.amount, 0n), paid = own.reduce((s, o) => s + o.money, 0n);
       return `${buy ? 'bought' : 'sold'} ${quantity(buy ? qty : -qty)} at ${money((paid * 100n) / qty)}`;
     };
-    return `${traderName} ${[side(true), side(false)].filter(Boolean).join(' and ')}, orders ${WHEN[basis(inside)][0]} in this candle`;
+    const who = new Set(inside.map((o) => o.player));
+    const name = who.size === 1 ? (names.get([...who][0]!) ?? '') : `${count(who.size)} players`;
+    return `${name} ${[side(true), side(false)].filter(Boolean).join(' and ')}, orders ${WHEN[basis(inside)][0]} in this candle`;
   }
 
   // ---- CSV (AT-44) ----
@@ -190,10 +217,11 @@
     {:else if ordered}
       <div class="roster">
         {#each ordered as m (m.item)}
-          <a class="row pick" href="#/markets/{m.item}" aria-current={m.item === item ? 'true' : undefined}>
+          {@const involved = app.scope.focus?.markets.includes(m.item) ?? false}
+          <a class="row pick" class:involved href="#/markets/{m.item}" aria-current={m.item === item ? 'true' : undefined}>
             <span class="who">
               <span class="ellipsis" style="font-weight: 500">{itemName(m.item)}</span>
-              <span class="small">{count(m.orders)} {m.orders === 1 ? 'order' : 'orders'}{m.price !== null ? ` · ${moneyShort(m.price)}` : ''}</span>
+              <span class="small">{involved ? 'In the incident · ' : ''}{count(m.orders)} {m.orders === 1 ? 'order' : 'orders'}{m.price !== null ? ` · ${moneyShort(m.price)}` : ''}</span>
             </span>
             <span class="num small" title="Highest price divided by the lowest in this time range">{m.swing === null ? '' : swing(m.swing)}</span>
             {#if flags.get(m.item)}
@@ -253,17 +281,18 @@
         {:else if chart.candles.length === 0}
           <p class="small" style="margin: 16px 0 0">No candles of this market in this time range.</p>
         {:else}
-          <CandleChart candles={chart.candles} minutes={chart.minutes} {log} usual={showUsual ? chart.usual : null} {marks} {describe} bind:view
+          <CandleChart candles={chart.candles} span={chart.capped ? chart.span : null} reset={chart.reset} minutes={chart.minutes} {log} usual={showUsual ? chart.usual : null} {marks} {describe} bind:view
             label="Price of {itemName(item)} in candles of {LENGTHS.find(([m]) => m === chart!.minutes)![1]}" />
           {#if chart.capped}
-            <p class="small" style="margin: 12px 0 0; color: var(--high)">This time range holds more than {count(5000)} candles of this length; the first {count(5000)} are shown. Zoom in and pick a shorter candle, or pick a longer one.</p>
+            <p class="small" style="margin: 12px 0 0; color: var(--high)">This time range holds more than {count(5000)} candles of this length. The chart starts with the newest {count(5000)} and reads the others as you drag it.</p>
           {/if}
         {/if}
         <div class="legend">
-          {#if trader}
-            <span class="key"><span aria-hidden="true" class="tri buy"></span>Bought by {traderName}</span>
-            <span class="key"><span aria-hidden="true" class="tri"></span>Sold by {traderName}</span>
-            <span>Each marker is one order at its average price, at the time it {WHEN[basis(traderOrders)][1]}.</span>
+          {#if shown.length}
+            <span class="key"><span aria-hidden="true" class="tri buy"></span>Bought by {shownName}</span>
+            <span class="key"><span aria-hidden="true" class="tri"></span>Sold by {shownName}</span>
+            <span>Each marker is one order at its average price, at the time it {WHEN[basis(traderOrders)][1]}.
+              Markers closer than a marker merge into one; point at it to see who traded how much.</span>
           {:else}
             <span>Pick a player below to see their orders on the chart.</span>
           {/if}
@@ -277,23 +306,27 @@
         <section class="card">
           <div class="cardhead">
             <h2 class="h2 h3" style="flex: 1 1 auto">Who traded here</h2>
+            {#if traders.length > 1}
+              <button type="button" class="link" onclick={() => (shown = allShown ? [] : traders.map((t) => t.uuid))}
+                >{allShown ? 'Hide all from the chart' : 'Show all on the chart'}</button>
+            {/if}
             {#if traders.length}<CsvButton screen="markets" table="traders-{item}" what="who traded here" make={() => traderTable(item)} />{/if}
           </div>
-          <p class="small" style="margin: 2px 0 0">In this time range. Pick a player to put their orders on the chart.</p>
+          <p class="small" style="margin: 2px 0 0">In this time range. Pick players to put their orders on the chart.</p>
           {#if traders.length === 0}
             <p style="margin: 16px 0 0; color: var(--text2)">No player traded on this market in this time range.</p>
           {:else}
             <div class="traders">
               {#each traders as t (t.uuid)}
-                <div class="trow" class:on={t.uuid === trader}>
+                <div class="trow" class:on={shown.includes(t.uuid)}>
                   <span class="avatar" aria-hidden="true">{initials(t.name)}</span>
                   <span class="who">
                     <a class="ref" href="#/players/{encodeURIComponent(t.uuid)}" style="font-weight: 500">{t.name}</a>
                     <span class="small">{t.bought ? `bought for ${moneyShort(t.bought)}` : 'bought nothing'}, {t.sold ? `sold for ${moneyShort(t.sold)}` : 'sold nothing'}</span>
                   </span>
                   <span class="num" style="color: {tone(t.profit)}" title="Realised profit">{signed(t.profit)}</span>
-                  <button type="button" class="link" aria-pressed={t.uuid === trader} onclick={() => (trader = t.uuid === trader ? null : t.uuid)}
-                    >{t.uuid === trader ? 'On the chart' : 'Show on chart'}</button>
+                  <button type="button" class="link" aria-pressed={shown.includes(t.uuid)} onclick={() => toggle(t.uuid)}
+                    >{shown.includes(t.uuid) ? 'On the chart' : 'Show on chart'}</button>
                 </div>
               {/each}
             </div>
@@ -332,4 +365,7 @@
   .trow .link[aria-pressed='false'] { color: var(--text3); }
   .avatar { flex: none; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; background: var(--raised); color: var(--text2); }
   .trow.on .avatar { background: var(--card); }
+  /* A market of the incident picked in the top bar. */
+  .involved { box-shadow: inset 3px 0 0 var(--accent); }
+  .involved .ellipsis { color: var(--accent); }
 </style>

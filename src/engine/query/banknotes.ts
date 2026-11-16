@@ -66,7 +66,7 @@ export function countNotes(scope: Scope): { result: BanknotesResult; moves: Note
   const until = scope.to !== null ? 'AND ts <= :to' : '';
 
   const nameOf = names(db);
-  const owner = new Map(all(db, 'SELECT number, owner FROM account WHERE owner IS NOT NULL').map((r) => [num(r.number)!, String(r.owner)]));
+  const owner = new Map(all(db, 'SELECT number, owner FROM main.account WHERE owner IS NOT NULL').map((r) => [num(r.number)!, String(r.owner)]));
   const person = (uuid: string | undefined) => (uuid ? { uuid, name: nameOf(uuid) } : null);
   const moves: NoteMove[] = [];
   const unclear = { rows: 0, amount: 0n };
