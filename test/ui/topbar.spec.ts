@@ -172,3 +172,15 @@ test('an incident picked in the top bar narrows every screen to its players and 
   await page.evaluate("location.hash = '#/players'");
   await expect(pick).toHaveCount(6);
 });
+
+test('the Info button says which version this is and what the tool does', async () => {
+  const version = JSON.parse(fs.readFileSync('package.json', 'utf8')).version as string;
+  await page.getByRole('button', { name: 'About the Audit Tool' }).click();
+  const info = page.locator('#info');
+  await expect(info.locator('h2')).toHaveText(`Audit Tool version ${version}`);
+  await expect(info).toContainText('BankSystem and StockMarket');
+  await expect(info).toContainText('never writes into a save');
+  await page.screenshot({ path: 'test-results/topbar-info-dark.png' });
+  await page.keyboard.press('Escape');
+  await expect(info).toBeHidden();
+});

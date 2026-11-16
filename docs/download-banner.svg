@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="132" viewBox="0 0 880 132" role="img" aria-label="Download the Audit Tool for Windows">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14161c"/>
+      <stop offset="1" stop-color="#232842"/>
+    </linearGradient>
+  </defs>
+  <rect width="880" height="132" rx="16" fill="url(#bg)"/>
+  <rect x="0.5" y="0.5" width="879" height="131" rx="15.5" fill="none" stroke="#3a3f55"/>
+  <g fill="none" stroke="#8b93ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(36 38) scale(2.3)">
+    <circle cx="10" cy="10" r="7"/><path d="M15 15l5 5M7 10l2 2 4-4"/>
+  </g>
+  <g font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
+    <text x="112" y="60" fill="#f2f3f7" font-size="30" font-weight="700">Audit Tool</text>
+    <text x="112" y="90" fill="#a3a8bd" font-size="16">Windows 10 and 11 · installer or portable zip</text>
+    <rect x="616" y="38" width="228" height="56" rx="12" fill="#8b93ff"/>
+    <g fill="none" stroke="#14161c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" transform="translate(666 54)">
+      <path d="M12 3v14M6 11l6 6 6-6M4 22h16"/>
+    </g>
+    <text x="696" y="73" fill="#14161c" font-size="19" font-weight="700">Download</text>
+  </g>
+</svg>

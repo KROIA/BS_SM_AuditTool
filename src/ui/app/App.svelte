@@ -46,6 +46,24 @@
       <div style="flex: 1 1 0"></div>
       <ScopeMenus />
       <a class="btn" href="#/case" aria-label="Case: {count(pins())} pinned"><span style="color: var(--text3); display: flex"><Icon d={ICON.pin} /></span><span>Case</span><span style="color: var(--text3)">{count(pins())} pinned</span></a>
+      <button type="button" class="btn" style="width: 40px; padding: 0; justify-content: center; anchor-name: --info" popovertarget="info" aria-label="About the Audit Tool">
+        <Icon d={ICON.info} />
+      </button>
+      <div id="info" popover class="info" aria-label="About the Audit Tool">
+        <h2>Audit Tool <span class="small">version {__APP_VERSION__}</span></h2>
+        <p>Finds exploits and cheating on Minecraft servers that run the BankSystem and StockMarket mods. It reads copies of
+          the saves of a master server and its slaves, checks the bank's log against the balances, looks for unusual trading,
+          follows the money and the items, and writes a report for the admins: who gained what, how, and what to take back.</p>
+        <ol>
+          <li><b>Saves and servers</b>: open the saves of the master and its slaves, as folders or zips.</li>
+          <li><b>Overview</b> says whether something needs attention; <b>Findings</b> lists what the rules found.</li>
+          <li><b>Players</b>, <b>Markets</b>, <b>Bank accounts</b> and <b>Item flow</b> show what happened and who gained.
+            Picking an incident in the top bar narrows every screen to its players and accounts.</li>
+          <li><b>Case and report</b> works out what to take back, prints the commands for the admins and exports the report.</li>
+        </ol>
+        <p class="small">It only reads: it works on copies, never writes into a save and never connects to a server.
+          Source and releases: <span class="url">github.com/KROIA/BS_SM_AuditTool</span></p>
+      </div>
       <button type="button" class="btn" style="width: 40px; padding: 0; justify-content: center" onclick={toggleTheme} aria-label={app.theme === 'dark' ? 'Switch to the light theme' : 'Switch to the dark theme'}>
         <Icon d={app.theme === 'dark' ? ICON.sun : ICON.moon} />
       </button>
@@ -79,6 +97,13 @@
 </div>
 
 <style>
+  .info { position-area: bottom span-left; position-anchor: --info; inset: auto; margin: 6px 0 0; width: 440px; max-height: 80vh; overflow-y: auto; padding: 16px 20px;
+    box-sizing: border-box; border-radius: 12px; background: var(--card); color: var(--text); border: 1px solid var(--line2); box-shadow: 0 12px 32px rgb(0 0 0 / 0.35); font-size: 14px; line-height: 1.5; }
+  .info h2 { margin: 0 0 8px; font-family: var(--font-head); font-size: 16px; }
+  .info h2 .small { margin-left: 6px; font-weight: 400; }
+  .info p, .info ol { margin: 0 0 10px; }
+  .info ol { padding-left: 20px; }
+  .info .url { user-select: text; color: var(--accent); }
   nav { flex: 0 0 232px; box-sizing: border-box; display: flex; flex-direction: column; gap: 28px; padding: 20px 12px; overflow-y: auto; background: var(--rail); border-right: 1px solid var(--line); }
   .brand { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 12px; font-family: var(--font-head); font-size: 16px; font-weight: 600; }
   .links { display: flex; flex-direction: column; gap: 2px; }

@@ -31,4 +31,5 @@ export const ICON = {
   ok: 'M5 12l5 5 9-10',
   warn: 'M12 4l9 15H3zM12 10v4M12 16.5v.5',
   none: 'M6 12h12',
+  info: 'M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 11v5M12 8v.01',
 };

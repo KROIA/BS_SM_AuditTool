@@ -1,8 +1,8 @@
 {
   "name": "audit-tool",
   "private": true,
-  "version": "1.0.0",
-  "description": "Offline investigation tool for worlds that run BankSystem and StockMarket",
+  "version": "1.1.0",
+  "description": "Offline audit tool for Minecraft servers running BankSystem and StockMarket: finds exploits and cheats in copies of the saves, follows the money and items, and reports what to take back",
   "type": "module",
   "main": "dist/node/main/main.js",
   "scripts": {

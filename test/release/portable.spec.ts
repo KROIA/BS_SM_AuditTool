@@ -12,7 +12,8 @@ import { folderEntries, writeZip } from '../fixtures/zip.ts';
 /** AUDIT_TOOL_EXE: an installed program to check instead of the portable zip (the install check of AT-50). */
 const installed = process.env.AUDIT_TOOL_EXE;
 const release = path.resolve('release');
-const portable = fs.readdirSync(release).find((f) => /-win\.zip$/.test(f));
+const version = JSON.parse(fs.readFileSync('package.json', 'utf8')).version as string;
+const portable = fs.readdirSync(release).find((f) => f === `Audit Tool-${version}-win.zip`); // not an older build left in release/
 const fx = buildFixtures(path.resolve('test-results/fixtures-release'));
 const network = writeZip(path.resolve('test-results/zips/release-network.zip'), [fx.master, ...fx.slaves].flatMap((s) => folderEntries(s, `network/${path.basename(s)}/`)));
 let temp: string; // made in beforeAll: Playwright also loads this file to list the tests
